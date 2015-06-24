@@ -1,0 +1,695 @@
+#!/bin/bash
+#
+# This script is used to start the OpenVCX SIP Video Conferencing Exchange 
+#
+
+function checkvcx {
+  VCX_HOME=$1
+  VCX_PATH="${VCX_HOME}/${VCX}"
+  if [ ! -f "${VCX_PATH}" ]; then
+    VCX_PATH=""
+  fi
+}
+
+function findvcx {
+  if [ "${VCX_PATH}" == "" ]; then
+    checkvcx .
+    if [ "${VCX_PATH}" != "" ]; then
+      VCX_HOME=`dirname ${VCX_PATH}`
+    fi
+    VCX="bin/${VCX}"
+  fi
+  if [ "${VCX_PATH}" == "" ]; then
+    checkvcx ${VCX_HOME}
+  fi
+  if [ "${VCX_PATH}" == "" ]; then
+    checkvcx .
+  fi
+  if [ "${VCX_PATH}" == "" ]; then
+    checkvcx `dirname $0`
+  fi
+  if [ "${VCX_PATH}" == "" ]; then
+    checkvcx `dirname $VCX_HOME`
+  fi
+  if [ "${VCX_PATH}" == "" ]; then
+    checkvcx `dirname $VCX_HOME`
+  fi
+  if [ "${VCX_PATH}" == "" ]; then
+    echo "Error:  Unable to find your OpenVCX installation directory."
+    echo "Please set VCX_HOME or run this script from your OpenVCX installation directory."
+    exit 0
+  fi
+}
+
+
+VCX="startvcx.sh"
+VCX_PATH=""
+
+findvcx
+
+if [ "${VCX_HOME}" != "" ]; then
+  cd "${VCX_HOME}"
+  VCX_HOME=`pwd`
+fi
+#VCX_HOME=`dirname $0`
+
+ENV_FILE=${VCX_HOME}/conf/start.env
+SIP_CONFERENCE="sip-conference"
+
+if [ ! -f "${ENV_FILE}" ]; then
+    if [ ! -d "${VCX_HOME}/conf" ]; then
+        echo "Error:  conf directory not found"  
+        exit 0
+    fi
+    echo "Creating ${ENV_FILE}"
+    echo "" > ${ENV_FILE}
+    echo "CATALINA_HOME=" >> ${ENV_FILE}
+    echo "VSX_HOME=" >> ${ENV_FILE}
+    echo "SDP_CONNECT_LOCATION=" >> ${ENV_FILE}
+else
+    echo "Using startup environment from ${ENV_FILE}"
+fi
+
+. ${ENV_FILE}
+
+function showVersion {
+    VERSION_FILE="./version.txt"
+    if [ -f "${VERSION_FILE}" ]; then
+        cat ${VERSION_FILE}
+        echo ""
+    fi
+}
+
+function getVersion {
+  if [ ! -f "$1" ]; then
+      echo ""
+      echo "Unable to get version information from $1"
+      echo ""
+      VERSION="0.0.0.b0"
+  else
+      VERSION=`grep -o '[0-9].*' $1`
+  fi
+  VERMAJOR=`echo ${VERSION} | awk -F '.' '{print $1}'`
+  VERMINOR=`echo ${VERSION} | awk -F '.' '{print $2}'`
+  VERMINOR2=`echo ${VERSION} | awk -F '.' '{print $3}'`
+  #VERMINOR2=`grep -o '[0-9].*.b' $1 | awk -F '.' '{print $3}'`
+  local T1=`echo ${VERSION} | awk -F '.' '{print $4}'`
+  local T2=( $T1 )
+  local T3="${T2[0]}"
+  BUILDNUM="${T3:1}"
+}
+
+function checkVersion {
+  SIPVERFILE="${CATALINA_HOME}/version.txt"
+  getVersion $SIPVERFILE
+  SIPVERSION=$VERSION
+  SIPVERMAJOR=$VERMAJOR
+  SIPVERMINOR=$VERMINOR
+  SIPVERMINOR2=$VERMINOR2
+  SIPBUILDNUM=$BUILDNUM
+
+  VSXVERFILE="${VSX_HOME}/version.txt"
+  getVersion $VSXVERFILE
+  VSXVERSION=$VERSION
+  VSXVERMAJOR=$VERMAJOR
+  VSXVERMINOR=$VERMINOR
+  VSXVERMINOR2=$VERMINOR2
+  VSXBUILDNUM=$BUILDNUM
+
+  if [ "$VSXVERMAJOR" -gt 0 -o "$VSXVERMINOR" -gt 0 ]; then
+  if [ "$VSXVERMAJOR" -lt "$SIPVERMAJOR" -o \( "$VSXVERMAJOR" -eq "$SIPVERMAJOR" -a \
+      \( "$VSXVERMINOR" -lt "$SIPVERMINOR" -o \( "$VSXVERMINOR" -eq "$SIPVERMINOR" -a \
+      \( "$VSXVERMINOR2" -lt "$SIPVERMINOR2" -o \( "$VSXVERMINOR2" -eq "$SIPVERMINOR2" -a \
+      "$VSXBUILDNUM" -lt "$SIPBUILDNUM" \) \) \) \) \)  ]; then
+      echo ""
+      echo "Error:  OpenVSX version ${VSXVERSION} found in ${VSX_HOME} is not up to date."
+      echo "This software version is ${SIPVERSION}"
+      echo "Please upgrade OpenVSX from http://openvcx.com"
+      exit 0
+  fi
+  fi
+
+}
+
+function checkLicense {
+
+  PWDROOT=`pwd`
+  cd "${VSX_HOME}"
+  local CONT=""
+
+  if [ -d ./lib ]; then
+    if [ `uname` = "Darwin" ]; then
+      export DYLD_LIBRARY_PATH=lib
+    else
+      export LD_LIBRARY_PATH=lib
+    fi
+  fi
+
+  LIC_INFO=`"./bin/vsx" --liccheck 2>&1`
+  local RC="$?"
+  if [ "`echo $LIC_INFO | grep "expires:"`" != "" ]; then
+      #echo "Verified OpenVSX license"
+      LIC_INFO=""
+  elif [ "`echo $LIC_INFO | grep "License: disabled"`" != "" ]; then
+      #echo "License: disabled"
+      LIC_INFO=""
+  elif [ "`echo $LIC_INFO | grep "^No license"`" != "" ]; then
+      echo ""
+      echo "OpenVSX found in ${VSX_HOME} does not have an installed license key."
+      echo "This means that a video call may be limited to just a few seconds duration!"
+      echo "Directions for obtaining a license key are available at http://openvcx.com/licensing.php"
+      echo ""
+
+      while [ "${CONT}" != "y" -a "${CONT}" != "n" ]; do
+          echo "Do you wish to create a license key request at this time?"
+          echo -n "y/n >"
+          read -r CONT
+      done
+
+      if [ "${CONT}" == "y" ]; then
+          LIC_REQ=`"./bin/vsx" --licgen 2>&1`
+          echo ""
+          echo ${LIC_REQ}
+          echo ""
+          echo "Please email the above generated license key request text to support@ngenbits.com"
+          echo "You should re-run this startup script after you receive and install the OpenVSX license key."
+          exit 0
+      else 
+          echo ""
+          echo "Without a license key a video call may be limited to just a few seconds duration!"
+          echo "Do you wish to continue anyway?"
+          echo -n "y/n >"
+          read -r CONT
+          if [ "${CONT}" != "y" ]; then
+              exit 0
+          fi 
+      fi
+  elif [ "${RC}" == 0 ]; then
+      echo ""
+      echo "Error:  OpenVSX found in ${VSX_HOME} does not have a valid license key."
+      echo "Please update your OpenVSX license."
+      echo "To request a license key please follow the directions available at http://openvcx.com/licensing.php"
+      echo ""
+      exit 0
+  else
+      echo ""
+      echo "Error:  OpenVSX found in ${VSX_HOME} is not able to execute on your system."
+      echo "Please take a look at ${VSX_HOME}/README.txt for troubleshooting tips."
+      if [ `uname` != "Darwin" -a "`uname -p | grep x86_64`" != "" ]; then
+        echo "Make sure that you have 32bit program library support on your system."
+      fi
+      echo ""
+      exit 0
+  fi
+
+  cd "${PWDROOT}"
+
+}
+
+function checkDepend {
+
+  local LIBS_MISSING=0
+  if [ ! -f "${VSX_HOME}/lib/libx264.so" ]; then
+      LIBS_MISSING=1
+  elif [ ! -f "${VSX_HOME}/lib/libfaac.so" ]; then
+      LIBS_MISSING=1
+  elif [ ! -f "${VSX_HOME}/lib/libSKP_SILK_SDK.so" ]; then
+      LIBS_MISSING=1
+  fi
+
+  if [ ${LIBS_MISSING} -gt 0 ]; then
+      local ARCH="linux_x86"
+      if [ `uname` = "Darwin" ]; then
+          ARCH="mac_x86_64" 
+      fi
+      local VER="${VSXVERMAJOR}.${VSXVERMINOR}.${VSXVERMINOR2}"
+      local PKG="vsxthirdparty_${ARCH}_v${VER}.tar.gz"
+      echo ""
+      echo "OpenVSX found in ${VSX_HOME} does not have the third-party transcoder add-on libraries package installed."
+      echo "You may need to download ${PKG} or build the required libraries from source yourself."
+      echo ""
+      echo "Do you wish to continue anyway?"
+      echo -n "y/n >"
+      read -r CONT
+      if [ "${CONT}" != "y" ]; then
+          exit 0
+      fi 
+  fi
+
+}
+
+function set_vsx_home {
+
+  while [ ! -f "${VSX_HOME}/bin/startconf.sh" ]; do
+      if [ -f "${VSX_HOME}/bin/vsx" ]; then
+         echo  "It appears that you may have installed OpenVSX-Lite.  Please note that OpenVSX-Lite is not compatible with OpenVCX."
+      fi
+      echo  "Please enter the full directory path of the OpenVSX (Video Streaming Processor) installation."
+      echo  "You may also manually edit VSX_HOME= in ${ENV_FILE}"
+      echo "If you have not installed OpenVSX you can download it from http://openvcx.com"
+
+      echo -n ">"
+      read -r VSX_HOME
+      if [ ! -f "${VSX_HOME}/bin/startconf.sh" ]; then
+          echo ""
+          echo "The path to VSX_HOME=${VSX_HOME} is not correct!"
+          echo ""
+      fi
+   done
+
+  if [ "`grep '^VSX_HOME=' ${ENV_FILE}`" == "" ]; then
+      echo "VSX_HOME=${VSX_HOME}" >> ${ENV_FILE}
+  else
+      sed s,^VSX_HOME=.*,VSX_HOME=${VSX_HOME},g ${ENV_FILE} > ${ENV_FILE}.bk
+      mv ${ENV_FILE}.bk ${ENV_FILE}
+  fi
+
+}
+
+function set_connect_location {
+
+  while [ "${SDP_CONNECT_LOCATION}" == "" ]; do
+      echo ""
+      echo "${ENV_FILE} is missing the environment variable SDP_CONNECT_LOCATION"
+      echo ""
+      echo "Set this to the external IP address or full hostname of this server."
+      echo "The published SDP 'c=' connect address will be set to this value."
+      echo ""
+      echo -n "Please enter the external IP address or full hostname of the server.  > "
+      read -r SDP_CONNECT_LOCATION
+  done
+
+  if [ "`grep '^SDP_CONNECT_LOCATION=' ${ENV_FILE}`" == "" ]; then
+      echo "SDP_CONNECT_LOCATION=${SDP_CONNECT_LOCATION}" >> ${ENV_FILE}
+  else
+      sed s,^SDP_CONNECT_LOCATION=.*,SDP_CONNECT_LOCATION=${SDP_CONNECT_LOCATION},g ${ENV_FILE} > ${ENV_FILE}.bk
+      mv ${ENV_FILE}.bk ${ENV_FILE}
+  fi
+
+}
+
+function set_catalina_home {
+
+  CATALINA_HOME=${VCX_HOME}
+
+  while [ ! -f "${CATALINA_HOME}/bin/catalina.sh" ]; do
+      echo -n "Please enter the full directory path of the SIP Video Conferencing Server installation or edit CATALINA_HOME in ${ENV_FILE} > "
+      read -r CATALINA_HOME
+      if [ ! -f "${CATALINA_HOME}/bin/catalina.sh" ]; then
+          echo ""
+          echo "The path to CATALINA_HOME=${CATALINA_HOME} is not correct!"
+          echo ""
+      fi
+  done
+
+  if [ "`grep '^CATALINA_HOME=' ${ENV_FILE}`" == "" ]; then
+      echo "CATALINA_HOME=${CATALINA_HOME}" >> ${ENV_FILE}
+  else
+      sed s,^CATALINA_HOME=.*,CATALINA_HOME=${CATALINA_HOME},g ${ENV_FILE} > ${ENV_FILE}.bk
+      mv ${ENV_FILE}.bk ${ENV_FILE}
+  fi
+
+}
+
+function checkJava {
+
+  JAVA_DOWNLOAD_URL="http://www.oracle.com/technetwork/java/javase/downloads/index.html"
+
+  #
+  # Set JAVA to JRE 6 or higher
+  #
+
+  if [ "${JRE_HOME}" != "" ]; then
+    JAVA="${JRE_HOME}/bin/java"
+  fi
+  if [ ! -f "${JAVA}" ]; then
+    if [ "${JAVA_HOME}" != "" ]; then
+      JAVA="${JAVA_HOME}/bin/java"
+    fi
+  fi
+  if [ ! -f "${JAVA}" ]; then
+    JAVA=`which java`
+  fi
+
+  if [ ! -f "${JAVA}" ]; then
+      echo "Error:  Java Runtime not found!"
+      echo "You can download Java JRE 6 or higher from:"
+      echo "${JAVA_DOWNLOAD_URL}"
+      exit 0
+  elif [ "${JRE_HOME}" == "" ]; then
+      MYJRE_HOME=`dirname ${JAVA}`
+      MYJRE_HOME=`dirname ${MYJRE_HOME}`
+
+      if [ "`grep '^JRE_HOME=' ${ENV_FILE}`" == "" ]; then
+          echo "JRE_HOME=${JRE_HOME}" >> ${ENV_FILE}
+      else
+          sed s,^JRE_HOME=.*,JRE_HOME=${MYJRE_HOME},g ${ENV_FILE} > ${ENV_FILE}.bk
+          mv ${ENV_FILE}.bk ${ENV_FILE}
+      fi
+
+  else
+     echo "Using JRE_HOME=${JRE_HOME}"
+  fi
+
+  JAVA_VERSION=`${JAVA} -version 2>&1 | grep 'java version' | awk -F 'version' '{print $2}' | sed -e 's/\"//g' |sed -e 's/ //g'`
+  echo "Found JAVA ${JAVA}    ${JAVA_VERSION}"
+  JAVA_VERSION_MAJ=`echo "${JAVA_VERSION}" | awk -F '.' '{print $1}'`
+  JAVA_VERSION_MIN=`echo "${JAVA_VERSION}" | awk -F '.' '{print $2}'`
+
+  if [ "$JAVA_VERSION_MAJ" -lt 1 -o "$JAVA_VERSION_MIN" -lt 6 ]; then
+      echo ""
+      echo "Error:  Java 6 (v1.6) or higher is required!" 
+      #if [ "${JRE_HOME}" != "" ]; then
+          echo "If you have Java 6 or higher installed update the environment variable JRE_HOME or manually edit ${ENV_FILE}"
+      #fi
+      echo "You can download Java JRE 6 or higher from:"
+      echo "${JAVA_DOWNLOAD_URL}"
+      exit 0
+  fi
+
+  if [ "${MYJRE_HOME}" != "" ]; then
+    JRE_HOME="${MYJRE_HOME}"
+  fi
+
+}
+
+function runStunnel {
+
+  local ARCH="linux_x86_32"
+  if [ `uname` = "Darwin" ]; then
+      ARCH="mac_x86_64"
+  fi
+
+  CMD=$1
+  STUNNEL_BIN="stunnel_ws"
+  STUNNEL_DIR="${VCX_HOME}/stunnel/${ARCH}"
+  STUNNEL_CONF="${STUNNEL_DIR}/stunnel.conf"
+  STUNNEL_PID="${STUNNEL_DIR}/stunnel.pid"
+  STUNNEL_LOG="${STUNNEL_DIR}/stunnel.log"
+  STUNNEL_CERT="${STUNNEL_DIR}/stunnel.pem"
+
+  if [ "${CMD}" == "stop" ]; then
+      killall ${STUNNEL_BIN}
+  elif [ "${CMD}" == "start" ]; then
+
+      if [ "${STUNNEL_PROXY}" == "y" ]; then
+
+          if [ ! -f "${STUNNEL_PID}" ]; then
+
+              sed -e "s,^pid=.*,pid=${STUNNEL_PID},g" \
+                  -e "s,^output=.*,output=${STUNNEL_LOG},g" \
+                  -e "s,^cert=.*,cert=${STUNNEL_CERT},g" \
+                  ${STUNNEL_CONF} > ${STUNNEL_CONF}.bk
+              mv ${STUNNEL_CONF}.bk ${STUNNEL_CONF}
+
+              echo "Starting ${STUNNEL_BIN} SIP SSL proxy"
+              ${STUNNEL_DIR}/bin/${STUNNEL_BIN} ${STUNNEL_CONF}
+
+          else
+              echo "${STUNNEL_BIN} is already running"
+          fi
+
+      else 
+          killall ${STUNNEL_BIN} 2>/dev/null
+      fi
+
+  fi
+
+}
+
+
+function checkStunnel {
+
+  RC_STUNNEL_PROXY=""
+
+  if [ "${STUNNEL_PROXY}" != "y" -a "${STUNNEL_PROXY}" != "n" ]; then
+      echo -n "Do you want to enable secure SIP y/n >"
+      read -r RC_STUNNEL_PROXY 
+
+      if [ "${RC_STUNNEL_PROXY}" != "y" ]; then
+        RC_STUNNEL_PROXY="n"
+      fi
+
+      if [ "${RC_STUNNEL_PROXY}" != "${STUNNEL_PROXY}" ]; then
+          if [ "`grep '^STUNNEL_PROXY=' ${ENV_FILE}`" == "" ]; then
+              echo "STUNNEL_PROXY=${RC_STUNNEL_PROXY}" >> ${ENV_FILE}
+          else
+              sed s,^STUNNEL_PROXY=.*,STUNNEL_PROXY=${RC_STUNNEL_PROXY},g ${ENV_FILE} > ${ENV_FILE}.bk
+              mv ${ENV_FILE}.bk ${ENV_FILE}
+          fi
+          STUNNEL_PROXY=${RC_STUNNEL_PROXY}
+      fi
+  fi
+
+}
+
+function getSIPListeners {
+    PORTS=`cat $1 | grep 'SipProtocolHandler' | grep 'port=' | awk -F 'port=\"' '{print $2}' | awk -F '"' '{print $1}'`
+    PORTS=`echo $PORTS | tr ' ' ' '`
+    ARR_PORTS=( `echo ${PORTS}` )
+
+    IPS=`cat $1 | grep 'SipProtocolHandler' | grep 'ipAddress=' | awk -F 'ipAddress=\"' '{print $2}' | awk -F '"' '{print $1}' `
+    IPS=`echo $IPS | tr ' ' ' '`
+    ARR_IPS=( ${IPS} )
+
+    TRANSPORTS=`cat $1 | grep 'SipProtocolHandler' | grep 'signalingTransport=' | awk -F 'signalingTransport=\"' '{print $2}' | awk -F '"' '{print $1}' `
+    TRANSPORTS=`echo $TRANSPORTS | tr ' ' ' '`
+    ARR_TRANSPORTS=( ${TRANSPORTS} )
+
+    if [ "${STUNNEL_PROXY}" == "y" ]; then
+        PORT_TLS=5061
+        PORT_WSS=5063
+        INDEX=0
+        for PORT in "${ARR_PORTS[@]}" ; do
+            if [ "${ARR_TRANSPORTS[$INDEX]}" == "tcp" ]; then 
+                PORT_TLS=`expr $PORT + 1`
+            elif [ "${ARR_TRANSPORTS[$INDEX]}" == "ws" ]; then 
+                PORT_WSS=`expr $PORT + 1`
+            fi
+            INDEX=`expr $INDEX + 1`
+        done
+        INDEX=${#ARR_PORTS[@]}
+        ARR_IPS[$INDEX]=${ARR_IPS[0]}
+        ARR_PORTS[$INDEX]=${PORT_TLS}
+        ARR_TRANSPORTS[$INDEX]="tls (via stunnel)"
+
+        INDEX=`expr $INDEX + 1`
+        ARR_IPS[$INDEX]=${ARR_IPS[0]}
+        ARR_PORTS[$INDEX]=${PORT_WSS}
+        ARR_TRANSPORTS[$INDEX]="wss (via stunnel)"
+    fi
+
+    INDEX=0
+    for PORT in "${ARR_PORTS[@]}" ; do
+        echo "Listening for SIP requests on ${ARR_IPS[$INDEX]}:${ARR_PORTS[$INDEX]} ${ARR_TRANSPORTS[$INDEX]}" 
+        INDEX=`expr $INDEX + 1`
+    done
+}
+
+function getHTTPListeners {
+    PORTS=`cat $1 | grep '<Connector' | grep 'HTTP/1' | grep -v 'SSL' | grep 'port=' | awk -F 'port=\"' '{print $2}' | awk -F '"' '{print $1}'`
+    PORTS=`echo $PORTS | tr ' ' ' '`
+    ARR_PORTS=( `echo ${PORTS}` )
+
+    INDEX=0
+    for PORT in "${ARR_PORTS[@]}" ; do
+        echo "Listening for HTTP requests on port ${ARR_PORTS[$INDEX]} ( http://${SDP_CONNECT_LOCATION}:${ARR_PORTS[$INDEX]}/webrtc-demo/ )" 
+        INDEX=`expr $INDEX + 1`
+    done
+}
+
+function getPortalListeners {
+    WP_LISTENERS=`grep '^listen=' "${VSX_HOME}/etc/vsxwp.conf" | awk -F'=' '{print $2}' | tr '\n' ' '`
+    echo "${WP} listening on ${WP_LISTENERS}" 
+    if [ "`echo "${WP_LISTENERS}" | grep '127.0.0.1'`" != "" ]; then
+        echo "${WP} is listening on a localhost socket."
+        echo "To accept connections from external hosts edit 'listen=' in ${VSX_HOME}/etc/vsxwp.conf"
+    fi
+
+}
+
+function startSIP {
+
+    if [ ! -d logs ]; then
+        mkdir logs
+    fi
+    if [ ! -d temp ]; then
+        mkdir temp
+    fi
+    if [ ! -f "webapps/${SIP_CONFERENCE}.war" ]; then
+        echo "Error:  webapps/${SIP_CONFERENCE}.war is missing!"
+        exit 0
+    fi
+
+    echo ""
+    echo "Starting the Video Conferencing SIP Server"
+    showVersion
+    getSIPListeners conf/server.xml
+    getHTTPListeners conf/server.xml
+    echo ""
+    echo "Configuration file is ${CATALINA_HOME}/conf/${SIP_CONFERENCE}.conf"
+    echo "Log file is ${CATALINA_HOME}/logs/${SIP_CONFERENCE}.log"
+    echo ""
+    if [ "${CATALINA_COMMAND}" == "run" ]; then
+        echo "To run in background use:  $0 start"
+        echo "Use Ctrl^C to quit"
+    else
+        echo "Starting in background."
+        echo "Stop with:  $0 stop"
+    fi
+    ./bin/catalina.sh ${CATALINA_COMMAND} > ${CATALINA_HOME}/logs/stdout.log 2>&1
+}
+
+function cleanupTempFiles {
+
+    CLEANUP_SCRIPT="cleanup.sh"
+    if [ -f "./bin/${CLEANUP_SCRIPT}" ]; then
+        ./bin/${CLEANUP_SCRIPT}
+    fi
+
+}
+
+#trap "runPortal stop; exit" SIGHUP SIGINT SIGTERM
+
+function runPortal {
+    CMD=$1
+    WP="OpenVSX Web Portal"
+    WPSTART="${VSX_HOME}/bin/startvsxwp.sh"
+
+    if [ ! -f "${WPSTART}" ]; then
+
+        echo "${WPSTART} for ${WP} not found."
+        echo -n "Do you want to continue without ${WP} y/n >"
+        read -r CONT
+        if [ "${CONT}" != "y" ]; then
+            exit 0
+        fi 
+
+    elif [ "${CMD}" == "start" ]; then
+
+        if [ "`grep '^mediaportal.listener.address' ./conf/${SIP_CONFERENCE}.conf | awk -F'=' '{print $2}'`" == "" ]; then
+            echo "${WP} is not enabled in ${SIP_CONFERENCE}"
+            return;
+        fi
+
+        RECORD_DIR="`grep '^mediaprox.record.dir' ./conf/${SIP_CONFERENCE}.conf | awk -F'=' '{print $2}'`"
+        #TODO need proper dereferencing of env vars here
+        if [ ! -d "${VSX_HOME}/recording" ]; then
+            mkdir -p "${VSX_HOME}/recording"
+        fi
+
+        WP_STATUS=`${WPSTART} status`
+        WP_ARGS=" -v --disablerootlist"
+
+        if [ "`echo "${WP_STATUS}" | grep 'is running'`" != "" ]; then
+
+            echo "${WP} is already running"
+            echo "To manually stop ${WP} run ${WPSTART} stop"
+            getPortalListeners
+
+        else
+
+            echo ${WPSTART} start ${WP_ARGS} 
+            ${WPSTART} start ${WP_ARGS} >/dev/null 2>/dev/null  &
+            sleep 1
+            WP_STATUS=`${WPSTART} status`
+
+            if [ "`echo "${WP_STATUS}" | grep 'is running'`" == "" ]; then
+                echo "$Error:  ${WP} has failed to start or is not configured."
+                echo -n "Do you want to continue without ${WP} y/n >"
+                read -r CONT
+                if [ "${CONT}" != "y" ]; then
+                    exit 0
+                fi 
+            else
+                echo "To manually stop ${WP} run ${WPSTART} stop"
+                getPortalListeners
+            fi
+        fi
+
+    elif [ "${CMD}" == "stop" ]; then
+
+        WP_STATUS=`${WPSTART} status`
+
+        if [ "`echo "${WP_STATUS}" | grep 'not running'`" == "" ]; then
+            echo "Stopping ${WP}"
+            echo ${WPSTART} stop
+            ${WPSTART} stop
+        fi
+    fi
+}
+
+checkJava
+
+if [ ! -f "${CATALINA_HOME}/bin/catalina.sh" ]; then
+    set_catalina_home
+fi 
+
+CATALINA_COMMAND=$1
+
+if [ "${CATALINA_COMMAND}" == "stop" ]; then
+    echo "Stopping services"
+    cd $CATALINA_HOME
+    export JRE_HOME
+    ./bin/catalina.sh stop 
+    exit 0
+
+elif [ "${CATALINA_COMMAND}" == "" ]; then
+    CATALINA_COMMAND="run"
+elif [ "${CATALINA_COMMAND}" != "start" -a  "${CATALINA_COMMAND}" != "run" ]; then
+    echo "Invalid command ${CATALINA_COMMAND}"
+    exit 0
+fi
+
+if [ ! -f "${VSX_HOME}/bin/startconf.sh" ]; then
+
+    echo ""
+
+    if [ -d "${VCX_HOME}/openvsx" ]; then
+      VSX_HOME="${VCX_HOME}/openvsx"
+    fi
+
+    if [ "${VSX_HOME}" == "" ]; then
+        echo "VSX_HOME environment variable is not defined in ${ENV_FILE}"
+    elif [ ! -f "${VSX_HOME}/bin/startconf.sh" ]; then
+        echo "The environment variable VSX_HOME=${VSX_HOME} defined in ${ENV_FILE} may be incorrect"
+    fi
+    echo ""
+    set_vsx_home
+fi 
+
+checkVersion
+
+checkLicense
+
+checkDepend
+
+if [ "${SDP_CONNECT_LOCATION}" == "" ]; then
+    set_connect_location
+fi 
+
+checkStunnel
+
+cd $CATALINA_HOME
+
+cleanupTempFiles
+
+echo "VSX_HOME=${VSX_HOME}"
+export VSX_HOME=${VSX_HOME}
+
+echo "CATALINA_HOME=${CATALINA_HOME}"
+export CATALINA_HOME=${CATALINA_HOME}
+
+echo "SDP_CONNECT_LOCATION=$SDP_CONNECT_LOCATION"
+export SDP_CONNECT_LOCATION=${SDP_CONNECT_LOCATION}
+
+echo "JRE_HOME=$JRE_HOME"
+export JRE_HOME=${JRE_HOME}
+
+echo ""
+
+runPortal start
+
+runStunnel start
+
+startSIP

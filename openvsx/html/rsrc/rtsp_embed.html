@@ -1,0 +1,74 @@
+<html><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+        <script type="text/javascript" src="/rsrc/common.js"></script>
+        <script type="text/javascript" src="/rsrc/mplayerframe.js"></script>
+	<link rel="stylesheet" type="text/css" href="/rsrc/main.css">
+	<title>OpenVSX Video Streaming Processor - http://openvcx.com</title>
+
+
+<script>
+
+function initparams() {
+  var uri=window.location.href;
+  var pos=uri.indexOf('?');
+  var nologo=0
+  var strhref=document.getElementById('linkid').href;
+
+  livepollredirector();
+
+  window.location=strhref;
+
+  if(pos>0) {
+    uri=uri.substr(pos+1);
+    var retParams=getRespArray(uri);
+    nologo=retParams['nologo'];
+  }
+
+  if(nologo!=1) {
+    document.getElementById('logodiv').innerHTML='<a href="http://openvcx.com"><div style="font-family: \'Maven Pro\', sans-serif; font-size: 48px; font-weight: bold; line-height: 46px; text-shadow: #999999 1px 3px 0px; color:#444444;">OpenVCX</div></a><br>&nbsp;<br>';
+    //document.getElementById('logodiv').innerHTML='<a href="http://openvcx.com"><img src="/img/logo3.jpg" border="0"></a><br>&nbsp;<br>';
+  }
+}
+
+</script>
+
+</head>
+<body class="bg" onload="javascript:initparams();">
+
+
+<table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td width="280" align="left">
+<div id="logodiv" align="left"></span>
+</td><td align="center" nowrap>
+<div style="font-size:1.288em;font-weight:bold; align:center">
+RTSP - Live Video Streaming
+</div>
+</td><td width="280">&nbsp;</td>
+</td></tr></table>
+
+
+
+<noscript>
+<h3>This page is a demo for OpenVSX Video Streaming Server.  It appears that you do not have javascript enabled.  This web page uses dynamic content and requires javascript to be enabled.</h3><h3>Please visit <a href="http://openvcx.com">http://openvcx.com</a> for more information.</h3>
+</noscript>
+	
+<div align="center">
+<p>&nbsp;</p>
+<p style="font-size:15px">
+Click on the image below to view live content. 
+</p>
+<p>
+<div class="rtspplay">
+<a id="linkid" href="$$rtsp://host:port/url$$"><img class="vidplaybluebigbtn" src="/rsrc/playbluebig.png" border="0"></a>
+</div>
+<br>
+<a id="linkid2" href="$$rtsp://host:port/url$$">$$rtsp://host:port/url$$</a>
+
+<div id="fileinfo"></div>
+<div id="fileinfo2"></div>
+<div id="fileinfo3"></div>
+<div id="fileinfoshareid2" style="z-index:5;"></div>
+</div>
+
+		
+</body>
+</html>

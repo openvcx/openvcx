@@ -1,0 +1,125 @@
+#!/bin/sh
+
+#
+# This script is used to build the OpenVCX java source
+#
+
+COMMAND=$1
+
+DIR=`dirname $0`
+ENV_FILE=${DIR}/conf/start.env
+ANT=@ANT_BINARY_PATH@
+
+CONFERENCE_WAR=sip-conference.war
+WEBRTC_DEMO_WAR=webrtc-demo.war
+
+BUILD_XML_CONFERENCE=build_conference.xml
+BUILD_XML_WEBRTC=build_webrtcdemo.xml
+
+BUILD_CONFERENCE=0
+BUILD_WEBRTC=0
+
+if [ "`echo $@ | grep ' conference'`" != "" ]; then
+  BUILD_CONFERENCE=1
+fi
+if [ "`echo $@ | grep ' webrtc'`" != "" ]; then
+  BUILD_WEBRTC=1
+fi
+if [ "`echo $@ | grep ' all'`" != "" ]; then
+  BUILD_CONFERENCE=1
+  BUILD_WEBRTC=1
+fi
+
+if [ "${BUILD_CONFERENCE}" -eq 0 -a "${BUILD_WEBRTC}" -eq 0 ]; then
+  if [ "${COMMAND}" == "" ]; then
+    echo "$0 [clean|compile|deploy|run] [all|webrtc|conference]"
+    exit 0
+  else
+    BUILD_CONFERENCE=1
+  fi
+fi
+
+function runant {
+
+  if [ "${BUILD_WEBRTC}" -eq 1 ]; then
+    ${ANT} -f ${BUILD_XML_WEBRTC} $1
+    if [ "$?" != "0" ]; then
+      exit 
+    fi
+  fi
+
+  if [ "${BUILD_CONFERENCE}" -eq 1 ]; then
+    ${ANT} -f ${BUILD_XML_CONFERENCE} $1
+    if [ "$?" != "0" ]; then
+      exit 
+    fi
+  fi
+
+}
+
+. ${ENV_FILE}
+
+if [ "${CATALINA_HOME}" == "" ]; then
+    echo "CATALINA_HOME is not set in ${ENV_FILE}.  Using ${DIR}"
+    export CATALINA_HOME=${DIR}
+else
+    export CATALINA_HOME=${CATALINA_HOME}
+fi
+
+SDP_CONNECT_LOCATION=`/sbin/ifconfig | grep -A1 eth0 | grep 'inet ' | awk -F ' ' '{print $2}'`
+if [ "$SDP_CONNECT_LOCATION" == "" ]; then
+    SDP_CONNECT_LOCATION=127.0.0.1  
+fi
+export SDP_CONNECT_LOCATION=${SDP_CONNECT_LOCATION}
+echo "export SDP_CONNECT_LOCATION=$SDP_CONNECT_LOCATION"
+echo ""
+
+if [ "${COMMAND}" == "compile" ]; then
+    runant compile
+    exit
+elif [ "${COMMAND}" == "clean" ]; then
+    runant clean 
+    exit
+elif [ "${COMMAND}" == "deploy" ]; then
+    runant deploy 
+    exit
+fi
+
+
+#cd ./build/vidconference/classes; java -classpath .:../../../lib/*:../../../test/:../../../lib/commons-codec-1.5.jar:com/openvcx/conference -Dlog4j.info com/openvcx/conference/SDP;cd ../../..; 
+
+if [ "${COMMAND}" != "run" -a "${COMMAND}" != "start" ]; then
+    echo "Illegal command ${COMMAND}"
+    exit
+fi
+
+#
+# Build and deploy all wars
+#
+runant deploy 
+
+cd $CATALINA_HOME
+if [ ! -d logs ]; then
+    mkdir logs
+fi
+if [ ! -d temp ]; then
+    mkdir temp
+fi
+
+
+#
+# Verify the build output
+#
+if [ "${BUILD_CONFERENCE}" -eq 1 -a ! -f "webapps/${CONFERENCE_WAR}" ]; then
+    echo "webapps/sip-conference.war is missing!"
+    exit 0
+elif [ "${BUILD_WEBRTC}" -eq 1 -a ! -f "webapps/${WEBRTC_DEMO_WAR}" ]; then
+    echo "webapps/${WEBRTC_DEMO_WAR} is missing!"
+    exit 0
+fi
+
+#
+# Start the servlet container
+#
+echo "Calling ./bin/startvcx.sh"
+./bin/startvcx.sh

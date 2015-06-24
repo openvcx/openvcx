@@ -1,0 +1,24 @@
+#ifndef __VSX_CONFIG__
+#define __VSX_CONFIG__
+
+#include "xcodeconfig.h"
+
+#define VSX_HAVE_VIDANALYZE 1
+#define VSX_DUMP_CONTAINER 1
+#define VSX_EXTRACT_CONTAINER 1
+#define VSX_CREATE_CONTAINER 1
+#define VSX_HAVE_SERVERMODE 1
+
+#if !defined(LITE_VERSION)
+//#define VSX_HAVE_LICENSE_WATERMARK 1
+//#define VSX_HAVE_LICENSE 1
+#define VSX_HAVE_LICENSE_UPDATER 1
+#endif // LITE_VERSION
+
+#define VSX_HAVE_CAPTURE 1
+#define VSX_HAVE_STREAMER 1
+#define VSX_HAVE_RTMP_HMAC 1
+//#define VSX_HAVE_RTMP_DH 1
+
+
+#endif // __VSX_CONFIG__

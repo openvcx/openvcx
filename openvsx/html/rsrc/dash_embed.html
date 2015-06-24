@@ -1,0 +1,187 @@
+<html><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+        <script type="text/javascript" src="/rsrc/common.js"></script>
+        <script type="text/javascript" src="/rsrc/mplayerframe.js"></script>
+        <script type="text/javascript" src="/rsrc/dash-player.js"></script>
+        <link rel="stylesheet" type="text/css" href="/rsrc/main.css">
+        <title>OpenVSX Video Streaming Server - http://openvcx.com</title>
+<script>
+
+//dash_embed.html
+var xres=$$width$$;
+var yres=$$height$$;
+var file='';
+var fileInfoReq;
+var profile=null;
+
+
+function initparams() {
+  var uri=window.location.href;
+  var pos=uri.indexOf('?');
+  var nologo=0;
+  var x=undefined;
+  var y=undefined;
+
+  file=getRsrcNameFromUri(uri);
+  if(profile==null) profile='';
+
+  if(pos>0) {
+    var retParams=getRespArray(uri);
+    x=retParams['x'];
+    y=retParams['y'];
+    nologo=retParams['nologo'];
+  }
+
+  livepollredirector();
+
+  setDimensions(x, y);
+
+  if(file!=null) {
+    fileInfoReq=createAjax();
+    ajaxGet(fileInfoReq, '/list?chkprofile=1&profile='+profile+'&file='+file, cbMPInfo, null, 3);
+  }
+
+  _elemd=document.getElementById('videoObj');
+  _elemd.style.width=xres;
+  _elemd.style.height=yres;
+
+  if(nologo!=1) {
+    document.getElementById('logodiv').innerHTML='<a href="http://openvcx.com"><div style="font-family: \'Maven Pro\', sans-serif; font-size: 48px; font-weight: bold; line-height: 46px; text-shadow: #999999 1px 3px 0px; color:#444444;">OpenVCX</div></a><br>&nbsp;<br>';
+    //document.getElementById('logodiv').innerHTML='<a href="http://openvcx.com"><img src="/img/logo3.jpg" border="0"></a><br>&nbsp;<br>';
+
+  }
+
+  connect();
+}
+
+function supports_media_source() {
+  "use strict";
+   var hasWebKit = (window.WebKitMediaSource !== null && window.WebKitMediaSource !== undefined),
+   hasMediaSource = (window.MediaSource !== null && window.MediaSource !== undefined);
+   return (hasWebKit || hasMediaSource);
+}
+
+var player;
+
+function connect() {
+  if(connectObj.textContent == "Disconnect") {
+    if(player!=null) {
+      player.reset();
+      player = null;
+    }
+    connectObj.textContent = "Connect";
+    //playObj.disabled = "disabled";
+    //playObj.textContent = "Pause";
+    statusStr.textContent = "Disconnected";
+  } else {
+    connectObj.textContent = "Disconnect";
+    //playObj.disabled = "";
+    //playObj.textContent = "Pause";
+    statusStr.textContent = "Playing";
+    var video = document.querySelector("video"),
+    context = new Dash.di.DashContext();
+    player = new MediaPlayer(context);
+    player.startup();
+    debug = player.debug;
+    //debug.init(console);
+    player.autoPlay = true;
+    player.attachView(video);
+    player.attachSource(connectStr.value);
+  }
+}
+
+function playControl() {
+  if(videoObj.paused == false) {
+    videoObj.pause();
+    statusStr.textContent = "Paused";
+    //playObj.textContent = "Play";
+  } else {
+    videoObj.play();
+    statusStr.textContent="Playing";
+    //playObj.textContent = "Pause";
+  }
+}
+
+function failed(e) {
+  switch (e.target.error.code) {
+    case e.target.error.MEDIA_ERR_ABORTED:
+      statusStr.textContent='You aborted the video playback.';
+      break;
+    case e.target.error.MEDIA_ERR_NETWORK:
+      statusStr.textContent='A network error caused the video download to fail part-way.';
+      break;
+    case e.target.error.MEDIA_ERR_DECODE:
+      statusStr.textContent='The video playback was aborted due to a corruption problem or because the video used features your browser did not support.';
+      break;
+    case e.target.error.MEDIA_ERR_SRC_NOT_SUPPORTED:
+      if(player!=null) {
+        statusStr.innerHTML= 'The video could not be loaded, either because the server or network failed or because the format is not supported.<br/>';
+      }
+      break;
+    default:
+      statusStr.textContent = 'An unknown error occurred.';
+      break;
+    }
+}
+
+
+</script>
+</head>
+
+<body class="bg" onload="javascript:initparams();">
+
+<table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td width="280" align="left">
+<div id="logodiv" align="left"></span>
+</td><td align="center" nowrap>
+<div style="font-size:1.288em;font-weight:bold; align:center">
+MPEG-DASH - Live Video Streaming
+</div>
+</td><td width="280">&nbsp;</td>
+</td></tr></table>
+
+
+<div align="center">
+    <div id="notsupported" style="display:none">
+      <h2><b>The MediaSource API is not supported by this browser</b></h2>
+      <br/>
+      <h3>Please view in a browser that does support the MediaSource API, such as Google Chrome.</h3>
+    </div>
+    <div id="supported" style="display:none">
+      <div id="divDashPlayer">
+        <style> video { background-color: #000000; } </style>
+        <video id="videoObj" x-webkit-airplay="allow" controls alt="Media File" width="630" height="354" onerror="failed(event)"></video>
+      </div>
+      <table border="0" cellpadding="4" cellspacing="4">
+      <tr><td align="right">
+        <b>Stream:</b>
+      </td><td>
+        <input id="connectStr" size = "56" type="text" placeholder="" value="$$http://localhost:8080/dash/default.mpd$$"/>
+      </td><td>
+        <button id="connectObj" type="button" style="width:80px" onclick="JavaScript:connect()">Connect</button>
+      </td></tr><tr><td align="right">
+        <b>Status:</b>
+      </td><td>
+        <label id="statusStr" size = "100" type="text" placeholder="" value="">Disconnected</label>
+      </td><td>
+<!--
+        <button id="playObj" type="button" style="width:50px" onclick="JavaScript:playControl()" disabled="disabled">Pause</button>
+-->
+      </td></tr>
+      </table>
+    </div>
+    <div id="debug_log" style="height: 425px; width: 630px; overflow: auto; clear: both;">
+    </div>
+
+<script>
+if(supports_media_source() ) {
+  supported.style.display="";
+  videoObj.style.display="";
+} else {
+  notsupported.style.display="";
+}
+
+</script>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE log4j:configuration SYSTEM "log4j.dtd">
+
+<log4j:configuration xmlns:log4j="http://jakarta.apache.org/log4j/">
+
+  <appender name="info-file" class="org.apache.log4j.RollingFileAppender"> 
+    <param name="file" value="${catalina.home}/logs/sip-conference.log"/>
+    <param name="MaxFileSize" value="1000KB"/>
+    <param name="MaxBackupIndex" value="10"/>
+    <layout class="org.apache.log4j.PatternLayout"> 
+      <param name="ConversionPattern" value="%d %-5p [%c] (%t) %m%n"/> 
+    </layout> 
+  </appender>
+
+  <appender name="web-file" class="org.apache.log4j.RollingFileAppender">
+    <param name="file" value="${catalina.home}/logs/web-conference.log"/>
+    <param name="MaxFileSize" value="1000KB"/>
+    <param name="MaxBackupIndex" value="10"/>
+    <layout class="org.apache.log4j.PatternLayout">
+      <param name="ConversionPattern" value="%d %-5p [%c] (%t) %m%n"/>
+    </layout>
+  </appender>
+
+  <appender name="debug-file" class="org.apache.log4j.RollingFileAppender">
+    <param name="file" value="${catalina.home}/logs/sip-conferencedbg.log"/>
+    <param name="MaxFileSize" value="1000KB"/>
+    <param name="MaxBackupIndex" value="10"/>
+    <layout class="org.apache.log4j.PatternLayout">
+      <param name="ConversionPattern" value="%d %-5p [%c] (%t) %m%n"/>
+    </layout>
+  </appender>
+  
+  <appender name="console" class="org.apache.log4j.ConsoleAppender"> 
+    <param name="Target" value="System.out"/> 
+    <layout class="org.apache.log4j.PatternLayout"> 
+      <param name="ConversionPattern" value="%d %-5p [%c{1}] (%t) %m%n"/> 
+    </layout> 
+  </appender> 
+  
+   <category name="org.mobicents">
+     <priority value="WARN" /> 
+     <appender-ref ref="info-file" /> 
+   </category>
+   <category name="gov.nist">
+     <priority value="WARN" /> 
+     <appender-ref ref="info-file" /> 
+   </category>
+
+   <category name="com.openvcx.webcall">
+     <priority value="DEBUG" />
+     <appender-ref ref="web-file" /> 
+   </category>
+
+   <category name="com.openvcx">
+     <priority value="DEBUG" />
+     <appender-ref ref="info-file" /> 
+   </category>
+   
+
+  <root> 
+    <priority value ="DEBUG" />     
+    <!-- <appender-ref ref="info-file" />  -->
+  </root>   
+
+
+</log4j:configuration>

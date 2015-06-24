@@ -1,0 +1,565 @@
+include ./makefiles/Makefile.conf
+
+SRC_DIR=src
+INCLUDE_DIRS += -I./include -I./makefiles \
+               -I./liblogutil/include \
+               -I./libcommonutil/include \
+               -I./libpcap_compat/include \
+               -I./xcoder/include \
+               -I./version/include \
+               -I./include/capture -I./include/stream \
+               -I./include/server -I./include/codecs \
+               -I./include/formats -I./include/util 
+
+
+LIBS += ${PCAP_LIB} ${LIB_PTHREAD} -lm ${LIB_ZLIB}
+LIBS += ${LIBS_EXT_CRYPTO_STATIC} ${LIBS_EXT_SSL_STATIC} ${LIBS_EXT_CRYPTO_STATIC_DLOPEN}
+INCLUDE_DIRS +=  ${INCLUDE_DIRS_CRYPTO} ${INCLUDE_DIRS_SRTP}
+LIBS_EXT +=  ${LIBS_EXT_CRYPTO} ${LIBS_EXT_SSL} ${LIBS_EXT_SRTP}
+
+OBJS_PRIMARY= \
+           ${BUILD_DIR}/capture/capture_cbhandler.o \
+           ${BUILD_DIR}/capture/capture_dev.o \
+           ${BUILD_DIR}/capture/capture_fbarray.o \
+           ${BUILD_DIR}/capture/capture_filter.o \
+           ${BUILD_DIR}/capture/capture_httpget.o \
+           ${BUILD_DIR}/capture/capture_httpflv.o \
+           ${BUILD_DIR}/capture/capture_httpmp4.o \
+           ${BUILD_DIR}/capture/capture_httpdash.o \
+           ${BUILD_DIR}/capture/capture_httplive.o \
+           ${BUILD_DIR}/capture/capture_mp2ts.o \
+           ${BUILD_DIR}/capture/capture_net.o \
+           ${BUILD_DIR}/capture/capture_pcap.o \
+           ${BUILD_DIR}/capture/capture_pkt_aac.o \
+           ${BUILD_DIR}/capture/capture_pkt_amr.o \
+           ${BUILD_DIR}/capture/capture_pkt_opus.o \
+           ${BUILD_DIR}/capture/capture_pkt_silk.o \
+           ${BUILD_DIR}/capture/capture_pkt_h264.o \
+           ${BUILD_DIR}/capture/capture_pkt_mpg4v.o \
+           ${BUILD_DIR}/capture/capture_pkt_h263.o \
+           ${BUILD_DIR}/capture/capture_pkt_vp8.o \
+           ${BUILD_DIR}/capture/capture_pkt_pcm.o \
+           ${BUILD_DIR}/capture/capture_pkt_rawdev.o \
+           ${BUILD_DIR}/capture/capture_pkt_rtmp.o \
+           ${BUILD_DIR}/capture/capture_pkthandler.o \
+           ${BUILD_DIR}/capture/capture_rtsp.o \
+           ${BUILD_DIR}/capture/capture_rtmp.o \
+           ${BUILD_DIR}/capture/capture_rtcp.o \
+           ${BUILD_DIR}/capture/capture_rtp.o \
+           ${BUILD_DIR}/capture/capture_abr.o \
+           ${BUILD_DIR}/capture/capture_dummy.o \
+           ${BUILD_DIR}/capture/capture_socket.o \
+           ${BUILD_DIR}/capture/capture_strutil.o \
+           ${BUILD_DIR}/capture/capture_tcp.o \
+           ${BUILD_DIR}/codecs/aac.o \
+	   ${BUILD_DIR}/codecs/ac3.o \
+	   ${BUILD_DIR}/codecs/amr.o \
+           ${BUILD_DIR}/codecs/avcc.o \
+           ${BUILD_DIR}/codecs/esds.o \
+           ${BUILD_DIR}/codecs/h263.o \
+           ${BUILD_DIR}/codecs/h264.o \
+           ${BUILD_DIR}/codecs/h264_analyze.o \
+           ${BUILD_DIR}/codecs/h264avc.o \
+	   ${BUILD_DIR}/codecs/mp3.o \
+           ${BUILD_DIR}/codecs/mpeg2.o \
+           ${BUILD_DIR}/codecs/mpg4v.o \
+           ${BUILD_DIR}/codecs/vp8.o \
+           ${BUILD_DIR}/codecs/vorbis.o \
+           ${BUILD_DIR}/formats/bmp.o \
+           ${BUILD_DIR}/formats/ebml.o \
+           ${BUILD_DIR}/formats/filetype.o \
+           ${BUILD_DIR}/formats/flv.o \
+           ${BUILD_DIR}/formats/flv_write.o \
+           ${BUILD_DIR}/formats/http_client.o \
+           ${BUILD_DIR}/formats/http_parse.o \
+           ${BUILD_DIR}/formats/httplive.o \
+           ${BUILD_DIR}/formats/image.o \
+           ${BUILD_DIR}/formats/metafile.o \
+           ${BUILD_DIR}/formats/mkv.o \
+           ${BUILD_DIR}/formats/mkv_write.o \
+           ${BUILD_DIR}/formats/mp2pes.o \
+           ${BUILD_DIR}/formats/mp2ts.o \
+           ${BUILD_DIR}/formats/mp4.o \
+           ${BUILD_DIR}/formats/mp4_moof.o \
+           ${BUILD_DIR}/formats/mp4boxes.o \
+           ${BUILD_DIR}/formats/mp4creator.o \
+           ${BUILD_DIR}/formats/mp4extractor.o \
+           ${BUILD_DIR}/formats/m3u.o \
+           ${BUILD_DIR}/formats/mpd.o \
+           ${BUILD_DIR}/formats/mpdpl.o \
+           ${BUILD_DIR}/formats/rtmp_hshake.o \
+           ${BUILD_DIR}/formats/rtmp_parse.o \
+           ${BUILD_DIR}/formats/rtmp_pkt.o \
+           ${BUILD_DIR}/formats/sdp.o \
+           ${BUILD_DIR}/formats/sdputil.o \
+           ${BUILD_DIR}/formats/stun.o \
+           ${BUILD_DIR}/vsxlib.o \
+           ${BUILD_DIR}/vsxlib_int.o \
+           ${BUILD_DIR}/vsxlib_intsrv.o \
+           ${BUILD_DIR}/server/srvauth.o \
+           ${BUILD_DIR}/server/srvcmd.o \
+           ${BUILD_DIR}/server/srvconfig.o \
+           ${BUILD_DIR}/server/srvctrl.o \
+           ${BUILD_DIR}/server/srvdevtype.o \
+           ${BUILD_DIR}/server/srvdirlist.o \
+           ${BUILD_DIR}/server/srvfidx.o \
+           ${BUILD_DIR}/server/srvfiles.o \
+           ${BUILD_DIR}/server/srvhandler.o \
+           ${BUILD_DIR}/server/srvhttp.o \
+           ${BUILD_DIR}/server/srvhttp_media.o \
+           ${BUILD_DIR}/server/srvinit.o \
+           ${BUILD_DIR}/server/srvlistener.o \
+           ${BUILD_DIR}/server/srvlistenstart.o \
+           ${BUILD_DIR}/server/srvlive.o \
+           ${BUILD_DIR}/server/srvmediadb.o \
+           ${BUILD_DIR}/server/srvmoof.o \
+           ${BUILD_DIR}/server/srvprop.o \
+           ${BUILD_DIR}/server/srvrtsp_handler.o \
+           ${BUILD_DIR}/server/srvrtsp.o \
+           ${BUILD_DIR}/server/srvrtmp.o \
+           ${BUILD_DIR}/server/srvflv.o \
+           ${BUILD_DIR}/server/srvmkv.o \
+           ${BUILD_DIR}/server/srvpip.o \
+           ${BUILD_DIR}/server/srvsession.o \
+           ${BUILD_DIR}/server/srvstatus.o \
+           ${BUILD_DIR}/stream/stream_net.o \
+           ${BUILD_DIR}/stream/stream_net_aac.o \
+           ${BUILD_DIR}/stream/stream_net_image.o \
+           ${BUILD_DIR}/stream/stream_net_amr.o \
+           ${BUILD_DIR}/stream/stream_net_av.o \
+           ${BUILD_DIR}/stream/stream_net_h264.o \
+           ${BUILD_DIR}/stream/stream_net_mpg4v.o \
+           ${BUILD_DIR}/stream/stream_net_vp8.o \
+           ${BUILD_DIR}/stream/stream_net_vorbis.o \
+           ${BUILD_DIR}/stream/stream_net_vconference.o \
+           ${BUILD_DIR}/stream/stream_net_aconference.o \
+           ${BUILD_DIR}/stream/stream_net_pes.o \
+           ${BUILD_DIR}/stream/stream_pktz_aac.o \
+           ${BUILD_DIR}/stream/stream_pktz_amr.o \
+           ${BUILD_DIR}/stream/stream_pktz_frbuf.o \
+           ${BUILD_DIR}/stream/stream_pktz_h264.o \
+           ${BUILD_DIR}/stream/stream_pktz_h263.o \
+           ${BUILD_DIR}/stream/stream_pktz_mpg4v.o \
+           ${BUILD_DIR}/stream/stream_pktz_vp8.o \
+           ${BUILD_DIR}/stream/stream_pktz_mp2ts.o \
+           ${BUILD_DIR}/stream/stream_pktz_pcm.o \
+           ${BUILD_DIR}/stream/stream_pktz_opus.o \
+           ${BUILD_DIR}/stream/stream_pktz_silk.o \
+           ${BUILD_DIR}/stream/stream_av.o \
+           ${BUILD_DIR}/stream/stream_fb.o \
+           ${BUILD_DIR}/stream/stream_outfmt.o \
+           ${BUILD_DIR}/stream/stream_rtp.o \
+           ${BUILD_DIR}/stream/stream_srtp.o \
+           ${BUILD_DIR}/stream/stream_dtls.o \
+           ${BUILD_DIR}/stream/stream_rtsp.o \
+           ${BUILD_DIR}/stream/stream_pip.o \
+           ${BUILD_DIR}/stream/stream_pipconf.o \
+           ${BUILD_DIR}/stream/stream_piplayout.o \
+           ${BUILD_DIR}/stream/stream_rtp_mp2tsraw.o \
+           ${BUILD_DIR}/stream/stream_monitor.o \
+           ${BUILD_DIR}/stream/stream_abr.o \
+           ${BUILD_DIR}/stream/stream_stun.o \
+           ${BUILD_DIR}/stream/stream_turn.o \
+           ${BUILD_DIR}/stream/streamer.o  \
+	   ${BUILD_DIR}/stream/streamer2.o \
+	   ${BUILD_DIR}/stream/stream_nack.o \
+	   ${BUILD_DIR}/stream/stream_xmit.o \
+           ${BUILD_DIR}/stream/streamer_rtp.o \
+           ${BUILD_DIR}/util/auth.o \
+           ${BUILD_DIR}/util/burstmeter.o \
+           ${BUILD_DIR}/util/blowfish.o \
+           ${BUILD_DIR}/util/base64.o \
+           ${BUILD_DIR}/util/bits.o \
+           ${BUILD_DIR}/util/crc.o \
+           ${BUILD_DIR}/util/conf.o \
+           ${BUILD_DIR}/util/fileutil.o \
+           ${BUILD_DIR}/util/lexparse.o \
+           ${BUILD_DIR}/util/listnode.o \
+           ${BUILD_DIR}/util/math_common.o \
+           ${BUILD_DIR}/util/md5.o \
+           ${BUILD_DIR}/util/netutil.o \
+           ${BUILD_DIR}/util/netio.o \
+           ${BUILD_DIR}/util/sslutil.o \
+           ${BUILD_DIR}/util/pktqueue.o \
+           ${BUILD_DIR}/util/pool.o \
+           ${BUILD_DIR}/util/sha1.o \
+           ${BUILD_DIR}/util/hmac.o \
+           ${BUILD_DIR}/util/strutil.o \
+           ${BUILD_DIR}/util/sysutil.o \
+           ${BUILD_DIR}/util/vidutil.o \
+           ${BUILD_DIR}/xcode/xcode.o \
+           ${BUILD_DIR}/xcode/xcode_parse.o \
+           ${BUILD_DIR}/xcode/xcode_aud.o \
+           ${BUILD_DIR}/xcode/xcode_vid.o \
+           ${BUILD_DIR}/xcode/xcode_vid_h264.o \
+           ${BUILD_DIR}/xcode/xcode_vid_h264_util.o \
+           ${BUILD_DIR}/xcode/xcode_vid_mpg4v.o \
+           ${BUILD_DIR}/xcode/xcode_ipc.o 
+
+ifeq ($(CFG_GDB),1)
+  OBJS_TEST=${BUILD_DIR}/test/test.o
+else
+  OBJS_TEST=
+endif
+
+OBJS_LOGUTIL=./liblogutil/${BUILD_DIR}/logutil.o \
+              ./liblogutil/${BUILD_DIR}/logutil_tid.o
+OBJS_COMMONUTIL=./libcommonutil/${BUILD_DIR}/fileops.o \
+                ./libcommonutil/${BUILD_DIR}/common.o \
+                ./libcommonutil/${BUILD_DIR}/pthread_compat.o \
+                ./libcommonutil/${BUILD_DIR}/timers.o \
+                ./libcommonutil/${BUILD_DIR}/unixcompat.o
+OBJS_PCAP_COMPAT=./libpcap_compat/${BUILD_DIR}/pktcapture.o \
+                 ./libpcap_compat/${BUILD_DIR}/pktcommon.o \
+                 ./libpcap_compat/${BUILD_DIR}/pktmacip.o \
+                 ./libpcap_compat/${BUILD_DIR}/pktgen.o 
+OBJS_DEP=${OBJS_LOGUTIL} ${OBJS_COMMONUTIL} ${OBJS_PCAP_COMPAT}
+OBJS=${OBJS_PRIMARY} ${OBJS_DEP} 
+OBJS_MAIN = ${BUILD_DIR}/main.o ${OBJS_TEST}
+
+
+
+OBJS_MGR_DEP=${OBJS_LOGUTIL} ${OBJS_COMMONUTIL} ${OBJS_PCAP_COMPAT}
+OBJS_MGR= \
+          ${BUILD_DIR}/capture/capture_strutil.o \
+          ${BUILD_DIR}/capture/capture_filter.o \
+          ${BUILD_DIR}/codecs/avcc.o \
+          ${BUILD_DIR}/codecs/aac.o \
+          ${BUILD_DIR}/codecs/amr.o \
+          ${BUILD_DIR}/codecs/esds.o \
+          ${BUILD_DIR}/codecs/h264.o \
+          ${BUILD_DIR}/codecs/h264avc.o \
+          ${BUILD_DIR}/codecs/h264_analyze.o \
+          ${BUILD_DIR}/codecs/mpg4v.o \
+          ${BUILD_DIR}/codecs/mpeg2.o \
+          ${BUILD_DIR}/codecs/vp8.o \
+          ${BUILD_DIR}/codecs/vorbis.o \
+          ${BUILD_DIR}/formats/ebml.o \
+          ${BUILD_DIR}/formats/http_client.o \
+          ${BUILD_DIR}/formats/http_parse.o \
+          ${BUILD_DIR}/formats/httplive.o \
+          ${BUILD_DIR}/formats/filetype.o \
+          ${BUILD_DIR}/formats/flv.o \
+          ${BUILD_DIR}/formats/flv_write.o \
+          ${BUILD_DIR}/formats/m3u.o \
+          ${BUILD_DIR}/formats/mpd.o \
+          ${BUILD_DIR}/formats/metafile.o \
+          ${BUILD_DIR}/formats/mkv.o \
+          ${BUILD_DIR}/formats/mkv_write.o \
+          ${BUILD_DIR}/formats/mp4.o \
+          ${BUILD_DIR}/formats/mp4boxes.o \
+          ${BUILD_DIR}/formats/mp4creator.o \
+          ${BUILD_DIR}/formats/mp4extractor.o \
+          ${BUILD_DIR}/formats/mp2ts.o \
+          ${BUILD_DIR}/formats/mp2pes.o \
+          ${BUILD_DIR}/formats/rtmp_hshake.o \
+          ${BUILD_DIR}/formats/rtmp_parse.o \
+          ${BUILD_DIR}/formats/rtmp_pkt.o \
+          ${BUILD_DIR}/formats/sdp.o \
+          ${BUILD_DIR}/formats/stun.o \
+          ${BUILD_DIR}/vsxlib_int.o \
+          ${BUILD_DIR}/stream/stream_fb.o \
+          ${BUILD_DIR}/stream/stream_outfmt.o \
+          ${BUILD_DIR}/stream/stream_stun.o \
+          ${BUILD_DIR}/stream/stream_turn.o \
+          ${BUILD_DIR}/server/srvauth.o \
+ 	  ${BUILD_DIR}/server/srvdevtype.o \
+ 	  ${BUILD_DIR}/server/srvdirlist.o \
+ 	  ${BUILD_DIR}/server/srvfidx.o \
+ 	  ${BUILD_DIR}/server/srvfiles.o \
+          ${BUILD_DIR}/server/srvflv.o \
+          ${BUILD_DIR}/server/srvmkv.o \
+ 	  ${BUILD_DIR}/server/srvhttp.o \
+ 	  ${BUILD_DIR}/server/srvhttp_media.o \
+ 	  ${BUILD_DIR}/server/srvlistener.o \
+ 	  ${BUILD_DIR}/server/srvlive.o \
+ 	  ${BUILD_DIR}/server/srvinit.o \
+ 	  ${BUILD_DIR}/server/srvmediadb.o \
+ 	  ${BUILD_DIR}/server/srvprop.o \
+          ${BUILD_DIR}/util/auth.o \
+          ${BUILD_DIR}/util/base64.o \
+          ${BUILD_DIR}/util/burstmeter.o \
+          ${BUILD_DIR}/util/bits.o \
+	  ${BUILD_DIR}/util/blowfish.o \
+          ${BUILD_DIR}/util/conf.o \
+          ${BUILD_DIR}/util/crc.o \
+          ${BUILD_DIR}/util/fileutil.o \
+          ${BUILD_DIR}/util/math_common.o \
+          ${BUILD_DIR}/util/md5.o \
+          ${BUILD_DIR}/util/pool.o \
+          ${BUILD_DIR}/util/pktqueue.o \
+          ${BUILD_DIR}/util/netutil.o \
+          ${BUILD_DIR}/util/netio.o \
+          ${BUILD_DIR}/util/sslutil.o \
+	  ${BUILD_DIR}/util/sha1.o \
+	  ${BUILD_DIR}/util/hmac.o \
+          ${BUILD_DIR}/util/strutil.o \
+          ${BUILD_DIR}/util/vidutil.o \
+          ${BUILD_DIR}/util/listnode.o \
+          ${BUILD_DIR}/util/lexparse.o \
+          ${BUILD_DIR}/util/sysutil.o \
+          ${BUILD_DIR}/xcode/xcode_vid_h264_util.o \
+          ${BUILD_DIR}/xcode/xcode_parse.o \
+	  ${BUILD_DIR}/mgr/srvmgr.o \
+	  ${BUILD_DIR}/mgr/srvproxy.o \
+	  ${BUILD_DIR}/mgr/procdb.o \
+	  ${BUILD_DIR}/mgr/procutil.o \
+          ${BUILD_DIR}/mgr/dummy_symbols.o
+
+LIBS_MGR= ${LIBS} 
+LIBS_MGR_EXT +=  ${LIBS_EXT_CRYPTO} ${LIBS_EXT_SSL} ${LIBS_EXT_SRTP}
+#DEFS_MGR += -DHAVE_MGR
+
+
+
+PRODNAME=vsx
+ifeq ($(CFG_VERSION_LITE),1)
+PRODEXT=lite
+endif
+
+ARCHIVE_STATIC=${BUILD_DIR}/lib${PRODNAME}${PRODEXT}.a
+ARCHIVE_SO=${BUILD_DIR}/lib${PRODNAME}${PRODEXT}.so
+ARCHIVE_SO_G=${BUILD_DIR}/lib${PRODNAME}${PRODEXT}_g.so
+
+ifeq ($(CFG_MAINLIB_SO),1)
+  LIBS_PRODNAME+=-L${BUILD_DIR} -l${PRODNAME}${PRODEXT}
+else
+  LIBS_PRODNAME+=${BUILD_DIR}/lib${PRODNAME}${PRODEXT}.a
+endif
+
+
+EXE = ${PRODNAME}bin${PRODEXT}
+EXEPATH = ${BUILD_DIR}/${EXE}
+MGR = ${PRODNAME}-wpbin${PRODEXT}
+EXEPATH_MGR = ${BUILD_DIR}/${MGR}
+ifeq ($(CFG_LDD_STATIC),1)
+  EXEPATH_OUT=${EXEPATH}_s
+else
+  EXEPATH_OUT=${EXEPATH}
+endif
+
+
+SUB_LIBS=sublibs
+SUBDIRS = libcommonutil liblogutil libpcap_compat xcoder 
+
+all:  ${SUB_LIBS} ${OBJS} ${OBJS_ARCH} ${OBJS_MAIN} ${ARCHIVE_STATIC} ${ARCHIVE_SO} $(EXE) ${MGR} 
+
+${SUB_LIBS}:
+	@for i in ${SUBDIRS}; do echo "making... $${i}"; $(MAKE) -C $${i}; done;
+
+#
+# license source is treated seperately from main program source 
+# with its own CFLAGS to ensure no gdb symbols are included as 
+# well as static functions optimized out
+#
+# omit -ggdb or any profiling info from license source
+#
+ifeq ($(CFG_HAVE_LICENSE),1)
+  CFLAGS_LICENSE=${CFLAGS_BASE} -O2
+  OBJS_LICENSE= ${BUILD_DIR}/license/license.o
+  SRC_LICENSE= ${SRC_DIR}/license/license.c
+  LICEXE_SRC_DEP= ${SRC_DIR}/util/base64.c \
+            ${SRC_DIR}/util/blowfish.c \
+            ${SRC_DIR}/util/sha1.c \
+            ${SRC_DIR}/util/fileutil.c \
+            ${SRC_DIR}/util/netutil.c 
+  LICEXE_OBJ_DEP= ${BUILD_DIR}/util/base64.o \
+            ${BUILD_DIR}/util/blowfish.o \
+            ${BUILD_DIR}/util/sha1.o \
+            ${BUILD_DIR}/util/fileutil.o \
+            ${BUILD_DIR}/util/netutil.o 
+LICEXE_OBJ_DEP+=${OBJS_DEP}
+EXE_LICENSE=license_gen
+else
+  OBJS_LICENSE= 
+  SRC_LICENSE=
+  LICEXE_OBJ_DEP=
+endif
+
+OBJS_LIB=${OBJS} ${OBJS_LICENSE} ${OBJS_ARCH}
+
+#
+# Create subdirs and compile license source files into object files.
+#
+$(OBJS_LICENSE): $(SRC_LICENSE)
+	@if test ! -d $(BUILD_DIR); then $(MKDIR) $(BUILD_DIR); fi;
+	@if test ! -d $(BUILD_DIR)/license; then $(MKDIR) $(BUILD_DIR)/license; fi;
+	@if test ! -d $(BUILD_DIR)/util; then $(MKDIR) $(BUILD_DIR)/util; fi;
+	$(CC) $(CFLAGS_LICENSE) $(DEFS) $(INCLUDE_DIRS) -o $@  -c ${SRC_LICENSE}
+
+license: ${OBJS_LICENSE}
+
+#
+# Create license_gen for license key generation
+#
+$(EXE_LICENSE): ${LICEXE_OBJ_DEP}
+	@if test ! -d $(BUILD_DIR); then $(MKDIR) $(BUILD_DIR); fi;
+	$(CC) $(DEFS) $(INCLUDE_DIRS) $(CFLAGS_LICENSE) $(LICEXE_OBJ_DEP) \
+          -o $(BUILD_DIR)/$(EXE_LICENSE) $(SRC_DIR)/license/license_gen.c \
+         $(LIBS) ${LIBS_EXT}
+
+#
+# Create subdirs and compile source files into object files.
+#
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c 
+	@if test ! -d $(BUILD_DIR); then $(MKDIR) $(BUILD_DIR); fi;
+	@if test "$(ARCH_DIR)" != "" ; then $(MKDIR) $(ARCH_DIR); fi;
+	@if test ! -d $(BUILD_DIR)/capture; then $(MKDIR) $(BUILD_DIR)/capture; fi;
+	@if test ! -d $(BUILD_DIR)/codecs; then $(MKDIR) $(BUILD_DIR)/codecs; fi;
+	@if test ! -d $(BUILD_DIR)/formats; then $(MKDIR) $(BUILD_DIR)/formats; fi;
+	@if test ! -d $(BUILD_DIR)/server; then $(MKDIR) $(BUILD_DIR)/server; fi;
+	@if test ! -d $(BUILD_DIR)/stream; then $(MKDIR) $(BUILD_DIR)/stream; fi;
+	@if test ! -d $(BUILD_DIR)/util; then $(MKDIR) $(BUILD_DIR)/util; fi;
+	@if test ! -d $(BUILD_DIR)/xcode; then $(MKDIR) $(BUILD_DIR)/xcode; fi;
+	@if test ! -d $(BUILD_DIR)/test; then $(MKDIR) $(BUILD_DIR)/test; fi;
+	@if test ! -d $(BUILD_DIR)/mgr; then $(MKDIR) $(BUILD_DIR)/mgr; fi;
+	$(CC) $(CFLAGS) $(DEFS) $(INCLUDE_DIRS)  -o $@ -c $<
+
+#
+# Create lib{$PRODNAME}.a API lib including all functional code for vendor integration
+#
+${ARCHIVE_STATIC}: ${SUB_LIBS} ${OBJS_LIB} 
+	${AR} rc ${ARCHIVE_STATIC} ${OBJS_LIB}
+	${RANLIB} ${ARCHIVE_STATIC}
+	@${E} ---------------------------------------  ;
+	@if [ -r ${ARCHIVE_STATIC} ];                   \
+	then                                            \
+	${E} ${ARCHIVE_STATIC} built successfully ;     \
+	else                                            \
+	${E} ${ARCHIVE_STATIC} build failed       ;     \
+	fi;
+	@${E} ---------------------------------------  ;
+
+
+#
+# Create lib${PRODNAME}.so lib including all functional code and command line
+#
+${ARCHIVE_SO}:  ${SUB_LIBS} ${OBJS_LIB} 
+	${CC} -shared -o ${ARCHIVE_SO} ${LDFLAGS_SO} ${OBJS_LIB} \
+             ${LIBS_DBGMALLOC} ${LIBS_IXCODE} ${LIBS_XCODE} ${LIBS_EXT}
+        ifneq ($(CFG_GDB),1) 
+	  @cp ${ARCHIVE_SO} ${ARCHIVE_SO_G}
+	  ${STRIP} ${ARCHIVE_SO} 
+        endif
+	@${E} ---------------------------------------  ;
+	@if [ -r ${ARCHIVE_SO} ];               \
+	then                                             \
+	${E} ${ARCHIVE_SO} built successfully ; \
+	else                                             \
+	${E} ${ARCHIVE_SO} build failed       ; \
+	fi;
+	@${E} ---------------------------------------  ;
+
+
+#
+# Create executable file
+#
+${EXE}:  ${SUB_LIBS} ${ARCHIVE_SO} ${OBJS_MAIN} 
+	    $(CC) $(LDFLAGS) ${LDFLAGS_EXE} -o ${EXEPATH_OUT} ${OBJS_MAIN} ${LIBS_PRODNAME} ${LIBS_XCODE} ${LIBS}
+            ifneq ($(CFG_GDB),1)
+	      @cp ${EXEPATH_OUT} ${EXEPATH}_g
+	      ${STRIP} ${EXEPATH_OUT} 
+            endif
+	    @${E} --------------------------------------- ;
+	    @if [ -r ${EXEPATH_OUT} ];                         \
+	    then                                           \
+	    ${E} ${EXEPATH_OUT} built successfully           ; \
+	    else                                           \
+	    ${E} ${EXEPATH_OUT} build failed                 ; \
+	    fi;
+	    @${E} --------------------------------------- ;
+
+${PRODNAME}-wp: ${MGR}
+
+${MGR}: ${SUB_LIBS} ${BUILD_DIR}/mgr/mainmgr.o  ${OBJS_MGR} ${OBJS_LICENSE} 
+	${CC} ${LDFLAGS} ${LIBS_MGR} -o ${EXEPATH_MGR} ${BUILD_DIR}/mgr/mainmgr.o \
+	      ${OBJS_MGR} ${OBJS_MGR_DEP} ${OBJS_LICENSE} ${LIBS_MGR_EXT}
+            ifneq ($(CFG_GDB),1)
+	      @cp ${EXEPATH_MGR} ${EXEPATH_MGR}_g 
+	      ${STRIP} ${EXEPATH_MGR} 
+            endif
+	    @${E} --------------------------------------- ;
+	    @if [ -r ${EXEPATH_MGR} ];                         \
+	    then                                           \
+	    ${E} ${EXEPATH_MGR} built successfully           ; \
+	    else                                           \
+	    ${E} ${EXEPATH_MGR} build failed                 ; \
+	    fi;
+	    @${E} --------------------------------------- ;
+
+installer-build: ${EXE} ${MGR}
+	@${E} --------------------------------------- ;
+	@if [ -r installer_output_path.tmp ]; \
+	then \
+	rm ./installer_output_path.tmp ; \
+	fi;
+	@${E} Running packaging script ../packaging/pkg_vsx.sh;
+	../packaging/pkg_vsx.sh unknown installer_output_path.tmp
+	@${E} --------------------------------------- ;
+	@if [ -r installer_output_path.tmp ]; \
+	then                                           \
+	if [ -r `cat installer_output_path.tmp` ]; \
+	then                                           \
+	${E} installer-build success. ; \
+	${E} Created self-extracting installer file: `cat installer_output_path.tmp` ; \
+	else                                           \
+	${E} installer-build failed.  Cannot find self-extracting file: `cat installer_output_path.tmp`  ; \
+	fi; \
+	else                                           \
+	${E} installer-build failed                 ; \
+	fi;
+	@${E} --------------------------------------- ;
+
+installer-run: installer-build
+install: installer-build
+
+
+proxy: ${BUILD_DIR}/proxy.o ${ARCHIVE_STATIC}
+	${CC} ${LDFLAGS} -o ${BUILD_DIR}/proxy ${BUILD_DIR}/proxy.o \
+              ${ARCHIVE_STATIC} ${LIBS_EXT} ${LIBS}  ${LIBS_XCODE} ${LIBS_EXT}
+
+
+#
+# Create symlinks to run directly from source tree
+#
+dev:
+	@${E} --------------------------------------- ;
+	@${E} Creating symbolic links in bin/         ;
+	@${MKDIR} bin/
+	@ln -fs ../scripts/pkg/${PRODNAME}child.sh bin/${PRODNAME}child.sh
+	@ln -fs ../scripts/pkg/startconf.sh bin/startconf.sh
+	@ln -fs ../scripts/pkg/${PRODNAME}wrapper.sh bin/${PRODNAME}
+	@ln -fs ../scripts/pkg/start${PRODNAME}wp.sh bin/start${PRODNAME}wp.sh
+	@ln -fs ../scripts/pkg/ffmpeg_tn_${ARCH} bin/ffmpeg_tn
+	@ln -fs ../${BUILD_DIR}/${EXE} bin/${EXE}
+	@ln -fs ../${BUILD_DIR}/${MGR} bin/${MGR}
+	@${E} Creating symbolic links in lib/         ;
+	@${MKDIR} lib/
+	@ln -fs ../xcoder/${BUILD_DIR}/libxcode_g.so lib/libxcode.so
+	@ln -fs ../${BUILD_DIR}/lib${PRODNAME}.a lib/lib${PRODNAME}.a
+	@ln -fs ../${BUILD_DIR}/lib${PRODNAME}_g.so lib/lib${PRODNAME}.so
+	@ln -fs ../${THIRDPARTYPATH}/libx264/libx264.so lib/libx264.so
+	@ln -fs ../${THIRDPARTYPATH}/openssl-1.0.1e/lib/libssl.1.0.0.dylib lib/libssl.1.0.0.dylib
+	@ln -fs ../${THIRDPARTYPATH}/openssl-1.0.1e/lib/libcrypto.1.0.0.dylib lib/libcrypto.1.0.0.dylib
+	@ln -fs ../${THIRDPARTYPATH}/faac-1.28/libfaac.so lib/libfaac.so
+	@ln -fs ../${THIRDPARTYPATH}/silk/libSKP_SILK_SDK.so lib/libSKP_SILK_SDK.so
+	@ln -fs ../${THIRDPARTYPATH}/opus-1.0.3/lib/libopus_float.so lib/libopus_float.0.dyilb
+	@ln -fs ../${THIRDPARTYPATH}/opus-1.0.3/lib/libopus_fixedpoint.so lib/libopus_fixedpoint.0.dyilb
+	@ln -fs ../${THIRDPARTYPATH}/opus-1.0.3/lib/libopus_floatapprox.so lib/libopus_floatapprox.0.dyilb
+	@ln -fs ../${THIRDPARTYPATH}/opus-1.0.3/lib/libopus_float.so lib/libopus.0.dyilb
+	@${E} Creating symbolic links in vcx/mobicents-sip        ;
+	@ln -fs ../../openvsx ../vcx/mobicents-sip/openvsx 
+	@${E} --------------------------------------- ;
+	
+
+#
+# clean build environment
+#
+cleanexe:
+	${RM} ./${BUILD_DIR}
+
+clean: cleanexe
+	@for i in ${SUBDIRS}; do echo "cleaning... $${i}"; $(MAKE) $@ -C $${i}; done;
+
+.PHONY:all ${EXE} ${MGR} clean install installer-build installer-run
+

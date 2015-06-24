@@ -1,0 +1,76 @@
+include ./Makefile.conf
+
+SRC_DIR = src
+INCLUDE_DIRS += -I./include  
+
+OBJS += ${BUILD_DIR}/xcoder_video.o ${BUILD_DIR}/xcoder_audio.o ${BUILD_DIR}/xcoder_libavcodec.o \
+        ${OBJS_X264} ${OBJS_VP8} ${OBJS_PIP} ${OBJS_MIXER} ${OBJS_FILTER} \
+        ${OBJS_SILK} ${OBJS_OPUS} ${OBJS_AAC}
+EXE_OBJS = ${BUILD_DIR}/main.o
+
+LIBS_EXT+= ${FFMPEGPATH}/libavcodec/libavcodec.a \
+           ${FFMPEGPATH}/libswscale/libswscale.a \
+           ${FFMPEGPATH}/libavutil/libavutil.a
+
+LIBS_EXT += ${LIBS_EXT_X264} ${LIBS_EXT_AAC} ${LIBS_EXT_AMR} ${LIBS_EXT_VORBIS} \
+            ${LIBS_EXT_VP8} ${LIBS_EXT_SPEEX} ${LIBS_EXT_SILK} ${LIBS_EXT_OPUS} ${LIBS_EXT_WEBRTC_VAD}
+
+
+INCLUDE_DIRS+=-I${FFMPEGPATH} -I${LIBX264PATH} ${INCLUDE_EXT_SPEEX} ${INCLUDE_EXT_SILK} \
+              ${INCLUDE_EXT_OPUS} ${INCLUDE_EXT_WEBRTC_VAD}
+#DEFS+= -DPES_XCODE -DXCODE_IPC
+#DEFS+=-DTESTME
+ifneq ($(HAVE_THIRDPARTY_SO),1)
+LIBS_EXE += ${OBJS}
+LIBS_EXE += -lm ${LIB_PTHREAD} ${LIB_ZLIB} ${LIB_DLOPEN}
+endif
+
+XCODE_NAME=xcode
+IXCODE_NAME=ixcode
+EXE = ${BUILD_DIR}/vsx${XCODE_NAME}${EXE_EXTENSION}
+IXCODE_STATIC = ${BUILD_DIR}/lib${IXCODE_NAME}.a
+THIRDPARTY_SO = ${BUILD_DIR}/lib${XCODE_NAME}.so
+THIRDPARTY_SO_G = ${BUILD_DIR}/lib${XCODE_NAME}_g.so
+LIBS = ${IXCODE_STATIC}
+#LIBS = -L${BUILD_DIR} -l${XCODE_NAME}
+
+all: ${IXCODE_STATIC} ${THIRDPARTY_SO} 
+
+
+
+# compile c source files into object files.
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
+	@if test ! -d $(BUILD_DIR); then $(MKDIR) $(BUILD_DIR); fi;
+	@if test ! -d $(BUILD_DIR)/mixer; then $(MKDIR) $(BUILD_DIR)/mixer; fi;
+	$(CC) $(CFLAGS) $(DEFS) $(INCLUDE_DIRS) -o $@ -c $<
+
+#create .a library of comprised of local .o source
+${IXCODE_STATIC}: ${OBJS}
+	    ${AR} cr ${IXCODE_STATIC} ${OBJS}
+	    ${RANLIB} ${IXCODE_STATIC}
+
+#create third-party encoder/decoder .so library
+${THIRDPARTY_SO}: 
+	    ${CC} ${LDFLAGS_SO}  -shared -o $@  ${LIBS_DBGMALLOC_XCODE} \
+            ${LIBS_EXT_LD_PREFIX} ${LIBS_EXT} ${LIBS_EXT_LD_SUFFIX} ${LIBS_EXE}
+#	    ifneq ($(CFG_GDB),1)
+	        ${CP} ${THIRDPARTY_SO} ${THIRDPARTY_SO_G}
+	        ${STRIP} ${THIRDPARTY_SO}
+#	    endif
+
+#create executable
+${EXE}: ${EXE_OBJS} ${IXCODE_STATIC}
+	$(CC) $(CFLAGS) -o $@ ${EXE_OBJS} ${LIBS} ${LIBS_EXT} ${LIBS_EXE}
+#	ifneq ($(CFG_GDB),1)
+	    ${STRIP} ${EXE}
+#	endif
+
+testclient: ${BUILD_DIR}/testclient.o
+	    $(CC) $(CFLAGS) -o ${BUILD_DIR}/testclient \
+                   ${BUILD_DIR}/testclient.o ${OBJS}
+
+# clean everything
+clean:
+	${RM} ./${BUILD_DIR}
+.PHONY:all clean
+

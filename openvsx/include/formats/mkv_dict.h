@@ -1,0 +1,341 @@
+/** <!--
+ *
+ *  Copyright (C) 2014 OpenVCX openvcx@gmail.com
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU Affero General Public License as
+ *  published by the Free Software Foundation, either version 3 of the
+ *  License, or (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU Affero General Public License for more details.
+ *
+ *  You should have received a copy of the GNU Affero General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ *  If you would like this software to be made available to you under an 
+ *  alternate license please email openvcx@gmail.com for more information.
+ *
+ * -->
+ */
+
+
+#ifndef __MKV_DICT_H__
+#define __MKV_DICT_H__
+
+#include "mkv_types.h"
+
+
+#define MEMBER_SIZEOF(t, e) sizeof(((t *)0)->e)
+#define OFFSETOF(t, e) ((uint64_t)((char *)&((t *)0)->e))
+#define INIT_NULL 0, NULL
+
+static const uint64_t s_ebml_type_max_lengths[] = {
+  0,          // EBML_TYPE_NONE
+  4,          // EBML_TYPE_UINT32
+  8,          // EBML_TYPEUINT64
+  8,          // EBML_TYPE_DOUBLE
+  0x1000000,  // EBML_TYPE_UTF8
+  0,          // EBML_TYPE_SUBTYPES
+  0,          // EBML_TYPE_DATE
+  0x10000000, // EBML_TYPE_BINARY
+  0,          // EBML_TYPE_BINARY_PARTIAL
+  0,          // EBML_TYPE_PASS
+  0,          // EBML_TYPE_END
+  0           // EBML_TYPE_LAST
+};
+
+
+static const EBML_SYNTAX_T s_mkv_dict_header_elements[] = {
+  { MKV_ID_EBMLVERSION, EBML_TYPE_UINT32, OFFSETOF(MKV_HEADER_T,version), NULL, INIT_UI32(EBML_VERSION), },
+  { MKV_ID_EBMLREADVERSION, EBML_TYPE_UINT32, OFFSETOF(MKV_HEADER_T,readVersion), NULL,  INIT_UI32(EBML_VERSION) },
+  { MKV_ID_EBMLMAXIDLENGTH, EBML_TYPE_UINT32, OFFSETOF(MKV_HEADER_T,maxIdLength), NULL, INIT_UI32(EBML_MAX_ID_LENGTH) },
+  { MKV_ID_EBMLMAXSIZELENGTH, EBML_TYPE_UINT32, OFFSETOF(MKV_HEADER_T,maxSizeLength), NULL, INIT_UI32(EBML_MAX_SIZE_LENGTH) },
+  { MKV_ID_DOCTYPE, EBML_TYPE_UTF8, OFFSETOF(MKV_HEADER_T,docType), NULL, INIT_STR("matroska"), 0, MEMBER_SIZEOF(MKV_HEADER_T, docType) },
+  { MKV_ID_DOCTYPEVERSION, EBML_TYPE_UINT32, OFFSETOF(MKV_HEADER_T,docVersion), NULL, INIT_UI32(EBML_VERSION) },
+  { MKV_ID_DOCTYPEREADVERSION, EBML_TYPE_UINT32, OFFSETOF(MKV_HEADER_T,docReadVersion), NULL, INIT_UI32(EBML_VERSION)  },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static const EBML_SYNTAX_T s_mkv_dict_header[] = {
+  { MKV_ID_HEADER, EBML_TYPE_SUBTYPES, 0, s_mkv_dict_header_elements, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static const EBML_SYNTAX_T s_mkv_dict_segment_seekhead_seekentry[] = {
+  { MKV_ID_SEEKID, EBML_TYPE_UINT64, OFFSETOF(MKV_SEEKENTRY_T, id), NULL, INIT_NONE },
+  { MKV_ID_SEEKPOSITION, EBML_TYPE_UINT64, OFFSETOF(MKV_SEEKENTRY_T, pos), NULL, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static const EBML_SYNTAX_T s_mkv_dict_segment_tag_targets[] = {
+  { MKV_ID_TAGTYPE, EBML_TYPE_UTF8, OFFSETOF(MKV_TAG_TARGET_T, type), NULL, INIT_NONE, 0, MEMBER_SIZEOF(MKV_TAG_TARGET_T, type) },
+  { MKV_ID_TAGTYPEVAL, EBML_TYPE_UINT64, OFFSETOF(MKV_TAG_TARGET_T, typeVal), NULL, INIT_UI64(50) },
+  { MKV_ID_TAGTRACKUID, EBML_TYPE_UINT64, OFFSETOF(MKV_TAG_TARGET_T, trackUid), NULL, INIT_NONE  },
+  { MKV_ID_TAGATTACHUID, EBML_TYPE_UINT64, OFFSETOF(MKV_TAG_TARGET_T, attachUid), NULL, INIT_NONE  },
+  { MKV_ID_TAGCHAPTERUID, EBML_TYPE_UINT64, OFFSETOF(MKV_TAG_TARGET_T, chapterUid), NULL, INIT_NONE  },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static const EBML_SYNTAX_T s_mkv_dict_segment_tag_simpletag[] = {
+  { MKV_ID_TAGNAME, EBML_TYPE_UTF8, OFFSETOF(MKV_TAG_SIMPLE_T, name), NULL, INIT_NONE, 0, MEMBER_SIZEOF(MKV_TAG_SIMPLE_T, name) },
+  { MKV_ID_TAGSTRING, EBML_TYPE_UTF8, OFFSETOF(MKV_TAG_SIMPLE_T, str), NULL, INIT_NONE, 0, MEMBER_SIZEOF(MKV_TAG_SIMPLE_T, str) },
+  { MKV_ID_TAGLANGUAGE, EBML_TYPE_UTF8, OFFSETOF(MKV_TAG_SIMPLE_T, language), NULL, INIT_STR("und"), 0, MEMBER_SIZEOF(MKV_TAG_SIMPLE_T, language) },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static const EBML_SYNTAX_T s_mkv_dict_segment_tag[] = {
+  { MKV_ID_SIMPLETAG, EBML_TYPE_SUBTYPES, OFFSETOF(MKV_TAG_T, simpleTag), s_mkv_dict_segment_tag_simpletag, INIT_NONE },
+  { MKV_ID_TAGTARGETS, EBML_TYPE_SUBTYPES, OFFSETOF(MKV_TAG_T, tagTarget), s_mkv_dict_segment_tag_targets, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static const EBML_SYNTAX_T s_mkv_dict_segment_tags[] = {
+  { MKV_ID_TAG, EBML_TYPE_SUBTYPES, OFFSETOF(MKV_TAGS_T, arrTags), s_mkv_dict_segment_tag, INIT_NONE, sizeof(MKV_TAG_T) },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static const EBML_SYNTAX_T s_mkv_dict_segment_seekhead[] = {
+  { MKV_ID_SEEKENTRY, EBML_TYPE_SUBTYPES, OFFSETOF(MKV_SEEKHEAD_T, arrSeekEntries), s_mkv_dict_segment_seekhead_seekentry, INIT_NONE, sizeof(MKV_SEEKENTRY_T) },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static const EBML_SYNTAX_T s_mkv_dict_segment_cues_entry_pos[] = {
+  //{ MKV_ID_CUETRACK, EBML_TYPE_UINT64, INIT_NULL, INIT_NONE },
+  //{ MKV_ID_CUECLUSTERPOSITION, EBML_TYPE_UINT64, INIT_NULL, INIT_NONE  },
+  //{ MKV_ID_CUEBLOCKNUMBER, EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static const EBML_SYNTAX_T s_mkv_dict_segment_cues_entry[] = {
+  //{ MKV_ID_CUETIME, EBML_TYPE_UINT64, INIT_NULL, INIT_NONE},
+  //{ MKV_ID_CUETRACKPOSITION, EBML_TYPE_SUBTYPES, 0, s_mkv_dict_segment_cues_entry_pos, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static const EBML_SYNTAX_T s_mkv_dict_segment_cues[] = {
+  //{ MKV_ID_POINTENTRY, EBML_TYPE_SUBTYPES, 0,s_mkv_dict_segment_cues_entry, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static const EBML_SYNTAX_T s_mkv_dict_segment_chapters_chapter_entry_display[] = {
+  //{ MKV_ID_CHAPSTRING, EBML_TYPE_UTF8, INIT_NULL, INIT_NONE },
+  //{ MKV_ID_CHAPLANG, EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static const EBML_SYNTAX_T s_mkv_dict_segment_chapters_chapter_entry[] = {
+  //{ MKV_ID_CHAPTERTIMESTART, EBML_TYPE_UINT64, INIT_NULL, INIT_NONE },
+  //{ MKV_ID_CHAPTERTIMEEND,EBML_TYPE_UINT64, INIT_NULL, INIT_NONE },
+  //{ MKV_ID_CHAPTERUID, EBML_TYPE_UINT64, INIT_NULL, INIT_NONE },
+  //{ MKV_ID_CHAPTERDISPLAY, EBML_TYPE_SUBTYPES, 0,s_mkv_dict_segment_chapters_chapter_entry_display, INIT_NONE },
+  //{ MKV_ID_CHAPTERFLAGHIDDEN, EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+  //{ MKV_ID_CHAPTERFLAGENABLED, EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+  //{ MKV_ID_CHAPTERPHYSEQUIV, EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+  //{ MKV_ID_CHAPTERATOM, EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+
+static const EBML_SYNTAX_T s_mkv_dict_segment_chapters_chapter[] = {
+  //{ MKV_ID_CHAPTERATOM, EBML_TYPE_SUBTYPES, 0,s_mkv_dict_segment_chapters_chapter_entry, INIT_NONE },
+  //{ MKV_ID_EDITIONUID, EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+  //{ MKV_ID_EDITIONFLAGHIDDEN, EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+  //{ MKV_ID_EDITIONFLAGDEFAULT, EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+  //{ MKV_ID_EDITIONFLAGORDERED, EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+
+static const EBML_SYNTAX_T s_mkv_dict_segment_chapters[] = {
+  //{ MKV_ID_EDITIONENTRY,EBML_TYPE_SUBTYPES, 0,s_mkv_dict_segment_chapters_chapter, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static const EBML_SYNTAX_T s_mkv_dict_segment_attachments_attachment[] = {
+  //{ MKV_ID_FILEUID, EBML_TYPE_UINT64, INIT_NULL, INIT_NONE },
+  //{ MKV_ID_FILENAME, EBML_TYPE_UTF8, INIT_NULL, INIT_NONE },
+  //{ MKV_ID_FILEMIMETYPE, EBML_TYPE_UTF8,  INIT_NULL, INIT_NONE },
+  //{ MKV_ID_FILEDATA, EBML_TYPE_BINARY,  INIT_NULL, INIT_NONE },
+  //{ MKV_ID_FILEDESC, EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+
+static const EBML_SYNTAX_T s_mkv_dict_segment_attachments[] = {
+  //{ MKV_ID_ATTACHEDFILE, EBML_TYPE_SUBTYPES, 0,s_mkv_dict_segment_attachments_attachment, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static const EBML_SYNTAX_T s_mkv_dict_segment_track_video[] = {
+  //{ MKV_ID_VIDEOFRAMERATE, EBML_TYPE_DOUBLE, INIT_NULL, INIT_NONE },
+  { MKV_ID_VIDEOFRAMERATE, EBML_TYPE_DOUBLE, OFFSETOF(MKV_TRACK_VID_T, fps), NULL, INIT_NONE },
+  { MKV_ID_VIDEODISPLAYWIDTH, EBML_TYPE_UINT32, OFFSETOF(MKV_TRACK_VID_T, displayWidth), NULL, INIT_NONE },
+  { MKV_ID_VIDEODISPLAYHEIGHT, EBML_TYPE_UINT32, OFFSETOF(MKV_TRACK_VID_T, displayHeight), NULL, INIT_NONE },
+  { MKV_ID_VIDEOPIXELWIDTH, EBML_TYPE_UINT32, OFFSETOF(MKV_TRACK_VID_T, pixelWidth), NULL, INIT_NONE },
+  { MKV_ID_VIDEOPIXELHEIGHT, EBML_TYPE_UINT32, OFFSETOF(MKV_TRACK_VID_T, pixelHeight), NULL, INIT_NONE },
+//  { MKV_ID_VIDEOCOLORSPACE, EBML_TYPE_BINARY,  INIT_NULL, INIT_NONE },
+//  { MKV_ID_VIDEOSTEREOMODE, EBML_TYPE_UINT32, INIT_NULL, INIT_NONE },
+//  { MKV_ID_VIDEOPIXELCROPB, EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+//  { MKV_ID_VIDEOPIXELCROPT, EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+//  { MKV_ID_VIDEOPIXELCROPL, EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+//  { MKV_ID_VIDEOPIXELCROPR, EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+  { MKV_ID_VIDEODISPLAYUNIT, EBML_TYPE_UINT32, OFFSETOF(MKV_TRACK_VID_T, displayUnit), NULL, INIT_NONE },
+//  { MKV_ID_VIDEOFLAGINTERLACED, EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+//  { MKV_ID_VIDEOASPECTRATIO, EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static const EBML_SYNTAX_T s_mkv_dict_segment_track_audio[] = {
+  { MKV_ID_AUDIOSAMPLINGFREQ, EBML_TYPE_DOUBLE, OFFSETOF(MKV_TRACK_AUD_T, samplingFreq), NULL, INIT_DBL(8000.0) },
+  { MKV_ID_AUDIOOUTSAMPLINGFREQ, EBML_TYPE_DOUBLE, OFFSETOF(MKV_TRACK_AUD_T, samplingOutFreq), NULL, INIT_NONE },
+  { MKV_ID_AUDIOBITDEPTH, EBML_TYPE_UINT32, OFFSETOF(MKV_TRACK_AUD_T, bitDepth), NULL, INIT_NONE },
+  { MKV_ID_AUDIOCHANNELS, EBML_TYPE_UINT32, OFFSETOF(MKV_TRACK_AUD_T, channels), NULL, INIT_UI32(1) },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static const EBML_SYNTAX_T s_mkv_dict_segment_track_operation_planes_plane[] = {
+  //{ MKV_ID_TRACKPLANEUID,        EBML_TYPE_UINT64, INIT_NULL, INIT_NONE },
+  //{ MKV_ID_TRACKPLANETYPE,       EBML_TYPE_UINT64, INIT_NULL, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static const EBML_SYNTAX_T s_mkv_dict_segment_track_operation_planes[] = {
+  //{ MKV_ID_TRACKPLANE, EBML_TYPE_SUBTYPES, 0,s_mkv_dict_segment_track_operation_planes_plane, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+
+
+/*
+static EBML_SYNTAX_T s_mkv_dict_segment_track_operation[] = {
+  //{ MKV_ID_TRACKCOMBINEPLANES, EBML_TYPE_SUBTYPES, 0,s_mkv_dict_segment_track_operation_planes, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static EBML_SYNTAX_T s_mkv_dict_segment_track_contentencoding_compression[] = {
+  //{ MKV_ID_ENCODINGCOMPALGO, EBML_TYPE_UINT64,  INIT_NULL, INIT_NONE },
+  //{ MKV_ID_ENCODINGCOMPSETTINGS, EBML_TYPE_BINARY, INIT_NULL, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static EBML_SYNTAX_T s_mkv_dict_segment_track_contentencoding[] = {
+  //{ MKV_ID_ENCODINGSCOPE, EBML_TYPE_UINT64, INIT_NULL, INIT_UI64(1) },
+  //{ MKV_ID_ENCODINGTYPE, EBML_TYPE_UINT64, INIT_NULL, INIT_NONE },
+  //{ MKV_ID_ENCODINGCOMPRESSION, EBML_TYPE_SUBTYPES, 0,s_mkv_dict_segment_track_contentencoding_compression, INIT_NONE },
+  //{ MKV_ID_ENCODINGORDER, EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static EBML_SYNTAX_T s_mkv_dict_segment_track_contentencodings[] = {
+  //{ MKV_ID_TRACKCONTENTENCODING, EBML_TYPE_SUBTYPES, 0,s_mkv_dict_segment_track_contentencoding, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+*/
+
+static EBML_SYNTAX_T s_mkv_dict_segment_track[] = {
+  { MKV_ID_TRACKNUMBER, EBML_TYPE_UINT32, OFFSETOF(MKV_TRACK_T, number), NULL, INIT_NONE },
+  //{ MKV_ID_TRACKUID, EBML_TYPE_UINT32, OFFSETOF(MKV_TRACK_T, uid), NULL, INIT_NONE },
+  { MKV_ID_TRACKUID, EBML_TYPE_UINT64, OFFSETOF(MKV_TRACK_T, uid), NULL, INIT_NONE },
+  { MKV_ID_TRACKTYPE, EBML_TYPE_UINT32, OFFSETOF(MKV_TRACK_T, type), NULL, INIT_NONE },
+//  { MKV_ID_TRACKFLAGENABLED,      EBML_TYPE_NONE, INIT_NULL, INIT_UI64(1)},
+//  { MKV_ID_TRACKFLAGDEFAULT,      EBML_TYPE_UINT64, INIT_NULL, INIT_UI64(1) },
+//  { MKV_ID_TRACKFLAGFORCED,       EBML_TYPE_UINT64, INIT_NULL, INIT_NONE },
+  { MKV_ID_TRACKFLAGLACING, EBML_TYPE_UINT32, OFFSETOF(MKV_TRACK_T, flagLacing), NULL, INIT_UI32(1) },
+//  { MKV_ID_TRACKMINCACHE,         EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+//  { MKV_ID_TRACKMAXCACHE,         EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+  { MKV_ID_TRACKDEFAULTDURATION, EBML_TYPE_UINT64, OFFSETOF(MKV_TRACK_T, defaultDuration), NULL, INIT_NONE },
+  { MKV_ID_TRACKTIMECODESCALE, EBML_TYPE_DOUBLE, OFFSETOF(MKV_TRACK_T, timeCodeScale), NULL, INIT_DBL(1.0) },
+//  { MKV_ID_TRACKMAXBLKADDID,      EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+  { MKV_ID_TRACKNAME,             EBML_TYPE_UTF8, INIT_NULL, INIT_NONE },
+  { MKV_ID_TRACKLANGUAGE, EBML_TYPE_UTF8, OFFSETOF(MKV_TRACK_T, language), NULL, INIT_STR("eng"), 0, MEMBER_SIZEOF(MKV_TRACK_T, language) },
+  { MKV_ID_CODECID, EBML_TYPE_UTF8, OFFSETOF(MKV_TRACK_T, codecId), NULL, INIT_NONE, 0, MEMBER_SIZEOF(MKV_TRACK_T, codecId) },
+  { MKV_ID_CODECPRIVATE, EBML_TYPE_BINARY, OFFSETOF(MKV_TRACK_T, codecPrivate), NULL, INIT_NONE },
+  //{ MKV_ID_CODECNAME,             EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+  { MKV_ID_CODECNAME, EBML_TYPE_UTF8, OFFSETOF(MKV_TRACK_T, codecName), NULL, INIT_NONE, 0, MEMBER_SIZEOF(MKV_TRACK_T, codecName) },
+//  { MKV_ID_TRACKATTACHMENTLINK,   EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+  { MKV_ID_TRACKVIDEO, EBML_TYPE_SUBTYPES, OFFSETOF(MKV_TRACK_T, video) ,s_mkv_dict_segment_track_video },
+  { MKV_ID_TRACKAUDIO, EBML_TYPE_SUBTYPES, OFFSETOF(MKV_TRACK_T, audio) ,s_mkv_dict_segment_track_audio },
+//  { MKV_ID_TRACKOPERATION,        EBML_TYPE_SUBTYPES, 0,s_mkv_dict_segment_track_operation },
+//  { MKV_ID_TRACKCONTENTENCODINGS, EBML_TYPE_SUBTYPES, 0,s_mkv_dict_segment_track_contentencodings },
+//  { MKV_ID_CODECDECODEALL,        EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+//  { MKV_ID_CODECINFOURL,          EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+//  { MKV_ID_CODECDOWNLOADURL,      EBML_TYPE_NONE, INIT_NULL, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+
+static EBML_SYNTAX_T s_mkv_dict_segment_tracks[] = {
+  { MKV_ID_TRACKENTRY,         EBML_TYPE_SUBTYPES,  OFFSETOF(MKV_TRACKS_T, arrTracks), s_mkv_dict_segment_track, INIT_NONE, sizeof(MKV_TRACK_T) },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+
+static EBML_SYNTAX_T s_mkv_dict_segment_info[] = {
+  { MKV_ID_TIMECODESCALE, EBML_TYPE_UINT64,  OFFSETOF(MKV_SEGINFO_T, timeCodeScale), NULL, INIT_UI64(1000000) },
+  { MKV_ID_DURATION, EBML_TYPE_DOUBLE, OFFSETOF(MKV_SEGINFO_T, duration), NULL, INIT_NONE },
+  { MKV_ID_TITLE, EBML_TYPE_UTF8,  OFFSETOF(MKV_SEGINFO_T, title), NULL, INIT_NONE, 0, MEMBER_SIZEOF(MKV_SEGINFO_T, title) },
+  { MKV_ID_WRITINGAPP, EBML_TYPE_UTF8, OFFSETOF(MKV_SEGINFO_T, writingApp), NULL, INIT_NONE, 0, MEMBER_SIZEOF(MKV_SEGINFO_T, writingApp)  },
+  { MKV_ID_MUXINGAPP, EBML_TYPE_UTF8, OFFSETOF(MKV_SEGINFO_T, muxingApp), NULL, INIT_NONE, 0, MEMBER_SIZEOF(MKV_SEGINFO_T, muxingApp) },
+  //{ MKV_ID_DATEUTC, EBML_TYPE_NONE, 0, NULL, INIT_NONE },
+  { MKV_ID_SEGMENTUID, EBML_TYPE_NONE, 0, NULL, INIT_NONE }, // Binary skipped
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+
+static EBML_SYNTAX_T s_mkv_dict_segment[] = {
+  { MKV_ID_INFO, EBML_TYPE_SUBTYPES, OFFSETOF(MKV_SEGMENT_T, info) ,s_mkv_dict_segment_info },
+  { MKV_ID_TRACKS, EBML_TYPE_SUBTYPES, OFFSETOF(MKV_SEGMENT_T, tracks) ,s_mkv_dict_segment_tracks },
+  //{ MKV_ID_SEGATTACHMENTS,        EBML_TYPE_SUBTYPES, 0,s_mkv_dict_segment_attachments },
+  //{ MKV_ID_SEGCHAPTERS,           EBML_TYPE_SUBTYPES, 0,s_mkv_dict_segment_chapters },
+  //{ MKV_ID_CUES,               EBML_TYPE_SUBTYPES, 0,s_mkv_dict_segment_cues },
+  { MKV_ID_TAGS, EBML_TYPE_SUBTYPES, OFFSETOF(MKV_SEGMENT_T, tags), s_mkv_dict_segment_tags },
+  { MKV_ID_SEEKHEAD, EBML_TYPE_SUBTYPES, OFFSETOF(MKV_SEGMENT_T, seekHead), s_mkv_dict_segment_seekhead },
+  { MKV_ID_CLUSTER, EBML_TYPE_END, INIT_NULL, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static EBML_SYNTAX_T s_mkv_dict_segments[] = {
+  { MKV_ID_SEGMENT,            EBML_TYPE_SUBTYPES, 0,s_mkv_dict_segment, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static EBML_SYNTAX_T s_mkv_dict_cluster_simpleblockgroup[] = {
+  { MKV_ID_SIMPLEBLOCK, EBML_TYPE_BINARY_PARTIAL, OFFSETOF(MKV_BLOCKGROUP_T, simpleBlock), NULL, INIT_NONE },
+  { MKV_ID_BLOCKDURATION, EBML_TYPE_UINT64, OFFSETOF(MKV_BLOCKGROUP_T, duration), NULL, INIT_NONE },
+  { MKV_ID_BLOCKREFERENCE, EBML_TYPE_UINT64, OFFSETOF(MKV_BLOCKGROUP_T, reference), NULL, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static EBML_SYNTAX_T s_mkv_dict_cluster_blockgroup[] = {
+  { MKV_ID_SIMPLEBLOCK, EBML_TYPE_BINARY_PARTIAL, OFFSETOF(MKV_BLOCKGROUP_T, simpleBlock), NULL, INIT_NONE },
+  { MKV_ID_BLOCKDURATION, EBML_TYPE_UINT64, OFFSETOF(MKV_BLOCKGROUP_T, duration), NULL, INIT_NONE },
+  { MKV_ID_BLOCKREFERENCE, EBML_TYPE_UINT64, OFFSETOF(MKV_BLOCKGROUP_T, reference), NULL, INIT_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static EBML_SYNTAX_T s_mkv_dict_cluster[] = {
+  { MKV_ID_CLUSTERTIMECODE, EBML_TYPE_UINT64, OFFSETOF(MKV_CLUSTER_T ,timeCode), NULL, INIT_NONE },
+  { MKV_ID_BLOCKGROUP, EBML_TYPE_SUBTYPES, OFFSETOF(MKV_CLUSTER_T, arrBlocks), s_mkv_dict_cluster_blockgroup, INIT_NONE, sizeof(MKV_BLOCKGROUP_T) },
+  { MKV_ID_SIMPLEBLOCK, EBML_TYPE_PASS, OFFSETOF(MKV_CLUSTER_T, arrBlocks), s_mkv_dict_cluster_simpleblockgroup, INIT_NONE, sizeof(MKV_BLOCKGROUP_T) },
+  //{ MKV_ID_CLUSTERPOSITION,EBML_NONE },
+  //{ MKV_ID_CLUSTERPREVSIZE,EBML_NONE },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+static EBML_SYNTAX_T s_mkv_dict_clusters[] = {
+  { MKV_ID_CLUSTER, EBML_TYPE_SUBTYPES, 0, s_mkv_dict_cluster },
+  { MKV_ID_INFO, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 },
+  { MKV_ID_CUES, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 },
+  { MKV_ID_TAGS, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 },
+  { MKV_ID_SEEKHEAD, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 },
+  { 0, EBML_TYPE_NONE, INIT_NULL, INIT_NONE, 0, 0 }
+};
+
+
+
+
+
+#endif // __MKV_DICT_H__

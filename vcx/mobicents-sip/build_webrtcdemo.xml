@@ -1,0 +1,63 @@
+<project name="webrtc-demo" default="war">
+
+    <property environment="env"/>
+    <property name="catalinaHome" value="${env.CATALINA_HOME}"/>
+    <property name="outputName" value="webrtc-demo"/>
+
+    <path id="compile.classpath">
+        <fileset dir="lib">
+            <include name="*.jar"/>
+        </fileset>
+    </path>
+
+    <target name="initialize">
+        <mkdir dir="dist/${outputName}/conf"/>
+        <mkdir dir="build/${outputName}/classes"/>
+        <mkdir dir="logs"/>
+        <mkdir dir="webapps"/>
+    </target>
+
+    <target name="compile" depends="initialize">
+        <javac destdir="build/${outputName}/classes" debug="true" includeantruntime="false" srcdir="src/webrtc-demo">
+            <classpath refid="compile.classpath"/>
+        </javac>
+    </target>
+
+    <target name="war" depends="compile">
+        <mkdir dir="dist/${outputName}/WEB-INF/"/>
+
+        <copy todir="dist/${outputName}">
+            <fileset dir="src/webrtc-demo/html">
+            </fileset>
+        </copy>
+
+        <copy todir="dist/${outputName}/WEB-INF">
+            <fileset dir="src/webrtc-demo">
+                <include name="web.xml"/>
+            </fileset>
+            <fileset dir="build/${outputName}"/>
+        </copy>
+
+        <jar destfile="dist/${outputName}/${outputName}.war" basedir="dist/${outputName}"/>
+    </target>
+
+    <target name="clean">
+        <delete dir="dist/${outputName}" />
+        <delete dir="build/${outputName}" />
+        <delete dir="webapps/${outputName}" />
+        <delete file="webapps/${outputName}.war" />
+    </target>
+
+    <target name="deploy" depends="clean, war">
+        <fail unless="env.CATALINA_HOME" message="CATALINA_HOME environment variable is not set!"/>
+
+        <delete dir="${catalinaHome}/webapps/${outputName}"/>
+        <delete file="${catalinaHome}/webapps/${outputName}.war"/>
+
+        <copy file="dist/${outputName}/${outputName}.war" todir="${catalinaHome}/webapps"/>
+        <copy todir="${catalinaHome}/conf">
+            <fileset dir="dist/${outputName}/conf"/>
+        </copy>
+    </target>
+
+</project>

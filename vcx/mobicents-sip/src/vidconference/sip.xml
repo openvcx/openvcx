@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<sip-app>
+	<app-name>ConferenceServlet</app-name>
+	<display-name>ConferenceServlet</display-name>
+	<description>ConferenceServlet</description>
+
+	<servlet-selection>
+		<main-servlet>
+   		ConferenceServlet	
+		</main-servlet>
+	</servlet-selection>
+ 
+	<servlet>
+		<servlet-name>ConferenceServlet</servlet-name>
+		<display-name>ConferenceServlet</display-name>
+		<description>ConferenceServlet</description>
+		<servlet-class>
+			com.openvcx.conference.ConferenceServlet
+		</servlet-class>
+		<load-on-startup>1</load-on-startup>
+	</servlet>
+	
+	<session-config>
+		<session-timeout>60</session-timeout>
+	</session-config>
+
+
+    <context-param>
+      <param-name>config</param-name>
+      <param-value>conf/sip-conference.conf</param-value>
+    </context-param>
+    
+    
+    <listener>
+        <listener-class>
+            com.openvcx.conference.ConferenceServlet
+        </listener-class>
+    </listener>
+
+</sip-app>

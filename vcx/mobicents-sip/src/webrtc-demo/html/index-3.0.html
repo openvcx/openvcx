@@ -1,0 +1,880 @@
+<html>
+    <head>
+        <title>OpenVCX Demo WebRTC / SIP Demo</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">	
+        <meta name="description" content="OpenVCX (Video Conferencing Server) demo for WebRTC.  Seamless video calling between WebRTC and any SIP video phone for mobile,
+ and desktop for up to 8 participants.">
+        <link href="./css/bootstrap.min.css" rel="stylesheet"> 
+        <link href="./css/bootstrap-responsive.css" rel="stylesheet"> 
+        <link href="css/docs.css" rel="stylesheet">
+
+        <script src="./js/common.js"></script>
+        <script src="./js/jquery-1.7.2.min.js"></script>
+        <script src="./js/jquery-ui-1.8.23.custom.min.js"></script>	
+        <script src="./js/bootstrap.js"></script>
+        <script src="./js/bootstrap.min.js"></script>
+        <script src="./js/jain-sip-3.0.js" type="text/javascript"></script> 
+        <script src="./js/WebRtcComm-3.0.js" type="text/javascript"></script>   
+<script type='text/javascript'>	 
+
+function isPrivateIP(ip) {
+   var parts = ip.split('.');
+   if(parts[0] === '127' || 
+      parts[0] === '10' || 
+      (parts[0] === '172' && (parseInt(parts[1], 10) >= 16 && parseInt(parts[1], 10) <= 31)) || 
+      (parts[0] === '192' && parts[1] === '168')) {
+      return true;
+   }
+   return false;
+}
+
+function isIp(val) {
+  if (/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(val)) 
+    return true;
+  else 
+    return false;
+}
+
+function getStunServer() {
+  var ip=window.location.hostname;
+  if((isIp(ip) && isPrivateIP(ip)) || ip.toUpperCase() === 'LOCALHOST') {
+    return '';
+  } else {
+    return 'stun.ekiga.net';
+  }
+}
+
+ var g_vcxhost="ws://" + window.location.hostname + ":5062";
+ var g_stunserver=getStunServer();
+ var g_uid='';
+ var g_to='';
+ var g_domain='exampledomain.com';
+ var g_maxWidth=640;
+ var g_maxHeight=480;
+ var g_previewWidth=160;
+ var g_previewHeight=120;
+ var g_enableVideo=true;
+ var g_useDisplayMessage=false;
+
+</script>
+        <script src="./js/WebRTCController-3.0.js" type="text/javascript"></script>   
+        <script type='text/javascript'>	 
+
+            webRTCController=new WebRTCController(this);
+
+            function modal_alert(message) {
+
+                if(g_useDisplayMessage) {
+                    setDisplayMessage(message);
+                } else {
+                    $("#modal_message").html(message);
+                    $('#messageModal').modal(); 
+                }
+
+            }
+
+            function setDisplayMessage(message) {
+                if(g_useDisplayMessage) {
+                    divobj=document.getElementById('errorMsgDiv');
+                    if(divobj!=null) {
+                        if(message==null)
+                            message='';
+                        divobj.innerHTML=message;
+                    }
+                }
+            }
+
+            function show_desktop_notification(message) {
+                if (window.webkitNotifications && window.webkitNotifications.checkPermission() == 0) {
+                    var thumb = "";
+                    var title = "WebRTC";
+                    var popup = window.webkitNotifications.createNotification(thumb, title, message);
+                    //Show the popup
+                    popup.show();
+                    setTimeout(function(){
+            	        popup.cancel();
+                    }, '10000');                
+                }
+            }
+
+            function enableConnectButton() 
+            {
+                document.getElementById("Register").disabled=false;
+                document.getElementById("sipDomain").disabled=false;
+                document.getElementById("sipUserName").disabled=false;
+                document.getElementById("sipPassword").disabled=false;
+                document.getElementById("stunServer").disabled=false;
+                document.getElementById("turnServer").disabled=false;
+                document.getElementById("turnLogin").disabled=false;
+                document.getElementById("turnPassword").disabled=false;
+                document.getElementById("sipOutboundProxy").disabled=false;
+            }
+    
+            function disableConnectButton() 
+            {
+                document.getElementById("Register").disabled=true;
+                document.getElementById("sipDomain").disabled=true;
+                document.getElementById("sipUserName").disabled=true;
+                document.getElementById("sipPassword").disabled=true;
+                document.getElementById("stunServer").disabled=true;
+                document.getElementById("turnServer").disabled=true;
+                document.getElementById("turnLogin").disabled=true;
+                document.getElementById("turnPassword").disabled=true;
+                document.getElementById("sipOutboundProxy").disabled=true;
+            }
+
+            function enableDisconnectButton() 
+            {
+                document.getElementById("UnRegister").disabled=false;
+            }
+    
+            function disableDisconnectButton() 
+            {
+                document.getElementById("UnRegister").disabled=true;
+            }
+
+            function  enableVideoCheckbox() 
+            {
+                document.getElementById("enableVideoCheck").disabled=false;
+            }
+
+            function  disableVideoCheckbox() 
+            {
+                document.getElementById("enableVideoCheck").disabled=true;
+            }
+ 
+            function  enableCallButton() 
+            {
+                document.getElementById("Call").disabled=false;
+                document.getElementById("sipContactUri").disabled=false;
+            }
+    
+            function disableCallButton() 
+            {
+                document.getElementById("Call").disabled=true;
+                document.getElementById("sipContactUri").disabled=true;
+            }
+
+            function enableEndCallButton() 
+            {
+                document.getElementById("Bye").disabled=false;
+            }
+    
+            function disableEndCallButton() 
+            {
+                document.getElementById("Bye").disabled=true;
+            }
+
+            function showLocalVideo() 
+            {
+                document.getElementById("localVideoPreview").disabled=true;
+            }
+
+            function hideLocalVideo() 
+            {
+                if(!g_enableVideo) 
+                    document.getElementById("localVideoPreview").style.visibility = "hidden";
+                document.getElementById("localVideoPreview").disabled=true;
+            }
+
+            function showRemoteVideo() 
+            {
+                if(g_enableVideo) 
+                    document.getElementById("remoteVideo").style.visibility = "visible";
+                document.getElementById("localVideoPreview").style.width=g_previewWidth+'px';
+                document.getElementById("localVideoPreview").style.height=g_previewHeight+'px';
+            }
+
+            function hideRemoteVideo()
+            {
+                document.getElementById("remoteVideo").style.visibility = "hidden";
+                document.getElementById("localVideoPreview").style.width=g_maxWidth+'px';
+                document.getElementById("localVideoPreview").style.height=g_maxHeight+'px';
+            }
+
+            function playLocalVideo(localMediaStream) 
+            {
+                //if(typeof navigator.webkitGetUserMedia != undefined)
+                if(navigator.webkitGetUserMedia)
+                {     
+                    document.getElementById("localVideoPreview").src=webkitURL.createObjectURL(localMediaStream);
+                }
+                //else if(typeof navigator.mozGetUserMedia != undefined)
+                else if(navigator.mozGetUserMedia)
+                {
+                    document.getElementById("localVideoPreview").mozSrcObject=localMediaStream;
+                }
+                document.getElementById("localVideoPreview").play();
+            }
+
+
+            function stopLocalVideo() 
+            {
+                document.getElementById("localVideoPreview").pause();
+                //if(typeof navigator.webkitGetUserMedia != undefined)
+                if(navigator.webkitGetUserMedia)
+                {     
+                    document.getElementById("localVideoPreview").src=null;
+                }
+                //else if(typeof navigator.mozGetUserMedia != undefined)
+                else if(navigator.mozGetUserMedia)
+                {
+                    document.getElementById("localVideoPreview").mozSrcObject=null;
+                }
+            }
+
+            function playRemoteVideo(remoteMediaStream) 
+            {
+                //if(typeof navigator.webkitGetUserMedia != undefined)
+                if(navigator.webkitGetUserMedia)
+                {     
+                    document.getElementById("remoteVideo").src=webkitURL.createObjectURL(remoteMediaStream);
+                }
+                //else if(typeof navigator.mozGetUserMedia != undefined)
+                else if(navigator.mozGetUserMedia)
+                {
+                    document.getElementById("remoteVideo").mozSrcObject=remoteMediaStream;
+                }
+                document.getElementById("remoteVideo").play();
+            }
+
+
+            function stopRemoteVideo() 
+            {
+                document.getElementById("remoteVideo").pause();
+                //if(typeof navigator.webkitGetUserMedia != undefined)
+                if(navigator.webkitGetUserMedia)
+                {     
+                    document.getElementById("remoteVideo").src=undefined;
+                }
+                //else if(typeof navigator.mozGetUserMedia != undefined)
+                else if(navigator.mozGetUserMedia)
+                {
+                    document.getElementById("remoteVideo").mozSrcObject=undefined;
+                }
+            }
+
+            function playRinging(remoteMediaStream) 
+            {
+                document.getElementById("ringing").play();
+            }
+
+            function stopRinging() 
+            {
+                document.getElementById("ringing").pause();
+            }
+           
+            function setStunServerTextInputValue(value) 
+            {
+                document.getElementById("stunServer").value=value;
+            }
+
+            function setTurnServerTextInputValue(value) 
+            {
+                document.getElementById("turnServer").value=value;
+            }
+
+            function setTurnLoginTextInputValue(value) 
+            {
+                document.getElementById("turnLogin").value=value;
+            }
+                
+            function setTurnPasswordTextInputValue(value) 
+            {
+                document.getElementById("turnPassword").value=value;
+            }
+
+            function setSipOutboundProxyTextInputValue(value) 
+            {
+                document.getElementById("sipOutboundProxy").value=value;
+            }
+
+            function setSipDomainTextInputValue(value) 
+            {
+                document.getElementById("sipDomain").value=value;
+            }
+
+            function setSipDisplayNameTextInputValue(value) 
+            {
+                document.getElementById("sipDisplayName").value=value;
+            }
+
+            function setSipUserNameTextInputValue(value) 
+            {
+                document.getElementById("sipUserName").value=value;
+            }
+
+            function setSipLoginTextInputValue(value) 
+            {
+                document.getElementById("sipLogin").value=value;
+            }
+
+            function setSipPasswordTextInputValue(value) 
+            {
+                document.getElementById("sipPassword").value=value;
+            }
+
+            function setSipContactUriTextInputValue(value) 
+            {
+                document.getElementById("sipContactUri").value=value;
+            }
+           
+
+            function getTextInputValue(elementId) 
+            {
+                var value = document.getElementById(elementId).value;
+                if(value=="undefined") return undefined;
+                else if(value=="") return undefined;
+                else return value
+            }
+            
+            function getStunServerTextInputValue() 
+            {
+                return getTextInputValue("stunServer")
+            }
+       
+            function getTurnServerTextInputValue() 
+            {
+                return getTextInputValue("turnServer")
+            }
+
+            function getTurnLoginTextInputValue() 
+            {
+                return getTextInputValue("turnLogin")
+            }
+
+            function getTurnPasswordTextInputValue() 
+            {
+                return getTextInputValue("turnPassword")
+            }
+
+            function getSipOutboundProxyTextInputValue() 
+            {
+                return getTextInputValue("sipOutboundProxy");
+            }
+            
+            function getSipDomainTextInputValue() 
+            {
+                return getTextInputValue("sipDomain");
+            }
+
+            function getSipDisplayNameTextInputValue() 
+            {
+                return getTextInputValue("sipDisplayName");
+            }
+
+            function getSipUserNameTextInputValue() 
+            {
+                return getTextInputValue("sipUserName"); 
+            }
+
+            function getSipLoginTextInputValue() 
+            {
+                return getTextInputValue("sipLogin");
+            }
+
+            function getSipPasswordTextInputValue() 
+            {
+                return getTextInputValue("sipPassword"); 
+            }
+
+            function getSipContactUriTextInputValue() 
+            {
+                return getTextInputValue("sipContactUri");
+            }  
+
+            function getAudioCodecsFilterTextInputValue() 
+            {
+                return getTextInputValue("audioCodecsFilter")
+            }
+            
+            function getVideoCodecsFilterTextInputValue() 
+            {
+                return getTextInputValue("videoCodecsFilter")
+            }
+            
+            function getLocalVideoFormatTextInputValue() 
+            {
+                return getTextInputValue("localVideoFormat")
+            }
+
+            function setAudioCodecsFilterTextInputValue(value) 
+            {
+                document.getElementById("audioCodecsFilter").value=value;
+            }
+            
+            function setVideoCodecsFilterTextInputValue(value) 
+            {
+                document.getElementById("videoCodecsFilter").value=value;
+            }
+            
+            function setLocalVideoFormatTextInputValue(value) 
+            {
+                document.getElementById("localVideoFormat").value=value;
+            }
+            
+            $(function() {
+                $( "#resizable" ).resizable({
+                    maxHeight: g_maxHeight,
+                    maxWidth: g_maxWidth,
+                    minHeight: 120,
+                    minWidth: 160
+                });
+            });
+            
+            $(function() {
+                $( "#localVideoPreview" ).draggable({ containment: "#media", scroll: false });
+            });            
+    
+            function toggleFullScreen() {
+            	var videoElement = document.getElementById("remoteVideo");
+                if (!document.mozFullScreen && !videoElement.webkitDisplayingFullscreen) {
+                    videoElement.webkitEnterFullScreen(Element.ALLOW_KEYBOARD_INPUT);
+                } else {
+                    videoElement.webkitExitFullscreen();
+                }
+            }
+
+
+var g_confQueryReq;
+var g_haveConfNumber=false;
+var g_lastCalledNumber=null;
+var g_calledNumber='';
+g_confQueryReq=createAjax();
+
+function ng_cbCreateNumber(id, rdata) {
+  var number='';
+  if(null==rdata) {
+    //number='1234'; 
+  } else {
+    var retParams=getRespArray(rdata)
+    g_haveConfNumber=true;
+    number=retParams['number'];
+  }
+  g_to=number;
+  g_uid=number;
+  document.getElementById('sipContactUri').value=g_to;
+  document.getElementById('sipUserName').value=g_uid;
+  ng_updateShareDiv();
+}
+
+function createMediaLink(number) {
+  var link=window.location.protocol+'//'+window.location.host+'/webrtc-demo/x/l/'+number;
+  return link;
+}
+
+function ng_updateShareDiv() {
+  divobj=document.getElementById('sharelinkdiv');
+  if(divobj!=null) {
+
+    if(g_uid!='') {
+      var proxy=getTextInputValue('sipOutboundProxy');
+      var parser=document.createElement('a');
+      parser.href=proxy;
+      var link=createMediaLink(g_uid);
+      var str='Share this link for to view your live video.  <a target="_new" href="'+link+'">'+link+'</a>';
+    } else {
+      var str='The link to share your live video will appear here.';
+    }
+    divobj.innerHTML=str;
+  }
+}
+
+function ng_onJoinConf() {
+  g_calledNumber=getTextInputValue('sipContactUri');
+  if(g_calledNumber!='') {
+    g_lastCalledNumber=g_calledNumber;
+  }
+  g_uid=getTextInputValue('sipUserName');
+
+  ng_updateShareDiv(false);
+}
+
+function ng_onLeaveConf() {
+  g_calledNumber='';
+  ng_updateShareDiv();
+}
+
+function ng_onChangeSipContactUri() {
+  //ng_updateShareDiv();
+}
+
+function ng_getCookie(c_name) {
+  var c=document.cookie;
+  var pos=c.indexOf(c_name + '=');
+  if(pos>=0) {
+    var idx=c.indexOf("=",pos)+1;
+    var end=c.indexOf(";",pos);
+    if(end==-1)
+      end = c.length;
+    c=unescape(c.substring(idx,end));
+  } else 
+    c='';
+  return c==null?'':c;
+}
+
+function ng_createConfNumber() {
+
+  if(true==g_haveConfNumber) {
+    g_uid=getTextInputValue('sipUserName');
+    g_to=g_uid;
+    document.getElementById('sipContactUri').value=g_to;
+    document.getElementById('sipUserName').value=g_uid;
+    ng_updateShareDiv();
+  } else {
+    var uri='/webrtc-demo/x/createNumber';
+    ajaxGet(g_confQueryReq, uri, ng_cbCreateNumber, null, 3);
+  }
+}
+
+function strip_filename(name) {
+  var l=name.length;
+  if(l>5) {
+    var len=l-5;
+    var ext=name.substring(len);
+    if(ext!=null&&(ext=='.html')) {
+      while(len> 0 && name[len-1] != '/') 
+        len--;
+      name=name.substring(0, len);
+    }
+  }
+  return name;
+}
+
+function ng_initTurn(retParams) {
+  var turnServer=retParams['ts'];
+  var turnLogin=retParams['tl'];
+  var turnPassword=retParams['tp'];
+  if(turnServer==undefined) turnServer='';
+  if(turnPassword==undefined) turnPassword='';
+  if(turnLogin==undefined) turnLogin='';
+  document.getElementById('turnServer').value=turnServer;
+  document.getElementById('turnLogin').value=turnLogin;
+  document.getElementById('turnPassword').value=turnPassword;
+
+
+}
+
+function ng_onload() {
+
+  var retParams=getRespArray(window.location.href);
+  var id=retParams['id'];
+  g_enableVideo=true;
+
+  //if(navigator.userAgent.match('Chrome')) {
+  if(navigator.userAgent.match('Android')) {
+    //var uri=strip_filename(window.location.pathname);
+    //var redirecturl=window.location.protocol+'//'+window.location.host+uri+'android.html';
+    //window.location=redirecturl;
+    //exit;
+
+    g_useDisplayMessage=true;
+    g_enableVideo=false;
+    g_maxWidth=320;
+    g_maxHeight=240;
+    g_previewWidth=80;
+    g_previewHeight=60;
+    document.getElementById("span5id").style.width='99%';
+    document.getElementById("span7id").style.width='99%';
+    document.getElementById("span7id").style.marginLeft='0px';
+    document.getElementById("span7id").style.minWidth=g_maxWidth+'px';
+    document.getElementById("callButtonDivider").innerHTML='<br>&nbsp;<br>';
+    document.getElementById("titleHeaderId").innerHTML='&nbsp;';
+  }
+
+  var _vid=retParams['vid'];
+  if(_vid==undefined) {
+    _vid=retParams['video'];
+  }
+  if(_vid!=undefined) {
+    if(_vid==1) {
+      g_enableVideo=true;
+    } else if(_vid==0) {
+      g_enableVideo=false;
+    }
+  }
+  document.getElementById("enableVideoCheck").checked=g_enableVideo;
+  document.getElementById("localVideoPreview").style.width=g_maxWidth+'px';
+  document.getElementById("localVideoPreview").style.height=g_maxHeight+'px';
+  document.getElementById("remoteVideo").style.width=g_maxWidth+'px';
+  document.getElementById("remoteVideo").style.height=g_maxHeight+'px';
+
+  ng_enableVideoCheckChange();
+
+  if(id==''||id==undefined) {
+
+    if(g_uid==''||g_uid==undefined) {
+      g_uid=ng_getCookie('sn');
+    }
+
+  } else {
+    g_uid=id;
+  }
+
+  g_to=g_uid;
+  document.getElementById('sipContactUri').value=g_to;
+  document.getElementById('sipUserName').value=g_uid;
+
+  ng_initTurn(retParams);
+
+  var stunServer=retParams['st'];
+  if(stunServer!=undefined) {
+    g_stunserver=stunServer
+  }
+
+  if(g_uid=='') {
+    ng_createConfNumber();
+  //} else {
+  //  g_haveConfNumber=true;
+  }
+
+  ng_updateShareDiv();
+  webRTCController.onLoadViewEventHandler();
+}
+
+function ng_enableVideoCheckChange() {
+
+  var enableVideo=document.getElementById("enableVideoCheck").checked;
+  var dorestart=false;
+
+  if(enableVideo != g_enableVideo) {
+    dorestart=true;
+  }
+  g_enableVideo=enableVideo;
+
+  var roomLabel='';
+
+  if(g_enableVideo) {
+      roomLabel='Video';
+      document.getElementById("localVideoPreview").style.visibility="visible";
+  } else {
+      roomLabel='Audio Only';
+      document.getElementById("localVideoPreview").style.visibility="hidden";
+  }
+  document.getElementById("roomHeaderId").innerHTML=roomLabel;
+
+  if(dorestart) {
+    // we're unable to do a full navigator.webkitGetUserMedia reset after first-time-init, so we just do a full page reload here
+    var redirecturl=window.location.protocol+'//'+window.location.host+window.location.pathname+'?video='+(g_enableVideo?1:0);
+    window.location=redirecturl;
+  }
+
+}
+
+        </script>
+
+    </head>
+    <body  onload='ng_onload();' onunload='webRTCController.onUnloadViewEventHandler();'>
+
+<!-- <a href="#" onclick="createConfNumber();">asf</a> -->
+        <div class="navbar Xnavbar-inverse navbar-fixed-top">
+            <div class="Xnavbar-inner">        
+                <div class="containerNoAutoWidth" id="titleHeaderId">
+                    &nbsp;<a class="brand" href="http://openvcx.com/vcx.php">OpenVCX Video Conferencing Server WebRTC / SIP Demo</a> 
+                    <div class="container">
+                       <!-- <img src="../images/logo_wm_sm2.png"> -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="navbar" style="padding:2px 2px 2px 30px;" id="sharelinkdiv">&nbsp;</div>
+        <div class="navbar" style="padding:0px 0px 0px 30px;font-size:20px;" id="errorMsgDiv"></div>
+
+        <div class="container-fluid">
+            <div class="row-fluid">
+                <div class="span5" id="span5id">
+
+
+
+
+
+                    <div class="form-horizontal well">
+
+                        <div id="sipAccountSettings" >
+
+                            <div class="accordion" id="accordion1">
+
+                               <div class="accordion-group">
+                                    <div class="accordion-heading">
+                                        <a class="accordion-toggle nav-header2" data-toggle="collapse" data-parent="#accordion1" href="#registration">
+                                            Registration
+                                        </a>
+                                    </div>
+                                    <div id="registration" class="accordion-body collapse">
+                                        <div class="accordion-inner">
+
+
+                            <div class="control-group" id='sipDomainDiv'>
+                                <label class="control-label">
+                                    <a style="color:#555555" href="#" rel="tooltip" title="SIP Realm" data-placement="top" data-delay: { show: 10, hide: 100 }>Domain</a>:</label>
+                                <input id="sipDomain"  type="text" size="30">
+                            </div>
+                            <div class="control-group" id='sipUserNameDiv'>
+                                <label class="control-label">
+                                    <a style="color:#555555" href="#" rel="tooltip" title="SIP Username" data-placement="top" data-delay: { show: 10, hide: 100 }>User Name</a>:</label>
+                                <input id="sipUserName"  type="text" size="30">
+                            </div>
+
+                                            <div class="control-group" id='sipPasswordDiv'>
+                                                <label class="control-label">
+                                                    <a style="color:#555555" href="#" rel="tooltip" title="Room Password" data-placement="top" data-delay: { show: 10, hide: 100 }>Password</a>:</label>
+                                                <input id="sipPassword"   type="text" size="30"> 
+                                            </div>
+                                        </div><!--/accordion-inner-->
+                                    </div><!--/registration-->
+                                </div><!--accordion-group-->
+
+                                <div class="accordion-group">
+                                    <div class="accordion-heading">           
+                                        <a class="accordion-toggle nav-header2" data-toggle="collapse" data-parent="#accordion1" href="#advancedSettings">
+                                            Advanced Settings
+                                        </a>						 
+                                    </div>
+                                    <div id="advancedSettings" class="accordion-body collapse">
+                                        <div class="accordion-inner">
+
+
+                                            <div class="control-group" id='sipOutboundProxyDiv'>
+                                                <label class="control-label"><a style="color:#555555" href="#" rel="tooltip" title="Specify the IP Address and Port of an OpenVCX Conference Server" data-placement="top" data-delay: { show: 10, hide: 100 }>OpenVCX SIP Server</a> :</label>
+                                                <input  id="sipOutboundProxy"  type="text" size="30"> 
+                                            </div>							
+
+                                            <div class="control-group" id='stunServerDiv'>
+                                                <label class="control-label" for="stunServer"><a style="color:#555555" href="#" rel="tooltip" title="Specify the IP Address and Port of a Stun Server.  Leave empty for local network calling." data-placement="top" data-delay: { show: 10, hide: 100 }>STUN server</a>:</label>
+                                                <input id="stunServer"  type="text" size="30"> 
+                                            </div>
+
+                                            <div class="control-group" id='turnServerDiv'>
+                                                <label class="control-label" for="turnServer"><a style="color:#555555" href="#" rel="tooltip" title="Specify the IP Address and Port of a TURN Server." data-placement="top" data-delay: { show: 10, hide: 100 }>TURN server</a>:</label>
+                                                <input id="turnServer"  type="text" size="30"> 
+                                            </div>
+
+                                            <div class="control-group" id='turnLoginDiv'>
+                                                <label class="control-label" for="turnLogin"><a style="color:#555555" href="#" rel="tooltip" title="Specify the authentication username for use with the TURN Server." data-placement="top" data-delay: { show: 10, hide: 100 }>TURN username</a>:</label>
+                                                <input id="turnLogin"  type="text" size="30"> 
+                                            </div>
+
+                                            <div class="control-group" id='turnPasswordDiv'>
+                                                <label class="control-label" for="turnPassword"><a style="color:#555555" href="#" rel="tooltip" title="Specify the authentication username for use with the TURN Server." data-placement="top" data-delay: { show: 10, hide: 100 }>TURN password</a>:</label>
+                                                <input id="turnPassword"  type="text" size="30"> 
+                                            </div>
+
+                                        </div><!--/accordion-inner-->
+                                    </div><!--/advancedSettings-->
+                                </div><!--/accordion-group-->
+
+                                <div class="accordion-group">
+                                    <div class="accordion-heading">           
+                                        <a class="accordion-toggle nav-header2" data-toggle="collapse" data-parent="#accordion1" href="#videoSettings">
+                                           Video Settings 
+                                        </a>                                             
+                                    </div>
+                                    <div id="videoSettings" class="accordion-body collapse">
+                                        <div class="accordion-inner">
+                                            <div class="control-group" id='videoEnabledDiv'>
+                                                <label class="control-label" for="videoEnabled"><a style="color:#555555" href="#" rel="tooltip" title="Enable Video" data-placement="top" data-delay: { show: 10, hide: 100 }></a>Enable Video:</label>
+                                                <input id="enableVideoCheck" type="checkbox" onchange="javascript:ng_enableVideoCheckChange(this);">
+
+
+                                            </div>
+                                        </div><!--/accordion-inner-->
+                                    </div><!--/videoSettings-->
+                                </div><!--/accordion-group-->
+
+                            </div><!--/accordion-->
+                            <div class="control-group" id ='input'>
+                                <input id='Register' class="btn btn-primary" type='submit' name='Register' disabled="disabled" value='Register'  onclick = "webRTCController.onClickConnectButtonViewEventHandler();"/>
+                                &nbsp;&nbsp;&nbsp;&nbsp;
+                                <input id='UnRegister' class="btn btn-primary" type='submit' name='UnRegister' value='UnRegister' disabled="disabled"  onclick = "webRTCController.onClickDisconnectButtonViewEventHandler();"/>
+                            </div>
+                        </div><!--/sipAccountSettings-->
+                    </div><!--/.well -->
+                </div><!--/span-->
+
+                <div class="span7" id="span7id">
+                    <div class="form-horizontal well">
+                        <div>
+                            <div class="nav-header2" id="roomHeaderId">Video</div>		    				      
+                            <p class="lead"> 
+                            <div id='sipContactUriDiv'>
+                                <div id='input'>
+
+                                    Room SIP URI: <input id="sipContactUri" type="text" size="60" class="input-xlarge focused" disabled onkeyup="javascript:ng_onChangeSipContactUri();">					
+
+                                    <span style="" id="callButtonDivider">&nbsp;</span>
+                                    &nbsp;<input id='Call' class="btn btn-primary" type='submit' name='Call' value='Call' disabled="disabled" onclick = "webRTCController.onClickCallButtonViewEventHandler(getSipContactUriTextInputValue());"/>
+                                    &nbsp;<input id='Bye' class="btn btn-primary" type='submit' name='Bye' value='Hangup' disabled="disabled" onclick = "webRTCController.onClickEndCallButtonViewEventHandler();"/>
+
+
+
+                                    <div id='media'>
+                                        <div id='over'>
+
+                                            <video id="localVideoPreview" autoplay="autoplay" muted="muted" class="ui-widget-content videoDisplay" style="width:640px; height:480px; margin-top: 10px; margin:10px 20px 10px 0px; -webkit-transition-property: opacity;-webkit-transition-duration: 2s;"></video>  
+                                        </div>
+                                        <div id='resizable'>
+                                            <video class="videoDisplay" id="remoteVideo" onDblClick="toggleFullScreen();" width="640" height="480" autoplay="autoplay" style="margin:10px 20px 10px 0px;-webkit-transition-property: opacity; -webkit-transition-duration: 2s;"></video>  
+                                        </div>						    
+                                    </div>	
+                                    <br><p><i>Double-Click the video to enter Full Screen mode </i></p>										  
+                                </div>						
+                            </div>    		        
+                        </div>
+                    </div>
+                </div><!--/span-->
+            </div><!--/row-fluid-->
+
+
+            <div class="modal hide fade" id="callModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+                <div class="modal-header">
+                    <!--button type="button" class="close" data-dismiss="modal" aria-hidden="true">Ã</button-->
+                    <h3 id="call_message">Incoming Call</h3>
+                </div>	  
+                <div class="modal-footer">
+                    <button class="btn reject-btn" data-dismiss="modal" aria-hidden="true">Reject</button>
+                    <button class="btn btn-primary accept-btn" data-dismiss="modal">Accept</button>
+                </div>
+            </div>
+
+            <div class="modal hide fade" id="messageModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+                <div class="modal-header">
+                    <!--button type="button" class="close" data-dismiss="modal" aria-hidden="true">Ã</button-->
+                    <h3 id="modal_message">Incoming Call</h3>
+                </div>	  
+                <div class="modal-footer">
+                    <button class="btn btn-primary" data-dismiss="modal">OK</button>
+                </div>
+            </div>
+        </div><!--/container-fluid-->
+
+
+        <input class="invisible" id="sipDisplayName"  type="text" size="30">
+        <input class="invisible" id="sipLogin"   type="text" size="30"> 
+        <input class="invisible" id="videoCodecsFilter"   type="text" size="30"> 
+        <input class="invisible" id="audioCodecsFilter"   type="text" size="30"> 
+        <input class="invisible" id="localVideoFormat"   type="text" size="30"> 
+
+        <div class="Xnavbar Xnavbar-inverse navbar-fixed-bottom">
+            <div class="Xnavbar-inner">
+                <div class="container" style="text-align:center;width:100%;">
+Powered by <a href="http://openvcx.com/vsx.php">Video Streaming Processor</a> &nbsp; - &nbsp; <a href="http://openvcx.com/vcx.php">Video Conferencing Server</a>&nbsp; -  &copy; 2014 &nbsp;
+                </div>
+            </div>
+        </div><!--Xnavbar-->
+
+        <audio id="ringing" loop src="audio/ringing.wav" ></audio>
+        <script type='text/javascript'>	           
+            // Accept modal 
+            $('#callModal .accept-btn').click(function() {
+                webRTCController.onClickAcceptCallButtonViewEventHandler();
+ 
+            });
+
+            // Reject modal
+            $('#callModal .reject-btn').click(function() { 
+                webRTCController.onClickRejectCallButtonViewEventHandler();
+            });
+</script>
+    </body>
+</html>

@@ -1,0 +1,2205 @@
+<html>
+<head>
+<link rel="stylesheet" type="text/css" href="/rsrc/main.css">
+<title>OpenVSX Video Streaming Server Broadcast Control Panel</title>
+
+<style type="text/css">
+.cpbar {
+  position:static;
+}
+.cpbarplayed {
+  background:#3333dd;
+}
+.cpbarleft{
+  background:#cccccc;
+}
+.bg {
+  margin: 0px 0px 0px 0px;
+  padding: 0px;
+  background-color:#080808;
+  color:#eeeeee;
+  font-size:11px;
+  font-family: Verdana, Arial, Helvetica, sans-serif;
+}
+.bg2 {
+  background-color:#222222;
+  color:#eeeeee;
+}
+.bg3 {
+  background-color:#777777;
+  color:#888888;
+}
+.hdr {
+  background-color:#292929;
+  color:#f3f3f3;
+}
+.footer{
+  font-size:9px;
+}
+.xtxt{
+  color:#cccc88;
+  font-size:9px;
+}
+.logotxt {
+  font-size:38px;
+}
+.inp {
+  color:#dddddd;
+  background-color:#333333;
+  border-color: #a1a0ae;
+  border-width:1px;
+}
+.inpsel {
+  color:#dddddd;
+  background-color:#676767;
+  border-color: #a1a0ae;
+  border-width:1px;
+}
+.cstatus{
+  color:#eeeeee;
+}
+.cstatusyl{
+  color:#eeee88;
+}
+.cstatusgr{
+  color:#67ee67;
+}
+.cstatusred{
+  color:#fe3333;
+}
+.thumbouter{
+  padding: 8px 0px 10px 0px;
+  background-color:#222222;
+  color:#eeeeee;
+}
+.thumbouter2{
+  padding: 8px 0px 10px 0px;
+  background-color:#080808;
+}
+.dirlink{
+  background:transparent url(img/folderbig.png) no-repeat;
+  position:relative; 
+  width:120px; 
+  height:66px; 
+  left:0px; 
+  top:0px;
+  border: 1px solid #444444;
+}
+.novidlink{
+  position:relative; 
+  width:120px; 
+  height:66px; 
+  left:0px; 
+  top:0px;
+  border: 0px;
+}
+.vidlink{
+  position:relative; 
+  width:120px; 
+  height:66px; 
+  left:0px; 
+  top:0px;
+  border: 1px solid #444444;
+}
+.vidlink .vidlinkplaybtn {
+  background:transparent url(img/playbluemed.png) no-repeat scroll 0pt 50%;
+  cursor:pointer;
+  color:#000000;
+  display:block;
+  height:32px;
+  position:relative;
+  text-align:left;
+  text-decoration:none;
+  vertical-align:bottom;
+  width:32px;
+  opacity: 0.8;
+  left: 0px;
+  top: 17px;
+}
+
+a.flink {
+  color:#eeeeee;text-decoration:none;
+}
+a.flink:hover{
+  color:#8888dd;text-decoration:none;
+}
+
+a{ color:#aaaaee; text-decoration:none; }
+a:hover { color:#6666cc; text-decoration:none; }
+td { font-size:11px; background-color:#111111; }
+div { font-size:11px;}
+
+#xtrainfoid {
+font-size: 0.75em;
+position: absolute;
+visibility: hidden;
+left: 0px;
+top: 0px;
+width: 100px;
+height: 0px;
+z-index: 10;
+}
+
+#clientinfoid {
+font-size: 0.75em;
+position: absolute;
+visibility: hidden;
+left: 0px;
+top: 0px;
+width: 100px;
+height: 100px;
+z-index: 5;
+}
+
+
+</style>
+
+<script language="javascript">
+
+var br_un=0;
+var br_ie=1;
+
+var browser=br_un;
+var srvHost="";
+var cmdUrl=srvHost+"/cmd";
+var listUrl=srvHost+"/list";
+var propUrl=srvHost+"/prop";
+var timerstatus;
+var timerimgroll;
+var imgrollidx=0;
+var imgrollsrc='';
+var progduration=0;
+var progpercent=0;
+var laststatus=0;
+var xcodeon=0;
+var dirsortopt=0;
+var ipod='';
+
+var fpaused=0;
+var lpaused=0;
+var rpaused=0;
+var capture=0;
+var recording=0;
+var looping=0;
+var loopingpl=0;
+var playing=0;
+var havechchgr=0;
+var curfile='';
+var prevfile='';
+var curtncnt=0;
+var curdir='';
+var errstr='';
+var curhvrnumtn=0;
+var uipwd='';
+
+
+
+
+
+
+
+
+
+
+
+function createAjax() {
+  // Mozilla/Safari
+  if (window.XMLHttpRequest) {
+    req=new XMLHttpRequest();
+  }
+  else if (window.ActiveXObject) {
+  // IE
+    req=new ActiveXObject("Microsoft.XMLHTTP");
+  }
+  return req;
+}
+
+var cmdReq=createAjax();
+var listReq=createAjax();
+var fileInfoReq=createAjax();
+
+function ajaxGet(req, strHost, queryStr, onSuccess) {
+  document.getElementById('cmdresp').innerHTML='';
+
+  req.open('GET', strHost + queryStr, true);
+  //self.xmlHttpReq.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+  req.onreadystatechange=function() {
+
+    if(req.readyState==4) {
+
+      if(req.status==0) {
+        document.getElementById('cmdresp').innerHTML='<font class="cstatusred">Server Unavailable</font>&nbsp;';
+      } else if(req.status==200) {
+        document.getElementById('cmdresp').innerHTML='&nbsp;';
+      } else {
+        document.getElementById('cmdresp').innerHTML='Server Error&nbsp;';
+      }
+      cbOnSuccess(onSuccess, req.responseText);
+    }
+
+  }
+
+  if (window.XMLHttpRequest) {
+    req.send(null);
+  } else {
+    req.send();
+  }
+}
+
+
+function setvisibility(_elem, vis) {
+  if(vis!=null) {
+    _elem.style.visibility='visible';
+    _elem.style.display=vis;
+  } else {
+    _elem.style.visibility='hidden';
+    _elem.style.display='none';
+  }
+}
+
+
+function truncname(name, max) {
+  var len=name.length;
+  var nameshort;
+  if(len>max) {
+    nameshort=name.substring(0,max-7); 
+    nameshort+='... '; 
+    nameshort+=name.substring(len-3);
+    return nameshort;
+  }
+  return name;
+}
+
+function doubledelims(path) {
+  var pairs=path.split('\\');
+  var str='';
+
+  for(var i=0; i < pairs.length; i++) {
+    if(i>0) {
+      str+='\\\\';
+    }
+    str+=pairs[i];
+  }
+  return str;
+}
+
+function dispdirstr(dir) {
+  var pairs=dir.split('\\');
+  var dirname='';
+  var str='';
+ 
+  if(pairs.length > 0 && pairs[0].length > 0) {
+    str='<a onclick="javascript:listdir(\'\');" href="#">..</a>';
+  } else {
+    str='';
+  }
+
+  for(var i=0; i < pairs.length; i++) {
+    if(pairs[i].length > 0) {
+      str+='\\';
+    }
+    if(i < pairs.length -1) {
+      str+='<a onclick="javascript:listdir(\''+doubledelims(dirname+pairs[i])+'\');" href="#">'+pairs[i]+'</a>';
+      dirname+=pairs[i];
+      dirname+='\\';
+    } else {
+      str+='<a onclick="javascript:listdir(\''+doubledelims(dirname+pairs[i])+'\');" href="#">'+pairs[i]+'</a>';
+    }
+  }
+  return str; 
+}
+
+function urlizestr(dir) {
+  var str='';
+  var pairs=dir.split('\\');
+  for(var i=0; i<pairs.length; i++) {
+    str+=pairs[i];
+    if(i<pairs.length-1) {
+      str+='/'; 
+    }
+  }
+  return str;
+}
+
+function getRespArray(uri) {
+  retParams=new Array();
+  var pairs=uri.split('&');
+  for(var i=0; i < pairs.length; i++) {
+    var pos=pairs[i].indexOf('=');
+    if(pos==-1) continue;
+    var key=pairs[i].substring(0,pos);
+    var val=pairs[i].substring(pos+1);
+    retParams[key]=val;
+  }
+  return retParams;
+}
+
+function formatsize(sz) {
+  return Math.round(sz/1048576*10)/10+' MB';
+}
+
+function formatduration(msin) {
+  var sec=msin/1000;
+  var hr=Math.floor(sec/3600);
+  var min=Math.floor(sec/60)%60;
+  var sec2=Math.floor(sec%60);
+  var ms='';
+  var str='';
+
+  if(hr>0) 
+    str+=hr+':';
+  if(hr>0||min>0) { 
+    if(hr>0&&min<10)
+      str+='0';
+    str+=min+':';
+  }
+  if(sec2<10)
+    str+='0';
+  str+=sec2;
+  if(msin<60000) { 
+    ms=Math.round((ms%10000)/1000);
+    str+='.'+ms;
+  }
+  
+  if(sec<60)
+    str+=' sec';
+
+  return str;
+}
+
+function drawprogbar(ms, progduration,progpercent) {
+  var draw=0;
+  var strbar='';
+  var stroffset='';
+  var progbarwid=734;
+  var wid=0;
+  var perc=0;
+  var ht=10;
+  if(ipod)
+    ht=28;
+  if((ms>0 && progduration>0)||progpercent>0) 
+    draw=1;
+
+  stroffset+='<font class="cstatus">';
+  if(ms!=null && ms!=0) {
+    stroffset+=formatduration(ms);
+    if(progduration==0 && ms<60000)
+      stroffset+=' sec';
+  }
+  if(progduration!=0) {
+    stroffset+=' / '+formatduration(progduration);
+    perc=ms/progduration;
+  } else if(progpercent!=null && progpercent>0) {
+    stroffset=progpercent+'%'; 
+    perc=progpercent/100.0;
+  }
+  stroffset+='&nbsp;';
+  stroffset+='</font>';
+  if(curfile!=null) {
+    stroffset+=' '+unescape(curfile);
+  }
+
+  if(playing==2||playing==3) {
+  var widl=progbarwid * perc;
+  var widr=progbarwid-widl;
+  strbar='<div style="border: 2px #aaaaaa solid;width:'+progbarwid+'px;" id="progbar"';
+  if(draw) {
+    strbar+=' onmousemove="javascript:onprogbarmove();"';
+    strbar+=' onmouseout="javascript:document.getElementById(\'proghvr\').innerHTML=\'&nbsp;\';setmovehandler(null);"';
+    strbar+=' onmouseover="javascript:setmovehandler(onprogbarmove);"';
+  }
+  strbar+='>';
+
+  if(draw) strbar+='<a href="#" onclick="javascript:progbarclick();">';
+  strbar+='<table border=0 cellpadding=0 cellspacing=0 style="position:static;width:'+progbarwid+'+px;">';
+  strbar+='<tr><td style="width:'+widl+'px;" class="cpbarplayed"></td><td style="width:'+widr+'px;" class="cpbarleft">';
+  strbar+='<img src="img/trans.gif" width="1" height="'+ht+'">';
+  strbar+='</td></tr></table>';
+  if(draw) strbar+='</a>';
+  strbar+='</div><div id="proghvr">&nbsp;</div>';
+
+  }
+
+  document.getElementById('opstatusbar').innerHTML=stroffset+'<br>'+strbar;
+}
+
+function drawfilelist(txt) {
+  var colcnt;
+  var colidx=0;
+  var colwid=178;
+  var str='';
+  var strdir='';
+  var retParams=getRespArray(txt); 
+  var cnt=retParams['cnt'];
+  var dir=retParams['dir'];
+
+  curdir=dir;
+  strdir+='Media Directory: ';
+  if(dir=='') 
+    strdir+='<a onclick="javascript:listdir(\'\');" href="#">&lt;Home&gt;</a>';
+  else if(dir!=null) 
+    strdir+=dispdirstr(dir);
+  if(cnt>0)
+    strdir+=' &nbsp;('+cnt+' item'+(cnt>1?'s':'')+')';
+
+  document.getElementById('curdirstr').innerHTML=strdir;
+
+
+  str+='<br>&nbsp;';
+  str+='<table border="0" cellpadding="2" cellspacing="2"><tr>';
+
+  if(cnt<0) {
+    str+='<br>&nbsp;<br>&nbsp;<br><font class="cstatusred">Please set the media directory in vsx.conf</font>';
+  } else if(cnt==0) {
+    str+='<div nowrap>No media files here</div>';
+  } else {
+
+    if(ipod) {
+      colcnt=3;
+      colwid=234;
+    } else
+      colcnt=4;
+
+    for(var i=0; i<cnt; i++) {
+      var prm;
+      var prmf=retParams['f_'+i];
+      var prmd=retParams['d_'+i];
+      var prmtns=retParams['t_'+i];
+      var prmtm=retParams['c_'+i];
+      var havebr=0;
+
+      var _curfile=unescape(curfile);
+      var fullpath=escape(dir); 
+
+      if(fullpath.length>0 && fullpath.substring(fullpath.len-1)!='/')
+        fullpath+='/';
+
+      str+='<td class="bg2" style="width:'+colwid+'px;" valign="top" align="center">';
+
+      if(prmf!=null) {
+
+        fullpath+=prmf;
+        if(prmtns==null) prmtns=0;
+        else if(prmtns >0) prmtns--;
+
+        str+='<div class="thumbouter" style="width:'+colwid+'px;"';
+        if(!ipod)
+          str+=' onmouseover="this.className=\'thumbouter2\'" onmouseout="this.className=\'thumbouter\'"';
+        str+='>';
+
+
+        var stylestr='';
+        if(curfile!='' && unescape(fullpath)==_curfile) {
+          stylestr+='border: 2px solid #eeee88;';
+        }
+
+        if(prmtns>0) {
+          str+='<div class="vidlink" style="background:url(\'tmn/'+fullpath+'_tn.jpg\') no-repeat center;'+stylestr+'"';
+          if(!ipod) 
+            str+=' onmouseover="showxtrainfo(\''+doubledelims(fullpath)+'\',\''+prmf+'\','+prmtns+');" onmouseout="hidextrainfo();"';
+          str+='>';
+          str+='<a style="position:relative;" id="fl_'+i+'" name="'+fullpath+'" onclick="javascript:playfile(this);"';
+          str+='><span class="vidlinkplaybtn"></span></a>';
+          str+='</div>';
+
+        } else {
+          str+='<div class="novidlink"';
+          if(stylestr.length>0) 
+            str+=' style="'+stylestr+'"';
+          str+='><a id="fl_'+i+'" name="'+fullpath+'" onclick="javascript:playfile(this);"';
+          if(!ipod)
+            str+=' onmouseover="showxtrainfo(\''+doubledelims(fullpath)+'\',\''+prmf+'\','+prmtns+');" onmouseout="hidextrainfo();"';
+          str+=' href="#"><img src="img/playbluebig.png" alt="Play" border="0"></a> ';
+          str+='</div>';
+        }
+
+
+        str+='<br>';
+        str+='<a class="flink" target="_new" href="/media/'+urlizestr(fullpath);
+        if(uipwd!='') str+='?pass='+uipwd;
+        str+='\"/>'+truncname(unescape(prmf),24)+'</a>';
+
+        str+='</div>';
+
+ 
+      } else if(prmd) {
+ 
+        fullpath+=prmd;
+
+        str+='<div class="thumbouter" style="width:'+colwid+'px;"'; 
+        if(!ipod)
+          str+=' onmouseover="this.className=\'thumbouter2\'" onmouseout="this.className=\'thumbouter\'"';
+        str+='>';
+
+        str+='<a onclick="javascript:listdir(\''+doubledelims(fullpath)+'\');" href="#">';
+        str+='<img src="img/folderbig.png" border="0">';
+        str+='</a><br>';
+        str+='<a onclick="javascript:listdir(\''+doubledelims(fullpath)+'\');" href="#">';
+        str+='&lt; '+truncname(unescape(prmd),24)+' &gt;';
+        str+='</a>';
+        str+='<br>&nbsp;<br>';
+        str+='</div>';
+
+      }
+
+      str+='</td>';
+      if(++colidx>=colcnt) {
+        str+='</tr><tr>';
+        colidx=0;
+      }
+
+    }
+  }
+  str+='</tr></table>';
+
+
+  document.getElementById('medialist').innerHTML=str;
+}
+
+function formatfps(num) {
+  var _fps
+  if(num == Math.round(num))
+    _fps=Math.round(num);
+  else if(num *10 == Math.round(num*10))
+    _fps=Math.floor(num * 10)/10;
+  else
+    _fps=Math.floor(num * 100)/100;
+  return _fps+'fps';
+}
+
+function cbOnSuccess(onSuccess, txt) {
+
+  if(onSuccess == 0) {
+
+    //document.getElementById('cmdresp').innerHTML=txt;
+
+  } else if(onSuccess == 2) {
+    drawfilelist(txt);
+  } else if(onSuccess == 4) {
+ 
+    var arg;
+    var retParams=getRespArray(txt); 
+
+    arg=retParams['dstaddr1'];
+    if(arg!=null)
+      document.forms['playfrm'].elements['dst'].value=arg;
+    arg=retParams['dstaddr2'];
+    if(arg!=null)
+      document.forms['playfrm'].elements['dst2'].value=arg;
+    arg=retParams['dstaddr3'];
+    if(arg!=null)
+      document.forms['playfrm'].elements['dst3'].value=arg;
+
+    arg=retParams['capaddr'];
+    if(arg!=null)
+      document.forms['playfrm'].elements['src'].value=arg;
+
+    arg=retParams['loop'];
+    if(arg!=null && arg!=looping)
+      looping=arg;
+    arg=retParams['loop_pl'];
+    if(arg!=null && arg!=loopingpl)
+      loopingpl=arg;
+    arg=retParams['dirsort'];
+
+    if(arg!=null && arg!=dirsortopt) {
+      var dirsortopt=arg;
+      var _elem=document.getElementById('dirsort');
+      if(_elem!=null)
+        _elem.selectedIndex=dirsortopt;
+    }
+
+    arg=retParams['chchgr'];
+    if(arg!=null&&arg==1)
+      havechchgr=1; 
+    else
+      havechchgr=0; 
+
+    arg=retParams['live'];
+    if(arg==null || arg==1)
+      document.forms['playfrm'].elements['do_live'].checked=true;
+    else
+      document.forms['playfrm'].elements['do_live'].checked=false;
+
+    arg=retParams['httplive'];
+    if(arg!=null && arg==1)
+      document.forms['playfrm'].elements['do_httplive'].checked=true;
+    else
+      document.forms['playfrm'].elements['do_httplive'].checked=false;
+
+    arg=retParams['xcodeprofile'];
+    if(arg!=null && arg>0) {
+      if(arg==1)
+        document.forms['playfrm'].elements['r_xcode'][1].checked=true;
+    } else
+      document.forms['playfrm'].elements['r_xcode'][0].checked=true;
+
+    arg=retParams['xcode'];
+    if(arg!=null && arg!=xcodeon)
+      xcodeon=arg;
+
+    arg=retParams['ipod'];
+    if(arg!=null && arg!=ipod)
+      ipod=arg;
+
+    if(ipod) {
+      var css=new Array();
+      if(document.styleSheets[0].cssRules)
+        css=document.styleSheets[0].cssRules;
+      else if(document.styleSheets[0].rules)
+        css=document.styleSheets[0].rules;
+      if(css!=null) {
+        for(var idx=0;idx<css.length;idx++) {
+          if(css[idx].selectorText=='td') 
+            css[idx].style.fontSize='18px';
+        }
+      }
+    }
+
+    updatexcodeopt(xcodeon);
+
+    drawcapctrl();
+    drawplayctrl();
+
+    listdir('');
+    checkstatus();
+
+
+  } else if(onSuccess == 3) {
+
+    var str='';
+    var needbr=0;
+    var retParams=getRespArray(txt); 
+    var _vc=retParams['vc'];
+    var _ac=retParams['ac'];
+    var _dur=retParams['dur'];
+    var _sz=retParams['sz'];
+    var _tm=retParams['tm'];
+
+    str+='<table border="0" cellpadding="0" cellspacing="0"><tr><td style="background-color: #333333;">';
+    str+='<font class="xtxt">';
+    if(_dur!=null&&_dur>0) {
+      str+=formatduration(_dur*1000)+'&nbsp;&nbsp;';
+      needbr=1;
+    }
+    if(_sz!=null) {
+       str+='&nbsp;'+formatsize(_sz);
+      needbr=1;
+    }
+    if(_dur>0&&_sz>0) {
+      var _kbps=_sz/128/_dur;
+      needbr=1;
+      str+='&nbsp;&nbsp;';
+      if(_kbps<1000) 
+        str+=Math.round(_kbps*10)/10+' Kb/s';
+      else if(_kbps)
+        str+=Math.round(_kbps/1024*10)/10+' Mb/s';
+    }
+
+    if(_tm.length>1) {
+
+      var dt=new Date();
+      _tm=parseInt(_tm);
+      dt.setTime(_tm * 1000);
+      var _day=dt.getDate();
+      if(++_day<10) _day='0'+_day;
+      var _mon=dt.getMonth();
+      if(++_mon<10) _mon='0'+_mon;
+      var _yr=dt.getYear();
+      _yr-=100;
+      if(_yr<10) _yr='0'+_yr;
+      var _hr=dt.getHours();
+      if(_hr<10) _hr='0'+_hr;
+      var _min=dt.getMinutes();
+      if(_min<10) _min='0'+_min;
+
+      str+='<br>Created on '+_hr+':'+_min+' '+_mon+'/'+_day+'/'+_yr;
+    }
+
+    if(_vc!=null&&_vc!=' ') {
+      if(needbr) str+='<br>';
+      str+=_vc;
+      needbr=1;
+    }
+    if(_ac!=null&&_ac!=' ') {
+      if(needbr) str+='<br>';
+      str+=_ac;
+    }
+  
+    str+='<br>&nbsp;</font>';
+    str+='</td></tr></table>';
+   
+    document.getElementById('fileinfoid').innerHTML=str;
+
+  } else if(onSuccess == 1) {
+
+    var num;
+    var haveplayicon=0;
+    var str='';
+    var strpl='';
+    var strfl='';
+    var strrec='';
+    var ratestr='';
+    var cfrmtstr='';
+    var tfrmtstr='';
+    var vidfrmtstr='';
+    var ms;
+    var _progduration=0;
+    var _fpaused=0;
+    var _lpaused=0;
+    var _rpaused=0;
+    var _capture=0;
+    var _recording=0;
+    var _looping=0;
+    var _loopingpl=0;
+    var _playing=0;
+    var _errstr='';
+    var retParams=getRespArray(txt); 
+
+    _errstr=retParams['err'];
+    curfile=retParams['file'];
+    curtncnt=retParams['tn'];
+
+    if(retParams['fpause']!=null) _fpaused=1;
+    if(retParams['lpause']!=null) _lpaused=1;
+    if(retParams['rpause']!=null) _rpaused=1;
+    if(retParams['cap']!=null) _capture=1;
+    if(retParams['record']!=null) _recording=1;
+    if(retParams['loop']!=null) _looping=1;
+    if(retParams['looppl']!=null) _loopingpl=1;
+    if(retParams['pl']!=null) 
+      _playing=3;
+    else if(retParams['file']!=null) 
+      _playing=2;
+    else if(_capture)
+      _playing=1;
+
+    if(_playing) {
+      num=retParams['kbyterate'];
+      if(num!=null && num>0) 
+        ratestr+=' '+(Math.round(num*80)/10)+'Kb/s';
+      num=retParams['pktrate'];
+      if(num!=null &&num>0)
+        ratestr+=' '+(Math.round(num*10)/10)+'pkt/s';
+
+      num=retParams['cph'];
+      if(num!=null)
+        cfrmtstr+=' '+num+' x ';
+      num=retParams['cpv'];
+      if(num!=null)
+        cfrmtstr+=num;
+      num=retParams['cpfps'];
+      if(num!=null)
+        cfrmtstr+=' '+formatfps(num);
+
+      num=retParams['tph'];
+      if(num!=null)
+        tfrmtstr+=' '+num+' x ';
+      num=retParams['tpv'];
+      if(num!=null)
+        tfrmtstr+=num;
+      num=retParams['tpfps'];
+      if(num!=null)
+        tfrmtstr+=' '+formatfps(num);
+    }
+
+    if(retParams['totms']!=null) {
+      _progduration=retParams['totms'];
+    } 
+    if(_progduration==0)
+      progpercent=retParams['per']; 
+    else 
+      progpercent=0; 
+
+    if(_playing==3) {
+      strpl+='<img src="img/bar_green.gif">&nbsp;';
+      strpl+='Playlist '+retParams['pl'];
+      haveplayicon=1;
+      strfl+=strpl+'&nbsp;&nbsp;&nbsp;';
+    }
+    if(_capture &&!_lpaused) {
+      if(!haveplayicon) strfl+='<img src="img/bar_green.gif">&nbsp;';
+      strfl+='Live';
+      vidfrmtstr=cfrmtstr;
+    } else if((_playing==2||_playing==3)&&_fpaused==0) {
+      if(!haveplayicon) strfl+='<img src="img/bar_green.gif">&nbsp;';
+      strfl+='Playback';
+      vidfrmtstr=tfrmtstr;
+    } else if((_playing==2||_playing==3)&&_fpaused) {
+      strfl+='<img src="img/bar_trans.png">&nbsp;';
+      strfl+='Playback Paused';
+    } else if(_lpaused) {
+      strfl+='<img src="img/bar_trans.png">&nbsp;';
+      strfl+='Streaming paused';
+    }
+
+    if(_recording==1) {
+      strrec+='<br>';
+      if(_rpaused)
+        strrec+='<img src="img/bar_gray.gif">';
+      else
+        strrec+='<img src="img/bar_red.gif">';
+      strrec+='&nbsp;';
+      if(_rpaused) 
+        strrec+='Recording paused ';
+      else
+        strrec+='Recording input to ';
+      strrec+=retParams['record']; 
+    }
+
+    if(_errstr!=null&&_errstr!=errstr) {
+      errstr=_errstr;
+      if(errstr.length > 0) 
+        document.getElementById('err').innerHTML='<font class="cstatusred">'+errstr+'</font>';
+      else 
+        document.getElementById('err').innerHTML='&nbsp;';
+    }
+
+    if(_fpaused!=fpaused || _lpaused!=lpaused || _rpaused!=rpaused||
+       _playing!=playing || _recording!=recording ||_looping!=looping || 
+       _loopingpl!=loopingpl || _capture!=capture) {
+
+      fpaused=_fpaused;
+      lpaused=_lpaused;
+      rpaused=_rpaused;
+      playing=_playing;
+      recording=_recording;
+      looping=_looping;
+      loopingpl=_loopingpl;
+      capture=_capture;
+
+      drawplayctrl();
+      drawcapctrl();
+    }
+
+    if(!ipod)
+      drawcurtn();
+
+    str='<font class="cstatusyl">'+strfl+ratestr+vidfrmtstr+strrec+'</font>';
+    document.getElementById('status').innerHTML=str;
+
+    ms=retParams['ms'];
+
+    if((_progduration>0|| ms> 0 || progpercent>0 || capture==1) && timerstatus==null) {
+       timerstatus=setTimeout("statuswtimer();", 2000);
+    }
+
+    if(_progduration!=progduration) {
+      progduration=_progduration;
+      drawplayctrl();
+    }
+
+    drawprogbar(ms,progduration,progpercent);
+
+    if(curfile!=null && prevfile!=null && curfile!=prevfile) {
+      prevfile=curfile;
+      listdir(''+curdir+'');
+    }
+
+  }
+}
+
+function getxcodeopt() {
+  var strtmp='';
+  var strxcode='';
+
+  _elem=document.getElementById('xcodeaopt');
+  if(_elem!=null)
+    strtmp+=_elem.options[_elem.selectedIndex].value;
+
+  _elem=document.getElementById('xcodevopt');
+  if(_elem!=null) {
+    var strvopt=','+_elem.options[_elem.selectedIndex].value;
+    if(strvopt.indexOf('vt_') >= 0) {
+      strvopt+=',vgmax_3000,vgmin_2000';
+    }
+    strtmp+=strvopt;
+  }
+
+  if(strtmp.length>0)
+    strxcode='&xcode='+strtmp;
+
+  return strxcode;
+}
+
+
+function playfile(elem) {
+  var _httplive=0;
+  var _strxcode='';
+  var _xcodeprofile=0;
+  var doloop=0;
+  var dolooppl=0;
+
+  if(playing==2||playing==3) {
+    if(document.forms['playfrm'].elements['r_loop'][0].checked)
+      doloop=1;
+    if(document.forms['playfrm'].elements['r_loop'][1].checked)
+      dolooppl=1;
+  }
+  var _dst=document.forms['playfrm'].elements['dst'].value;
+  var strUrl='?cmd=playf&proto=m2t&dst='+_dst;
+
+  var _multidst=document.forms['playfrm'].elements['elemmultichk'].checked;
+  if(_multidst) {
+    var _elemdst=document.forms['playfrm'].elements['dst2'];
+    if(_elemdst && _elemdst.value!='') {
+      _dst=_elemdst.value; 
+      strUrl+='&dst2='+_dst;
+    }
+    _elemdst=document.forms['playfrm'].elements['dst3'];
+    if(_elemdst && _elemdst.value!='') {
+      _dst=_elemdst.value; 
+      strUrl+='&dst3='+_dst;
+    }
+  }
+
+  if(document.forms['playfrm'].elements['do_live'].checked)
+    strUrl+='&live=1';
+  else
+    strUrl+='&live=0';
+
+  if(document.forms['playfrm'].elements['do_httplive'].checked)
+    _httplive=1;
+  strUrl+='&httplive='+_httplive;
+
+  strUrl+='&file='+elem.name;
+  //strUrl+='&mtu='+document.forms['playfrm'].elements['mtu'].value;
+  if(doloop) strUrl+='&loop=1';
+  if(dolooppl) strUrl+='&looppl=1';
+  
+  strUrl+='&input='+document.forms['playfrm'].elements['src'].value;
+
+  _strxcode=getxcodeopt();
+  strUrl+=_strxcode;
+  if(document.forms['playfrm'].elements['r_xcode'][1].checked)
+    _xcodeprofile=1;
+  if(_xcodeprofile > 0 && (_strxcode.indexOf('vc_264') < 0 ||  _strxcode.indexOf('ac_aac') < 0)) {
+    alert('Please select a valid video and audio output format for the selected media device.');
+    return;
+  }
+  strUrl+='&xcodeprofile='+_xcodeprofile;
+  if(uipwd!='') strUrl+='&pass='+uipwd;
+
+  document.getElementById('status').innerHTML='&nbsp;';
+  document.getElementById('err').innerHTML='&nbsp;';
+  curtncnt=-1;
+  drawcurtn();
+  ajaxGet(cmdReq, cmdUrl, strUrl, 0);
+
+  playing=2;
+  fpaused=0;
+  drawprogbar(0, 0, 0);
+  drawcapctrl();
+  drawplayctrl();
+
+  clearTimeout(timerstatus);
+  timerstatus=setTimeout("statuswtimer();", 2000);
+}
+
+function playlive(strm) {
+  var _httplive=0;
+  var _live=0;
+  var _xcodeprofile=0;
+  var strfltr='type=m2t';
+  var _strxcode='';
+
+  var strUrl='?cmd=playl&proto=m2t&dst='+document.forms['playfrm'].elements['dst'].value+
+             //'&mtu='+document.forms['playfrm'].elements['mtu'].value+
+             '&input='+document.forms['playfrm'].elements['src'].value+
+             '&filter='+strfltr;
+  strUrl+='&extractpes=1';
+
+  _strxcode=getxcodeopt();
+  strUrl+=_strxcode;
+
+  if(document.forms['playfrm'].elements['do_live'].checked)
+    _live=1;
+  strUrl+='&live='+_live;
+
+  if(document.forms['playfrm'].elements['do_httplive'].checked)
+    _httplive=1;
+  strUrl+='&httplive='+_httplive;
+
+  if(document.forms['playfrm'].elements['r_xcode'][1].checked) 
+    _xcodeprofile=1;  
+
+  if(_xcodeprofile > 0 && (_strxcode.indexOf('vc_264') < 0 ||  _strxcode.indexOf('ac_aac') < 0)) {
+    alert('Please select a valid video and audio output format for the selected media device.');
+    return;
+  }
+  else if((_strxcode.indexOf('ac_aac') >= 0 || _strxcode.indexOf('ac_ac3') > 0) && _strxcode.indexOf('vc_264') < 0) {
+    alert('A valid video output format must be selected if audio transcoding is enabled.');
+    return;
+  }
+
+  strUrl+='&xcodeprofile='+_xcodeprofile;
+
+  if(strm) {
+    strUrl+='&stream=1';
+    capture=1;
+    playing=1;
+    lpaused=1;
+  } else {
+    lpaused=1;
+  }
+  if(uipwd!='') strUrl+='&pass='+uipwd;
+  
+  document.getElementById('status').innerHTML='&nbsp;';
+  document.getElementById('err').innerHTML='&nbsp;';
+  ajaxGet(cmdReq, cmdUrl, strUrl, 0);
+
+  drawprogbar(0, 0, 0);
+  drawcapctrl();
+  drawplayctrl();
+
+  clearTimeout(timerstatus);
+  timerstatus=setTimeout("statuswtimer();", 2000);
+}
+
+function playstop(file, live) {
+
+  if(live&&recording){
+    var conf=confirm('Are you sure you want to stop the recording');
+    if(!conf) 
+      return;
+  }
+
+  var strUrl='?cmd=stop';
+  if(file) {
+    strUrl+='&file=1';
+    if(playing==2||playing==3)
+      playing=0;
+  }
+  if(live) {
+    strUrl+='&live=1';
+    if(playing==1)
+      playing=0;
+    if(capture) 
+      capture=0;
+  }
+  if(uipwd!='') strUrl+='&pass='+uipwd;
+  document.getElementById('status').innerHTML='&nbsp;';
+  document.getElementById('err').innerHTML='&nbsp;';
+
+  ajaxGet(cmdReq, cmdUrl, strUrl, 0);
+
+  curfile='';
+  curtncnt=0;
+  listdir(''+curdir+'');
+  drawprogbar(0, 0, 0);
+  drawcapctrl();
+  drawplayctrl();
+  drawcurtn();
+
+  clearTimeout(timerstatus);
+  if(capture||playing)
+    timerstatus=setTimeout("statuswtimer();", 2000);
+  progduration=0;
+  progpercent=0;
+}
+
+function playjump(perc) {
+  var strUrl='?cmd=playj&percent='+perc;
+  if(uipwd!='') strUrl+='&pass='+uipwd;
+  ajaxGet(cmdReq, cmdUrl, strUrl, 0);
+}
+function playjumpffwd(ffwd) {
+  var strUrl='?cmd=playj&ffwd='+ffwd;
+  if(uipwd!='') strUrl+='&pass='+uipwd;
+  ajaxGet(cmdReq, cmdUrl, strUrl, 0);
+}
+
+function playskip() {
+  var strUrl='?cmd=skip';
+  if(uipwd!='') strUrl+='&pass='+uipwd;
+  ajaxGet(cmdReq, cmdUrl, strUrl, 0);
+}
+
+function playprop() {
+  var strUrl='?cmd=playp';
+
+  if(document.forms['playfrm'].elements['r_loop']) {
+    if(document.forms['playfrm'].elements['r_loop'][0].checked) 
+      strUrl+='&loop=1';
+    else if(document.forms['playfrm'].elements['r_loop'][1].checked) 
+      strUrl+='&looppl=1';
+    else
+      strUrl+='&loop=0';
+  }
+
+  if(document.forms['playfrm'].elements['do_live'].checked) 
+    strUrl+='&live=1';
+  else 
+    strUrl+='&live=0';
+
+  if(uipwd!='') strUrl+='&pass='+uipwd;
+
+  ajaxGet(cmdReq, cmdUrl, strUrl, 0);
+}
+
+function playprop_ch() {
+  var strUrl='?cmd=playp';
+
+  strUrl+='&channel='+document.forms['playfrm'].elements['channel'].value;
+
+  if(uipwd!='') strUrl+='&pass='+uipwd;
+
+  ajaxGet(cmdReq, cmdUrl, strUrl, 0);
+}
+
+function playpause(file, live) {
+  var strUrl='?cmd=pause';
+  if(file) {
+    strUrl+='&file=1';
+    fpaused=!fpaused;
+  }
+  if(live) {
+    strUrl+='&live=1';
+    lpaused=!lpaused;
+
+    if(!lpaused)
+      strUrl+=getxcodeopt();
+  }
+  if(uipwd!='') strUrl+='&pass='+uipwd;
+
+  ajaxGet(cmdReq, cmdUrl, strUrl, 0);
+
+  drawcapctrl();
+  drawplayctrl();
+}
+
+function record(start) {
+  var strUrl='?cmd=';
+  if(start==1) {
+    strUrl+='record';
+    var outpath=document.forms['playfrm'].elements['rfile'].value;
+    if(outpath!=null&&outpath!='') {
+      strUrl+='&rfile='+outpath;
+    } 
+    if(curdir!='') {
+      strUrl+='&rdir='+curdir;
+    }
+    recording=1;
+    rpaused=0;
+  } else if(start==2) {
+    strUrl+='rpause';
+    rpaused=!rpaused;
+  } else {
+    strUrl+='rstop';
+    recording=0;
+    rpaused=0;
+  }
+  if(uipwd!='') strUrl+='&pass='+uipwd;
+
+  ajaxGet(cmdReq, cmdUrl, strUrl, 0);
+
+  drawcapctrl();
+  drawplayctrl();
+}
+
+
+
+function checkstatus() {
+  var strUrl='?cmd=status';
+  if(uipwd!='') strUrl+='&pass='+uipwd;
+  laststatus=1;
+  ajaxGet(cmdReq, cmdUrl, strUrl, 1);
+}
+
+function statuswtimer() {
+  checkstatus();
+  timerstatus=setTimeout("statuswtimer();", 2000);
+}
+
+function listdir(dir) {
+
+  var strUrl='?dir='+dir;
+  _elem=document.getElementById('dirsort');
+  if(_elem!=null)
+    strUrl+='&dirsort='+_elem.options[_elem.selectedIndex].value;
+  if(uipwd!='') strUrl+='&pass='+uipwd;
+  ajaxGet(listReq, listUrl, strUrl, 2);
+}
+
+function getfileinfo(fpath) {
+  var strUrl='?file='+fpath;
+  if(uipwd!='') strUrl+='&pass='+uipwd;
+  ajaxGet(fileInfoReq, listUrl, strUrl, 3);
+}
+
+function listprop() {
+  var strUrl='?dstaddr=echo';
+  if(uipwd!='') strUrl+='&pass='+uipwd;
+  ajaxGet(listReq, propUrl, strUrl, 4);
+}
+
+function onprogbarmove(ev) {
+  var ofLeft=0;
+  var ofTop=0;
+  var oprogbar=document.getElementById('progbar');
+  var tmp=document.getElementById('fixeddiv');
+  var wid=oprogbar.offsetWidth;
+  ofLeft=tmp.offsetLeft;
+  posprogx = ev.clientX-ofLeft;
+  if(posprogx<0) posprogx=0;
+  else if(posprogx>wid) posprogx=wid;
+
+  posprogy = ev.clientY;
+
+  var progbarwid=p=document.getElementById('progbar').offsetWidth;
+  var perc=posprogx/progbarwid;
+  var str='Jump to ';
+  if(progduration>0)
+    str+=formatduration(perc * progduration);
+  else
+    str+=Math.round(1000*perc)/10+'%';
+  document.getElementById('proghvr').innerHTML=str;
+}
+
+function setmovehandler(onmove) {
+  document.onmousemove=onmove;
+}
+
+function progbarclick() {
+  var progbarwid=p=document.getElementById('progbar').offsetWidth;
+  var perc=posprogx/progbarwid * 100;
+  if(perc<0) 
+    perc=0;
+  else if(perc>99.9)
+    perc=99.9;
+ 
+  playjump(perc);
+}
+
+function playlivectrlstr() {
+  var str='';
+  var _ipod=ipod;
+
+  str+='<a id="playl_stop" name="playl_stop" onclick="javascript:playstop(0,1);" href="#"><img src="img/stop'+_ipod+'.png" border="0" alt="Stop"></a> ';
+  str+='<a id="playl_pause" name="playl_pause" onclick="javascript:playpause(0,1);" href="#">';
+  if(lpaused) 
+    str+='<img src="img/play'+_ipod+'.png" border="0" alt="Resume"></a> ';
+  else 
+    str+='<img src="img/pause'+_ipod+'.png" border="0" alt="Pause"></a> ';
+  str+='</a> ';
+
+  return str;
+}
+
+function playfilectrlstr() {
+  var str='';
+  var _ipod=ipod;
+
+  str+='<a id="playf_restart" name="playf_restart" onclick="javascript:playjump(0);" href="#"><img src="img/first'+_ipod+'.png" border="0" alt="Restart"></a> ';
+  if(progduration>0) str+='&nbsp;<a id="playrwnd" name="playrwnd" onclick="javascript:playjumpffwd(-31);" href="#"><img src="img/rewind'+_ipod+'.png" border="0" alt="Rewind"></a> ';
+  if(progduration>0) str+='&nbsp;<a id="playrwnd2" name="playrwnd2" onclick="javascript:playjumpffwd(-7);" href="#"><img src="img/rewindb'+_ipod+'.png" border="0" alt="Rewind Short"></a> ';
+  str+='&nbsp;<a id="playf_stop" name="playf_stop" onclick="javascript:playstop(1,0);" href="#"><img src="img/stop'+_ipod+'.png" border="0" alt="Stop"></a> ';
+  if(progduration>0) { str+='&nbsp;<a id="playf_pause" name="playf_pause" onclick="javascript:playpause(1,0);" href="#">';
+  if(fpaused) 
+    str+='<img src="img/play'+_ipod+'.png" border="0" alt="Resume"></a> ';
+  else 
+    str+='<img src="img/pause'+_ipod+'.png" border="0" alt="Pause"></a> ';
+  str+='</a> ';
+  }
+
+  if(progduration>0) str+='&nbsp;<a id="playffwd" name="playffwd" onclick="javascript:playjumpffwd(28);" href="#"><img src="img/ffwd'+_ipod+'.png" border="0" alt="Fast Forward"</a> ';
+
+  if(progduration>0) str+='&nbsp;<a id="playf_skip" name="playf_skip" onclick="javascript:playskip();" href="#"><img src="img/last'+_ipod+'.png" border="0" alt="Skip"></a> ';
+  else str+='&nbsp;<a id="playf_skip" name="playf_skip" onclick="javascript:playjump(100);" href="#"><img src="img/last'+_ipod+'.png" border="0" alt="Skip"></a> ';
+
+  if(ipod>0)
+    str+='<br>&nbsp;<br>';
+  else
+    str+='&nbsp;&nbsp;&nbsp;';
+  str+='loop:';
+
+  str+='&nbsp;&nbsp;<input type="radio" name="r_loop" value="file" ';
+  if(looping) str+='checked'; 
+  str+=' onchange="javascript:playprop();">file';
+  str+='&nbsp;&nbsp;<input type="radio" name="r_loop" value="dir" ';
+  if(loopingpl) str+='checked'; 
+  str+=' onchange="javascript:playprop();">dir';
+  str+='&nbsp;&nbsp;<input type="radio" name="r_loop" value="off" ';
+  if(!looping && !loopingpl) str+='checked'; 
+  str+=' onchange="javascript:playprop();">off';
+
+  return str;
+}
+
+function recordctrlstr() {
+  var str='';
+  var _ipod=ipod;
+
+  if(capture) {
+    str+='<table border="0" cellpadding="2" cellspacing="2"><tr><td class="bg2" valign="center">';
+    str+='&nbsp;&nbsp;&nbsp;';
+    if(recording) {
+        str+='Recording';
+        if(rpaused) str+=' paused';
+        str+=': ';
+        str+='</td><td class="bg2">';
+        str+='<a id="stopr" name="stopr" onclick="javascript:record(0);" href="#"><img src="img/stop'+_ipod+'.png" border="0" alt="Stop Recording"></a> ';
+      if(rpaused) {
+        str+='<a id="playr" name="playr" onclick="javascript:record(2);" href="#"><img src="img/play'+_ipod+'.png" border="0" alt="Resume Recording"></a> ';
+      } else {
+        str+='<a id="pauser" name="pauser" onclick="javascript:record(2);" href="#"><img src="img/pause'+_ipod+'.png" border="0" alt="Record"></a> ';
+      }
+    } else {
+      str+='Record capture: ';
+      str+='</td><td class="bg2">';
+      str+='<a id="record" name="record" onclick="javascript:record(1);" href="#"><img src="img/play'+_ipod+'.png" border="0" alt="Record"></a> ';
+      str+='</td><td class="bg2" valign="center">';
+      str+=' filename: <input type="text" class="inp" onfocus="javascript:this.className=\'inpsel\';" onblur="javascript:this.className=\'inp\';" name="rfile" size="16">';
+    }
+    str+='</td></tr></table>';
+  }
+
+  return str;
+}
+
+function drawplayctrl() {
+  var str='';
+  //var spacerht=ipod?310:200;
+  var spacerht=ipod?205:155;
+
+  str+='<table border="0" cellpadding="2" cellspacing="2"><tr>';
+  if(capture) {
+    if(ipod) {
+      spacerht+=34;
+      if(recording)
+        spacerht+=20;
+    } else
+      spacerht+=2;
+    str+='<td class="bg2" align="right">';
+    str+='Live capture: ';
+    str+='&nbsp; <td class="bg2">';
+    str+=playlivectrlstr();
+    str+='</td><td class="bg2" align="right">';
+    str+=recordctrlstr();
+  } else {
+    str+='<td class="bg2" align="right" colspan=2>';
+  }
+  str+='</td></tr><tr>';
+  if(playing==2||playing==3) {
+    if(ipod)
+      spacerht+=170;
+    else
+      spacerht+=38;
+    str+='<td class="bg2" align="right" valign="top">';
+    str+='File playback:';
+    str+='&nbsp;</td><td class="bg2" colspan="2">';
+    str+=playfilectrlstr();
+  } else {
+    str+='<td class="bg2" align="right" colspan=2>';
+  }
+  str+='</td></tr></table>';
+
+  var _elem=document.getElementById('spacer');
+  if(_elem!=null)
+    spacer.style.height=spacerht+'px';
+
+  document.getElementById('playctrl').innerHTML=str;
+}
+
+function drawcapctrl() {
+  var str=' ';
+  var _ipod=ipod;
+  _elema=document.getElementById('xcodeaopt');
+  _elemv=document.getElementById('xcodevopt');
+  _elemp=document.getElementById('xcodeprofile');
+  //_elemvfps=document.getElementById('xcodevfpsopt');
+
+  if(!capture) {
+    str+='<table border="0" cellpadding="0" cellspacing="0"><tr><td class="bg2">';
+    str+='&nbsp;Capture:&nbsp;&nbsp;';
+    str+='</td><td class="bg2" valign="center">';
+    str+='&nbsp;<a id="capture" name="capture" onclick="javascript:playlive(0);" href="#"><img src="img/play'+_ipod+'.png" border="0" alt="Capture"></a> ';
+    str+='</td></tr></table>';
+
+    if(_elema){
+      _elema.disabled=false;
+      setvisibility(_elema, 'inline');
+    }
+    if(_elemv){
+      _elemv.disabled=false;
+      setvisibility(_elemv, 'inline');
+    }
+    if(_elemp){
+      _elemp.disabled=false;
+      setvisibility(_elemp, 'block');
+    }
+    //if(_elemvfps){
+    //  _elemvfps.disabled=false;
+    //  setvisibility(_elemvfps, 'inline');
+    //}
+    document.forms['playfrm'].elements['src'].disabled=false;
+
+  } else {
+    if(_elema){
+      _elema.disabled=true;
+      setvisibility(_elema, null);
+    }
+    if(_elemv){
+      _elemv.disabled=true;
+      setvisibility(_elemv, null);
+    }
+    if(_elemp){
+      _elemp.disabled=true;
+      setvisibility(_elemp, null);
+    }
+    //if(_elemvfps){
+    //  _elemvfps.disabled=true;
+    //  setvisibility(_elemvfps, null);
+    //}
+    document.forms['playfrm'].elements['src'].disabled=true;
+
+  }
+
+  document.getElementById('capctrl').innerHTML=str;
+}
+
+function drawcurtn() {
+  var str='';
+  if(curfile!='' &&curtncnt!=null&&curtncnt>0) {
+    var tnpath='tmn/'+unescape(curfile);
+
+    str+='<div class="vidlink" style="border: 1px solid #eeee88;">';
+    str+='<img src="'+tnpath+'_tn.jpg"';
+    if(!ipod)
+      str+=' onmouseover="showxtrainfo(\''+doubledelims(curfile)+'\',\''+curfile+'\','+curtncnt+');" onmouseout="hidextrainfo();"';
+    str+='>';
+    str+='</div>';
+  }
+  document.getElementById('curplaytn').innerHTML=str;
+}
+
+
+function multidstchk(elem) {
+ var _multidst=0;
+ _elemdiv=document.getElementById('dstmulti');
+ _elemdiv2=document.getElementById('dstmultitxt');
+ _multidst=elem.checked;
+  if(_multidst){
+    _elemdiv.style.visibility='visible';
+    _elemdiv2.style.visibility='visible';
+    _elemdiv.style.display='block';
+    _elemdiv2.style.display='block';
+  } else {
+    _elemdiv.style.visibility='hidden';
+    _elemdiv2.style.visibility='hidden';
+    _elemdiv.style.display='none';
+    _elemdiv2.style.display='none';
+  }
+}
+
+function dirsortchange(_elem) {
+  var str=_elem.options[_elem.selectedIndex].value;
+  listdir(''+curdir+'');
+}
+
+function getxcodedefaults(_xcodeon) {
+
+  if(_xcodeon) {
+
+    var xcodeaopttexts_ipod=new Array("mono 64k","stereo 128k");
+    var xcodeaoptvals_ipod=new Array("ac_aac,as_1,ar_0,ab_64000",
+                                      "ac_aac,as_2,ar_0,ab_64000");
+
+    if(document.forms['playfrm'].elements['r_xcode'][1].checked) {
+
+      var xcodevoptvals_ipod=new Array(
+      "","","","vc_264,x_480,y_320,vb_100,vt_20,fn_997,fd_100,vf_0,vp_66,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_150,vt_20,fn_997,fd_100,vf_0,vp_66,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_200,vt_20,fn_997,fd_100,vf_0,vp_66,vcfrout_1,vup_1",
+         "","","vc_264,x_480,y_320,vb_100,vt_20,fn_997,fd_100,vf_0,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_150,vt_20,fn_997,fd_100,vf_0,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_200,vt_20,fn_997,fd_100,vf_0,vp_77,vcfrout_1,vup_1",
+      "","","","vc_264,x_480,y_320,vb_200,vt_20,fn_1498,fd_100,vf_0,vp_66,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_250,vt_20,fn_1498,fd_100,vf_0,vp_66,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_300,vt_20,fn_1498,fd_100,vf_0,vp_66,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_350,vt_20,fn_1498,fd_100,vf_0,vp_66,vcfrout_1,vup_1",
+         "","","vc_264,x_480,y_320,vb_150,vt_20,fn_1498,fd_100,vf_0,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_200,vt_20,fn_1498,fd_100,vf_0,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_250,vt_20,fn_1498,fd_100,vf_0,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_300,vt_20,fn_1498,fd_100,vf_0,vp_77,vcfrout_1,vup_1",
+      "","","","vc_264,x_480,y_320,vb_350,vt_20,fn_2997,fd_100,vf_0,vp_66,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_400,vt_20,fn_2997,fd_100,vf_0,vp_66,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_450,vt_20,fn_2997,fd_100,vf_0,vp_66,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_500,vt_20,fn_2997,fd_100,vf_0,vp_66,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_550,vt_20,fn_2997,fd_100,vf_0,vp_66,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_600,vt_20,fn_2997,fd_100,vf_0,vp_66,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_700,vt_20,fn_2997,fd_100,vf_0,vp_66,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_800,vt_20,fn_2997,fd_100,vf_0,vp_66,vcfrout_1,vup_1",
+         "","","vc_264,x_480,y_320,vb_250,vt_20,fn_2997,fd_100,vf_0,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_300,vt_20,fn_2997,fd_100,vf_0,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_350,vt_20,fn_2997,fd_100,vf_0,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_400,vt_20,fn_2997,fd_100,vf_0,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_450,vt_20,fn_2997,fd_100,vf_0,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_500,vt_20,fn_2997,fd_100,vf_0,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_600,vt_20,fn_2997,fd_100,vf_0,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_480,y_320,vb_700,vt_20,fn_2997,fd_100,vf_0,vp_77,vcfrout_1,vup_1",
+
+         "","","vc_264,x_960,y_640,vb_900,vt_20,fn_2997,fd_100,vf_1,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_960,y_640,vb_120,vt_20,fn_2997,fd_100,vf_1,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_960,y_640,vb_1500,vt_20,fn_2997,fd_100,vf_1,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_960,y_640,vb_1800,vt_20,fn_2997,fd_100,vf_1,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_960,y_640,vb_2100,vt_20,fn_2997,fd_100,vf_1,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_960,y_640,vb_2400,vt_20,fn_2997,fd_100,vf_1,vp_77,vcfrout_1,vup_1",
+         "","","vc_264,x_1080,y_720,vb_1400,vt_20,fn_2997,fd_100,vf_1,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_1080,y_720,vb_1700,vt_20,fn_2997,fd_100,vf_1,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_1080,y_720,vb_2000,vt_20,fn_2997,fd_100,vf_1,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_1080,y_720,vb_2300,vt_20,fn_2997,fd_100,vf_1,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_1080,y_720,vb_2600,vt_20,fn_2997,fd_100,vf_1,vp_77,vcfrout_1,vup_1",
+               "vc_264,x_1080,y_720,vb_2900,vt_20,fn_2997,fd_100,vf_1,vp_77,vcfrout_1,vup_1");
+
+
+
+      var xcodevopttexts_ipod=new Array(
+       "","-- 10fps --", "iPod/iPhone","320p 100k","320p 150k","320p 200k",
+                         "","iPhone4", "320p 100k","320p 150k","320p 200k",
+      "","-- 15fps --",  "iPod/iPhone","320p 200k","320p 250k","320p 300k","320p 350k",
+                          "","iPhone4","320p 150k","320p 200k","320p 250k","320p 300k",
+       "","-- 30fps --", "iPod/iPhone","320p 350k","320p 400k","320p 450k",
+                                       "320p 500k", "320p 550k","320p 600k", "320p 700k","320p 800k",
+                          "","iPhone4","320p 250k","320p 300k","320p 350k",
+                                       "320p 400k", "320p 450k","320p 500k", "320p 600k","320p 700k",
+                             "","iPad","640p 900k","640p 1200k","640p 1500k",
+                                       "640p 1800k","640p 2100k","640p 2400k",
+                             "","iPad","720p 1400k","720p 1700k","720p 2000k",
+                                       "720p 2300k","720p 2600k","720p 2900k");
+
+
+      xcodeaopttexts = xcodeaopttexts_ipod;
+      xcodeaoptvals = xcodeaoptvals_ipod;
+      xcodevopttexts = xcodevopttexts_ipod;
+      xcodevoptvals = xcodevoptvals_ipod;
+
+    } else {
+
+      var xcodeaopttexts_pc=new Array("Audio", "Original","","AC3 mono 64k","AC3 stereo 128k",
+                                 "","AAC mono 64k","AAC stereo 128k");
+      var xcodeaoptvals_pc=new Array(
+              "", "","","ac_ac3,as_1,ah_0,ar_64000","ac_ac3,as_2,ar_0,ab_64000",
+              "","ac_aac,as_1,ah_0,ar_64000","ac_aac,as_2,ar_0,ab_64000");
+
+      var xcodevoptvals_pc=new Array("",
+                              "vc_264,y_270,vb_100,vt_20,fn_1798,fd_100,vf_0","vc_264,y_270,vb_150,vt_20,fn_1798,fd_100,vf_0","vc_264,y_270,vb_200,vt_20,fn_2397,fd_100,vf_0","vc_264,y_270,vb_300,vt_20,fn_2497,fd_100,vf_0","vc_264,y_270,vb_400,vt_20,fn_2997,fd_100,vf_0","vc_264,y_270,vb_500,vt_20,fn_2997,fd_100,vf_0","vc_264,y_270,vb_600,vt_20,fn_2997,fd_100,vf_0",
+                              "","vc_264,y_360,vb_300,vt_30,fn_2497,fd_100,vf_0","vc_264,y_360,vb_450,vt_30,fn_2997,fd_100,vf_0","vc_264,y_360,vb_600,vt_30,fn_2997,fd_100,vf_0","vc_264,y_360,vb_750,vt_30,fn_2997,fd_100,vf_0","vc_264,y_360,vb_1000,vt_30,fn_2997,fd_100,vf_0",
+                              "","vc_264,y_480,vb_500,vt_40,fn_2497,fd_100,vf_1","vc_264,y_480,vb_700,vt_40,fn_2997,fd_100,vf_1","vc_264,y_480,vb_900,vt_40,fn_2997,fd_100,vf_1","vc_264,y_480,vb_1100,vt_40,fn_2997,fd_100,vf_1","vc_264,y_480,vb_1300,vt_40,fn_2997,fd_100,vf_1",
+                              "","vc_264,y_640,vb_900,vt_60,fn_2497,fd_100,vf_1","vc_264,y_640,vb_1200,vt_60,fn_2997,fd_100,vf_1","vc_264,y_640,vb_1500,vt_60,fn_2997,fd_100,vf_1","vc_264,y_640,vb_1800,vt_60,fn_2997,fd_100,vf_1","vc_264,y_640,vb_2100,vt_60,fn_2997,fd_100,vf_1",
+                              "","vc_264,y_720,vb_1400,vt_80,fn_2997,fd_100,vf_1","vc_264,y_720,vb_1700,vt_80,fn_2997,fd_100,vf_1","vc_264,y_720,vb_2000,vt_80,fn_2997,fd_100,vf_1","vc_264,y_720,vb_2300,vt_80,fn_2997,fd_100,vf_1","vc_264,y_720,vb_2600,vt_80,fn_2997,fd_100,vf_1","vc_264,y_720,vb_2900,vt_80,fn_2997,fd_100,vf_1","vc_264,y_720,vb_3200,vt_80,fn_2997,fd_100,vf_1",
+                              "","vc_264,y_840,vb_2100,vt_80,fn_2997,fd_100,vf_1","vc_264,y_840,vb_2400,vt_80,fn_2997,fd_100,vf_1","vc_264,y_840,vb_2900,vt_80,fn_2997,fd_100,vf_1","vc_264,y_840,vb_3400,vt_80,fn_2997,fd_100,vf_1","vc_264,y_840,vb_3900,vt_80,fn_2997,fd_100,vf_1","vc_264,y_840,vb_4400,vt_80,fn_2997,fd_100,vf_1");
+                              
+      var xcodevopttexts_pc=new Array("Original",
+     "270p 100k","270p 150k","270p 200k","270p 300k","270p 400k","270p 500k","270p 600k",
+     "","360p 300k","360p 450k","360p 600k","360p 750k","360p 1000k",
+     "","480p 500k","480p 700k","480p 900k","480p 1100k","480p 1300k",
+     "","640p 900k","640p 1200k","640p 1500k","640p 1800k","640p 2100k",
+     "","720p 1400k","720p 1700k","720p 2000k","720p 2300k","720p 2600k","720p 2900k","720p 3200k",
+     "","840p 2100k","840p 2400k","840p 2900k","840p 3400k","840p 3900k","840p 4400k");
+
+      xcodeaopttexts = xcodeaopttexts_pc;
+      xcodeaoptvals = xcodeaoptvals_pc;
+      xcodevopttexts = xcodevopttexts_pc;
+      xcodevoptvals = xcodevoptvals_pc;
+
+    }
+
+
+
+  } else {
+    xcodevoptvals=new Array("", "");
+    xcodevopttexts=new Array("", "None");
+    xcodeaoptvals=new Array("","", "");
+    xcodeaopttexts=new Array("Audio","","None");
+  }
+
+}
+
+function updatexcodeopt(_xcodeon) {
+
+  getxcodedefaults(_xcodeon);
+
+  var _elem=document.getElementById('xcodevopt');
+  var len=_elem.length;
+  for(var i=1;i<len;i++) 
+    _elem.remove(_elem.length-1); 
+  for(var i=1; i<xcodevoptvals.length;i++) {
+    _elem.options[i]=new Option(xcodevopttexts[i], xcodevoptvals[i]); 
+  }
+
+  var _elem=document.getElementById('xcodeaopt');
+  var len=_elem.length;
+  for(var i=0;i<len;i++) 
+    _elem.remove(_elem.length-1); 
+
+  for(var i=0; i<xcodeaoptvals.length;i++) {
+    _elem.options[i]=new Option(xcodeaopttexts[i], xcodeaoptvals[i]); 
+  }
+
+}
+
+
+function initparams(str) {
+  if(navigator.appName.match('Internet Explorer')) {
+    browser=br_ie;
+  }
+
+  document.forms['playfrm'].elements['dst'].value='rtp://127.0.0.1:5004';
+  document.forms['playfrm'].elements['src'].value='udp://127.0.0.1:41394';
+
+  var uri=window.location.href;
+  var pos=uri.indexOf('?');
+  if(pos>0) {
+    uri=uri.substr(pos+1);
+    var retParams=getRespArray(uri);
+    var pw=retParams['pass'];
+    if(pw!=null)
+      uipwd=pw;
+  }
+
+  listprop();
+}
+
+function getclientinfoobj(){
+  if(document.getElementById)
+    return document.getElementById("clientinfoid");
+  else if(document.all)
+    return document.all.clientinfoid;
+}
+
+function hideclientinfo() {
+  getclientinfoobj().style.visibility='hidden';
+}
+
+function showclientinfo(){
+  var obj=getclientinfoobj();
+
+  var hvrtxt='<div style="padding: 4px; border: 10px; background-color: #cccccc;" align="center" width="100%" height="100%">';
+  hvrtxt+='<div class="bg2" align="right" width="100%"><a onclick="javascript:hideclientinfo();" href="#"><img src="img/close2.png" alt="Close"></a></div>';
+  hvrtxt+='<div class="bg2" width="100%">';
+  if(havechchgr) {
+    hvrtxt+='<table border="0"><tr><td class="bg2" valign="center">';
+    hvrtxt+='Channel Number: &nbsp;<input type="text" class="inp" onfocus="javascript:this.className=\'inpsel\';" onblur="javascript:this.className=\'inp\';" name="channel" size="4"> &nbsp;';
+    hvrtxt+='</td><td class="bg2">';
+    hvrtxt+='<a onclick="javascript:playprop_ch();" href="#" ><img src="img/playbluemed.png" border="0" alt="Set"></a>';
+    hvrtxt+='</td></tr></table>';
+  } else {
+    hvrtxt+='To enable changing channels set <i>channelchanger</i> in the configuration.';
+  }
+  hvrtxt+='<br>&nbsp;</div>';
+
+  //hvrtxt+='</form>';
+  hvrtxt+='</div>';
+
+  wid = 746;
+  var posx=(document.all? truebody().scrollLeft+truebody().clientWidth : pageXOffset+window.innerWidth -wid)/2;
+  var ht=document.all? Math.min(truebody().scrollHeight, truebody().clientHeight) : Math.min(window.innerHeight) - 100;
+
+  posy=50;
+
+
+
+  obj.innerHTML=hvrtxt;
+  obj.style.width=wid+"px";
+  obj.style.height=ht+"px";
+  obj.style.visibility="visible";
+  obj.style.left=posx+"px";
+  obj.style.top=posy+"px";
+
+}
+
+var curthumbwt=260;
+var curthumbht=146;
+
+function getxtrainfoobj(){
+  if(document.getElementById)
+    return document.getElementById("xtrainfoid");
+  else if(document.all)
+    return document.all.xtrainfoid;
+}
+
+function truebody(){
+  return (!window.opera && document.compatMode && document.compatMode!="BackCompat")? document.documentElement : document.body
+}
+
+function getimgrollstr(imgrollsrc, imgrollidix) {
+  return '<img src="'+imgrollsrc+'_tn'+imgrollidx+'.jpg" border="0">';
+}
+
+function showxtrainfo(fpath,fname,numtn){
+
+  document.onmousemove=followmouse;
+  document.onscroll=pagescroll;
+  imgrollidx=0;
+  imgrollsrc='tmn/'+fpath;
+  var xtrainfowid=curthumbwt+20;
+  
+  getfileinfo(fpath);
+
+  var hvrtxt='<div style="padding: 1px; background-color: #333333; border: 1px solid #444444;';
+  hvrtxt+=' width:'+xtrainfowid+'px; ';
+  hvrtxt+='" align="center">';
+  hvrtxt+='<h2>'+unescape(fname)+'</h2>';
+  hvrtxt+='<div id="fileinfoid" align="center">'; 
+  hvrtxt+='&nbsp;';
+  hvrtxt+='</div>';
+
+  if(numtn>0){
+    hvrtxt+='<div id="imgrollid" align="center" style="padding: 4px 4px 12px 4px;">';
+    hvrtxt+=getimgrollstr(imgrollsrc,imgrollidx);
+    hvrtxt+='</div>';
+  }
+  hvrtxt+='</div>';
+
+  getxtrainfoobj().innerHTML=hvrtxt;
+  getxtrainfoobj().style.visibility="visible";
+
+  if(numtn>0) {
+    curhvrnumtn=numtn;
+    timerimgroll=setTimeout("rollimage();", 2000);
+  }
+
+}
+
+function hidextrainfo(){
+  clearTimeout(timerimgroll);
+
+  getxtrainfoobj().style.visibility="hidden";
+  document.onmousemove="";
+  getxtrainfoobj().style.left="-200px";
+}
+
+function rollimage() {
+  var tmtms=1400;
+  if(++imgrollidx>curhvrnumtn-1) 
+    imgrollidx=0;
+  else if(imgrollidx==curhvrnumtn-1)
+    tmtms=2500;
+
+  document.getElementById("imgrollid").innerHTML=getimgrollstr(imgrollsrc,imgrollidx);
+
+  timerimgroll=setTimeout("rollimage();", tmtms);
+}
+
+function followmouse(e){
+
+  var xcoord=15;
+  var ycoord=15;
+
+  var docwidth=document.all? truebody().scrollLeft+truebody().clientWidth : pageXOffset+window.innerWidth-15
+  var docheight=document.all? Math.min(truebody().scrollHeight, truebody().clientHeight) : Math.min(window.innerHeight)
+
+  if (typeof e != "undefined"){
+    if (docwidth - e.pageX < 270){
+      xcoord = e.pageX - xcoord - 285; // Move to the left side of the cursor
+    } else {
+      xcoord += e.pageX;
+    }
+    if (docheight - e.pageY < (curthumbht+110)){
+      ycoord += e.pageY - Math.max(0,(110 + curthumbht+ e.pageY - docheight - truebody().scrollTop));
+    } else {
+      ycoord += e.pageY;
+    }
+  } else if (typeof window.event != "undefined"){
+    if (docwidth - event.clientX < 270){
+      xcoord = event.clientX + truebody().scrollLeft - xcoord - 285; // Move to the left side of the cursor
+    } else {
+      xcoord += truebody().scrollLeft+event.clientX
+    }
+    if (docheight - event.clientY < (curthumbht+ 110)){
+      ycoord += event.clientY + truebody().scrollTop - Math.max(0,(110 + curthumbht+ event.clientY - docheight));
+    } else {
+      ycoord += truebody().scrollTop + event.clientY;
+    }
+  }
+
+  if(ycoord < 0) { ycoord = ycoord*-1; }
+  getxtrainfoobj().style.left=xcoord+"px"
+  getxtrainfoobj().style.top=ycoord+"px"
+
+}
+
+
+function pagescroll(e) {
+  hidextrainfo();
+}
+
+</script>
+
+</head>
+<body class="bg" onload="javascript:initparams();">
+
+<form name="playfrm">
+
+<table border="0" cellpadding="0" cellspacing="0" width="100%" class="bg">
+<tr><td align="center" valign="top" class="bg">
+
+
+<table border="0" cellpadding="0" cellspacing="0" class="bg" style="width:742px;">
+<tr><td class="bg" align="center">
+
+
+<div id="fixeddiv" class="bg2" style="position:static; z-index: 5;width:742px;" align="center">
+
+<table border="0" cellpadding="1" cellspacing="1" class="bg2" width="100%">
+<tr><td class="bg2" colspan="4">
+
+<!--
+<div id="testdiv">
+testdiv
+</div>
+<div id="testdiv2">
+testdiv2
+</div>
+-->
+
+<!-- <img src="img/logo.png" alt="Media Server"> -->
+
+</td></tr>
+
+<tr><td class="bg2" colspan="4">
+<img src="img/trans.gif" width="3" height="3">
+</td></tr>
+
+<tr><td class="bg2" align="right">
+Out: 
+</td><td class="bg2">
+
+<table border="0" cellpadding="0" cellspacing="0"><tr><td valign="top" class="bg2">
+<input type="text" class="inp" onfocus="javascript:this.className='inpsel';" onblur="javascript:this.className='inp';" name="dst" size="22">
+
+<!--<font class="footer">(RTP - MPEG2-TS)</font>-->
+
+</td><td class="bg2">
+
+&nbsp;&nbsp;Multiple RTP:
+<input type="checkbox" name="elemmultichk" onchange="javascript:multidstchk(this);">
+
+&nbsp; &nbsp;HTTP:
+<input type="checkbox" name="do_live" onchange="javascript:playprop(this);">
+&nbsp; &nbsp;iPhone:
+<input type="checkbox" name="do_httplive" onchange="javascript:playprop(this);">
+
+</td></tr></table>
+
+
+</td><td class="bg2" align="right">
+<!--MTU:-->
+&nbsp;
+</td><td class="bg2" align="right"> <!-- <input type="text" class="inp" onfocus="javascript:this.className='inpsel';" onblur="javascript:this.className='inp';" name="mtu" size="4"> --> &nbsp;
+
+<a id="clientinfo" name="clientinfo" onclick="javascript:showclientinfo();" href="#"><img src="img/info.png" alt="Settings" border="0"></a>
+<a target="_new" href="http://openvcx.com"><img src="img/help.png" border="0"></a>
+</td></tr>
+
+<tr><td class="bg2">
+<div id="dstmultitxt" style="visibility:hidden;display:none;">
+</div>
+
+</td><td colspan=3 class="bg2">
+
+<div id="dstmulti" style="visibility:hidden;display:none;">
+<input type="text" class="inp" onfocus="javascript:this.className='inpsel';" onblur="javascript:this.className='inp';" name="dst2" size="22">
+<input type="text" class="inp" onfocus="javascript:this.className='inpsel';" onblur="javascript:this.className='inp';" name="dst3" size="18">
+</div>
+
+</td></tr>
+
+<tr><td colspan="4" class="bg" style="height:3px;">
+</td></tr>
+
+<tr><td class="bg2" align="right" valign="top">
+In:
+</td><td class="bg2" colspan="3" valign="top">
+
+<table border="0" cellpadding="0" cellspacing="0" width="100%" class="bg2"><tr><td valign="top" width="10%" class="bg2">
+<input type="text" class="inp" onfocus="javascript:this.className='inpsel';" onblur="javascript:this.className='inp';" name="src" size="22">
+<!--<font class="footer">(MPEG2-TS)</font>-->
+<!--<img src="img/help.png">-->
+
+
+</td><td width="90%" valign="top" class="bg2">
+
+<div id="xcodeprofile">
+
+&nbsp;&nbsp;Convert for 
+
+PC:<input type="radio" name="r_xcode" value="pc" onchange="javascript:updatexcodeopt(xcodeon);">
+&nbsp;&nbsp;Mobile:<input type="radio" name="r_xcode" value="ipod" onchange="javascript:updatexcodeopt(xcodeon);">
+
+<select id="xcodevopt">
+  <option value="">Video</option>
+</select>
+<!--
+<select id="xcodevfpsopt">
+  <option value="">fps</option>
+</select>
+-->
+<select id="xcodeaopt">
+  <option value="">Audio</option>
+</select>
+
+</div>
+
+</td></tr></table>
+
+
+</td><tr><tr><td colspan="4" class="bg2" style="height:3px;">
+</td><tr><tr><td colspan="4" class="bg" style="height:3px;">
+</td></tr></table>
+
+
+
+
+
+<table border="0" cellpadding="1" cellspacing="1" class="bg2" width="100%">
+<tr><td class="bg2">
+
+<div id="capctrl">
+&nbsp;
+</div>
+
+</td><td rowspan="3" class="bg2" align="right" valign="bottom">
+<div id="curplaytn">
+&nbsp;
+</div>
+
+</td></tr>
+<tr><td class="bg2" style="color:#f3f3f3;";>
+<div id="status">
+&nbsp;
+</div>
+
+</td></tr>
+<tr><td class="bg2">
+
+<div id="playctrl">
+&nbsp;
+</div>
+
+
+</td></tr><tr><td colspan="2" class="bg2">
+
+<div id="opstatusbar">
+&nbsp;
+</div>
+
+<table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td class="bg2">
+<div id="curdirstr">
+&nbsp;
+</div>
+</td><td class="bg2" align="right">
+Sort:
+<select id="dirsort" onchange="javascript:dirsortchange(this);">
+  <option value="0">None</option>
+  <option value="1">Name</option>
+  <option value="2">Reverse </option>
+  <option value="3">Smallest</option>
+  <option value="4">Largest</option>
+  <option value="5">Oldest</option>
+  <option value="6">Newest</option>
+</select>
+</td></tr></table>
+
+</td><tr><tr><td colspan="2" class="bg3" style="height:1px;">
+</td></tr></table>
+</div>
+
+
+
+
+
+</td></tr><tr><td class="bg2" align="center">
+
+
+<div id="spacerX">
+</div>
+
+<div id="spacer" class="bg2" style="width:100%;height:220px;z-index:4;">
+</div>
+
+
+<div id="xtrainfoid" style="z-index:10;">
+</div>
+
+<div id="clientinfoid" style="z-index:5;">
+</div>
+
+<div id="listdiv" style="z-index:4;">
+
+<table border="0" cellpadding="1" cellspacing="1" class="bg2" width="100%">
+<tr><td class="bg2">
+<!--Media listing&nbsp;-->
+<div id="medialist">
+&nbsp;
+<a id="list_dir" name="list_dir" onclick="javascript:listdir('');" href="#">.</a>
+</div>
+
+</td></tr></table>
+
+</div>
+
+
+
+
+</td><tr>
+<tr><td class="bg2">
+
+<table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td>
+<div id="err">
+&nbsp;
+</div>
+</td><td align="right">
+<div id="cmdresp">
+&nbsp;
+</div>
+</td></tr></table>
+
+</td></tr>
+</table>
+
+</td></tr>
+<tr><td align="center" class="bg">
+<font class="footer">&copy;2014 OpenVSX Video Streaming Server</font>
+</td></tr></table>
+
+</form>
+
+<!--
+<form action="/" enctype="multipart/form-data" method="POST">
+<input type="file" name="datafile" size="40">
+<input type="submit" value="Send">
+</form>
+
+
+<br>&nbsp;<br>&nbsp; <br> <br>&nbsp;<br>&nbsp; <br> <br>&nbsp;<br>&nbsp; <br>
+
+<div id="testdiv">
+</div>
+<div id="testdiv2">
+</div>
+-->
+
+
+<script type="text/javascript">
+
+fixedMenuId = 'fixeddiv';
+
+var fixedMenu = {
+  hasInner: typeof(window.innerWidth) == 'number',
+  hasElement: document.documentElement != null && document.documentElement.clientWidth,
+  menu: document.getElementById ? document.getElementById(fixedMenuId) : document.all ? document.all[fixedMenuId] : document.layers[fixedMenuId]
+};
+
+fixedMenu.computeShifts = function() {
+  fixedMenu.shiftX = fixedMenu.hasInner ? pageXOffset : fixedMenu.hasElement ? document.documentElement.scrollLeft : document.body.scrollLeft;
+  if(fixedMenu.targetLeft > 0)
+    fixedMenu.shiftX += fixedMenu.targetLeft;
+  else {
+    fixedMenu.shiftX += (fixedMenu.hasElement ? document.documentElement.clientWidth : fixedMenu.hasInner ? window.innerWidth - 20 : document.body.clientWidth) - fixedMenu.targetRight - fixedMenu.menu.offsetWidth;
+  }
+
+  fixedMenu.shiftY = fixedMenu.hasInner ? pageYOffset : fixedMenu.hasElement ? document.documentElement.scrollTop : document.body.scrollTop; 
+  if(fixedMenu.targetTop > 0)
+   fixedMenu.shiftY += fixedMenu.targetTop;
+  else {
+    fixedMenu.shiftY += (fixedMenu.hasElement ? document.documentElement.clientHeight : fixedMenu.hasInner ? window.innerHeight - 20 : document.body.clientHeight) - fixedMenu.targetBottom - fixedMenu.menu.offsetHeight;
+  }
+};
+
+fixedMenu.moveMenu = function() {
+  fixedMenu.computeShifts();
+  if(fixedMenu.currentX != fixedMenu.shiftX || fixedMenu.currentY != fixedMenu.shiftY) {
+    fixedMenu.currentX = fixedMenu.shiftX;
+    fixedMenu.currentY = fixedMenu.shiftY;
+
+    if(document.layers) {
+      fixedMenu.menu.left = fixedMenu.currentX;
+      fixedMenu.menu.top = fixedMenu.currentY;
+    } else if(browser==br_ie) {
+      fixedMenu.menu.style.left = '';
+      fixedMenu.menu.style.top = '';
+    } else {
+      fixedMenu.menu.style.left = fixedMenu.currentX + 'px';
+      fixedMenu.menu.style.top = fixedMenu.currentY + 'px';
+    }
+  }
+
+  fixedMenu.menu.style.right = '';
+  fixedMenu.menu.style.bottom = '';
+};
+
+fixedMenu.floatMenu = function() {
+  fixedMenu.moveMenu();
+  setTimeout('fixedMenu.floatMenu()', 20);
+};
+
+fixedMenu.addEvent = function(element, listener, handler) {
+  if(typeof element[listener] != 'function' || typeof element[listener + '_num'] == 'undefined') {
+    element[listener + '_num'] = 0;
+    if(typeof element[listener] == 'function') {
+      element[listener + 0] = element[listener];
+      element[listener + '_num']++;
+    }
+    element[listener] = function(e) {
+      var r = true;
+      e = (e) ? e : window.event;
+      for(var i = 0; i < element[listener + '_num']; i++)
+        if(element[listener + i](e) === false)
+          r = false;
+      return r;
+    }
+  }
+
+  for(var i = 0; i < element[listener + '_num']; i++)
+    if(element[listener + i] == handler)
+      return;
+  element[listener + element[listener + '_num']] = handler;
+  element[listener + '_num']++;
+};
+
+fixedMenu.supportsFixed = function() {
+  var testDiv = document.createElement("div");
+  testDiv.id = "testingPositionFixed";
+  testDiv.style.position = "fixed";
+  testDiv.style.top = "0px";
+  testDiv.style.right = "0px";
+  document.body.appendChild(testDiv);
+  var offset = 1;
+  if(typeof testDiv.offsetTop == "number" && testDiv.offsetTop != null && testDiv.offsetTop != "undefined") {
+    offset = parseInt(testDiv.offsetTop);
+  }
+  if(offset == 0)
+    return true;
+
+  return false;
+};
+
+fixedMenu.init = function() {
+  if(fixedMenu.supportsFixed())
+    fixedMenu.menu.style.position = "fixed";
+  else {
+    var ob = document.layers ? fixedMenu.menu : fixedMenu.menu.style;
+
+    fixedMenu.targetLeft = parseInt(ob.left);
+    fixedMenu.targetTop = parseInt(ob.top);
+    fixedMenu.targetRight = parseInt(ob.right);
+    fixedMenu.targetBottom = parseInt(ob.bottom);
+
+    if(document.layers) {
+      menu.left = 0;
+      menu.top = 0;
+    }
+    fixedMenu.addEvent(window, 'onscroll', fixedMenu.moveMenu);
+    fixedMenu.floatMenu();
+  }
+};
+
+fixedMenu.addEvent(window, 'onload', fixedMenu.init);
+
+</script>
+
+
+</body>
+</html>

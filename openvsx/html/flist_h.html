@@ -1,0 +1,237 @@
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<script type="text/javascript" src="/rsrc/config.js"></script>
+<script type="text/javascript" src="/rsrc/common.js"></script>
+<script type="text/javascript" src="/rsrc/flist.js"></script>
+<script type="text/javascript" src="/rsrc/flist_h_custom.js"></script>
+<link rel="stylesheet" type="text/css" href="/rsrc/main.css">
+<title>OpenVSX Video Streaming Server Media Directory</title>
+
+<script language="javascript">
+
+//var colvert=0;
+//var colwid_h=190;
+//var curmaxpp_h=3;
+var curplayfile='';
+var curplaydivname='';
+var prevplaydiv=null;
+var uipwd='';
+var listReq;
+var mediaReq;
+//var ipod=0;
+var curdir='';
+var curstartidx=0;
+//var curmaxpp;
+var h_curstartidx=0;
+var h_objs;
+
+
+
+function h_jump(startidx) {
+  curstartidx=startidx;
+  var txt=create_resp_h(curstartidx,  curmaxpp_h);
+  drawfilelist_h(txt);
+}
+
+
+function drawfilediv_h(dir, retParams, i) {
+  var str='';
+  var prmf=retParams['f_'+i];
+  var prmd=retParams['d_'+i];
+  var prmtns=retParams['t_'+i];
+  var prmtm=retParams['c_'+i];
+  var prmn=retParams['n_'+i];
+  var _curfile=unescape(curplayfile);
+
+  if(prmf!=null) {
+
+    if(prmn==null) {
+      prmn=prmf;
+    }
+    var fullpath=escape(dir);
+    if(prmd!=null&&prmd.charAt(0)!='/'&& fullpath!=null&&fullpath.length>0&&fullpath.charAt(fullpath.length-1)!='/')
+      fullpath+='/';
+    fullpath+=prmf;
+
+    if(prmtns==null) prmtns=0;
+    else if(prmtns >0) prmtns--;
+
+    var stylestr='';
+    if(curplayfile!='' && unescape(fullpath)==_curfile) {
+      stylestr+='background-color: #cccccc;';
+    }
+
+    str+='<div class="thumbouter" style="width:'+colwid_h+'px;'+stylestr+'"';
+    if(!ipod)
+      str+=' onmouseover="this.className=\'thumbouterhvr\'" onmouseout="this.className=\'thumbouter\'"';
+    str+=' id="h_fo_'+i+'">';
+
+    if(prmtns>0) {
+      str+='<a style="position:relative;cursor:hand;" name="h_'+fullpath+'" onclick="javascript:playfile2(\''+urlizestr(fullpath)+'\',\'h_fl_'+i+'\');">';
+      str+='<div class="vidlink" style="background:url(\'tmn/'+fullpath+'_xn.jpg\') no-repeat center;"';
+      str+=' id="h_fl_'+i+'">';
+      str+='</div>';
+      str+='</a>';
+
+    } else {
+      str+='<div class="novidlink"';
+      str+=' id="h_fl_'+i+'"><a name="h_'+fullpath+'" onclick="javascript:playfile2(\''+urlizestr(fullpath)+'\',\'h_fl_'+i+'\');"';
+      str+=' href="#"><img class="vidplaybluebigbtn" src="img/playbluebig.png" alt="Play"';
+      str+='></a> ';
+      str+='</div>';
+    }
+
+    //str+='<br>';
+
+    str+='<a class="flink" href="#" onclick="javascript:playfile2(\''+urlizestr(fullpath)+'\',\'h_fl_'+i+'\');"';
+    if(uipwd!='') str+='?pass='+uipwd;
+    str+='\"/>';
+    str+=truncname(unescape(prmn),26);
+    str+='</a>';
+
+    str+='</div>';
+
+  }
+  return str;
+}
+
+function drawfilelist_h(txt) {
+  var colidx=0;
+  var str='';
+  var strdir='';
+  var retParams=getRespArray(txt);
+  var cnt=retParams['cnt'];
+  var tot=retParams['tot'];
+  var dir=retParams['dir'];
+  var startidx=retParams['idx'];
+
+  var _wid=truebody(document).clientWidth-20;
+  var _num=Math.floor(_wid/(Number(colwid_h)+10));
+
+  str+='<table border="0" cellpadding="2" cellspacing="2"><tr>';
+  str+='<td valign="top">';
+  if(startidx>0) {
+    var _sidx=Number(startidx)-Number(curmaxpp_h);
+    str+='<a onclick="javascript:h_jump('+_sidx+');" href="#"><img src="img/h_prev.gif" alt="Previous" border="0"></a>';
+  } else {
+    str+='<img src="img/h_trans.gif">';
+  }
+  str+='</td>';
+  for(var i=0; i<cnt; i++) {
+    str+='<td style="width:'+colwid_h+'px;" valign="top" align="center">';
+    str+=drawfilediv_h(dir, retParams, i);
+    str+='</td>';
+  }
+  str+='<td valign="top">';
+  if(Number(startidx)+Number(cnt)<Number(tot)) {
+    var _sidx=Number(startidx)+Number(curmaxpp_h);
+    str+='<a onclick="javascript:h_jump('+_sidx+');" href="#"><img src="img/h_next.gif" alt="Next" border="0"></a>';
+  } else {
+    str+='<img src="img/h_trans.gif">';
+  }
+  str+='</td>';
+  str+='</tr></table>';
+
+  document.getElementById('medialist_h').innerHTML=str;
+
+  return str;
+}
+
+
+
+function init_v(path, thumbs, descr) {
+  _obj = new Object();
+  _obj.path = path;
+  if(thumbs==null) thumbs=0;
+  _obj.thumbs = thumbs;
+  if(descr==null) descr='';
+  _obj.descr = descr;
+  return _obj;
+}
+
+function create_resp_h(start, max) {
+  max=Number(start)+Number(max);
+  if(max>h_objs.length) max=h_objs.length;
+
+  var str='tot='+h_objs.length+'&cnt='+(Number(max)-Number(start))+'&idx='+start+'&dir=';
+  var iter=0;
+  for(idx=start;idx<max;idx++) {
+    str+='&f_'+iter+'='+h_objs[idx].path+'&t_'+iter+'='+h_objs[idx].thumbs;
+    if(h_objs[idx].descr !=null && h_objs[idx].descr.length>0)
+      str+='&n_'+iter+'='+h_objs[idx].descr;
+    iter++;
+  }
+  return str;
+}
+
+
+
+function initparams() {
+
+  listReq=createAjax();
+  mediaReq=createAjax();
+
+  var uri=window.location.href;
+  var pos=uri.indexOf('?');
+
+  if(pos>0) {
+    uri=uri.substr(pos+1);
+    var retParams=getRespArray(uri);
+    var file=retParams['file'];
+    var dir=retParams['dir'];
+    var pw=retParams['pass'];
+    ipod=retParams['ipod'];
+    if(pw!=null)
+      uipwd=pw;
+
+    var _colvert_h=retParams['colvert'];
+    if(_colvert_h!=null) {
+      colvert_h=_colvert;
+    }
+  }
+
+  if(ipod==0&&colvert_h==0) {
+   var _wid=truebody(document).clientWidth-20;
+   var _num=Math.floor(_wid/(Number(colwid_h)+12));
+   curmaxpp_h=_num;
+  } else if(ipod==2) {
+   curmaxpp_h=5;
+  }
+
+  init_flist_custom();
+  var txt=create_resp_h(curstartidx,  curmaxpp_h);
+  drawfilelist_h(txt);
+}
+
+
+</script>
+
+</head>
+<body class="bg" onload="javascript:initparams();">
+<form name="playfrm">
+
+<table border="0" cellpadding="0" cellspacing="0" class="bg">
+<tr><td width="100%">
+
+
+<table border="0" cellpadding="1" cellspacing="1" width="100%">
+<tr><td> 
+
+<div id="medialist_h"></div>
+&nbsp;
+<!--
+<a id="list_dir" name="list_dir" onclick="javascript:listdir('');" href="#">.</a>
+</div>
+-->
+
+</td></tr></table>
+
+</td></tr></table>
+
+</form>
+
+</body>
+</html>
+
+

@@ -1,0 +1,78 @@
+
+include ./openvsx/makefiles/Makefile.conf
+
+MKDATE=mkdate
+MKBUILDNUM=mkbuildnum
+BUILD_DIR = bin
+SRC_DIR = src
+INCLUDE_DIRS =
+
+LIBS =
+
+LIB_OBJS = 
+
+SUBDIRS_MEDIASERVER = openvsx/
+SUBDIRS_SIPSERVER= @SUBDIRS_SIPSERVER_VALUE@
+
+MKDATE_FILE = openvsx/version/include/build_info_date.h
+MKBLDNUM_FILE = buildopenvsx/version/include/build_info_ver.h
+
+
+all: openvsx openvcx
+
+${MKDATE}:
+	@echo "#define BUILD_INFO_DATE \"\c" > ${MKDATE_FILE}.tmp
+	@date "+%a %m/%d/%Y" >> ${MKDATE_FILE}.tmp
+	@echo "\"" >> ${MKDATE_FILE}.tmp
+	@awk '{ str1=str1 $$0 }END{ print str1 }' < ${MKDATE_FILE}.tmp > ${MKDATE_FILE}
+#@tr "\n" " " < ${MKDATE_FILE}.tmp > ${MKDATE_FILE}
+	@rm ./${MKDATE_FILE}.tmp
+	@echo "Created build date file" ${MKDATE_FILE}
+
+${MKBUILDNUM}:
+	@awk '{ printf "#define BUILD_INFO_NUM %d\n", $$3+1 }' < ${MKBLDNUM_FILE} > ${MKBLDNUM_FILE}.tmp
+	@mv ./${MKBLDNUM_FILE}.tmp ./${MKBLDNUM_FILE}
+	@echo "Created build number file" ${MKBLDNUM_FILE}
+
+#
+# Increment build version
+#
+version: ${MKDATE} ${MKBUILDNUM}
+
+
+# compile C++ source files into object files.
+#$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
+#	@if test ! -d $(BUILD_DIR); then $(MKDIR) $(BUILD_DIR); fi;
+#	$(PRECC) $(CPP) $(DEFS) $(INCLUDE_DIRS) $(CFLAGS) -o $@ -c $<
+
+
+#
+# Make OpenVSX Video Streaming Processor C source
+#
+openvsx: 
+	@for i in ${SUBDIRS_MEDIASERVER}; do echo "making... $${i}"; $(MAKE) -C $${i}; done;
+
+#
+# Make OpenVCX Video Conferencing Server Java source 
+#
+openvcx:
+	@for i in ${SUBDIRS_SIPSERVER}; do echo "making... $${i}"; $(MAKE) -C $${i}; done;
+
+
+#
+# Create self-extracting installation package for both OpenVCX and OpenVSX
+#
+installer-build: openvsx 
+	@for i in ${SUBDIRS_SIPSERVER}; do echo "making installer-build... $${i}"; $(MAKE) installer-build -C $${i}; done;
+installer-run: openvsx 
+	@for i in ${SUBDIRS_SIPSERVER}; do echo "making installer-run... $${i}"; $(MAKE) installer-run -C $${i}; done;
+install: openvsx 
+	@for i in ${SUBDIRS_SIPSERVER}; do echo "making install... $${i}"; $(MAKE) install -C $${i}; done;
+
+#
+# clean everything
+#
+clean:
+	@for i in ${SUBDIRS_MEDIASERVER}; do echo "cleaning... $${i}"; $(MAKE) $@ -C $${i}; done;
+
+.PHONY:all openvsx openvcx clean install version installer-build installer-run

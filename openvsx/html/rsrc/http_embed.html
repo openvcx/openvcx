@@ -1,0 +1,110 @@
+<html><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+        <script type="text/javascript" src="/rsrc/flowplayer-3.2.4.min.js"></script>
+        <script type="text/javascript" src="/rsrc/common.js"></script>
+        <script type="text/javascript" src="/rsrc/mplayerframe.js"></script>
+	<link rel="stylesheet" type="text/css" href="/rsrc/main.css">
+	<title>OpenVSX Video Streaming Server - http://openvcx.com</title>
+
+<script>
+
+//http_embed.html
+var xres=$$width$$;
+var yres=$$height$$;
+var file='';
+var fileInfoReq;
+var profile=null;
+
+function initparams() {
+  var uri=window.location.href;
+  var pos=uri.indexOf('?');
+  var nologo=0;
+  var x=undefined;
+  var y=undefined;
+
+
+  file=getRsrcNameFromUri(uri);
+  if(profile==null) profile='';
+
+  if(pos>0) {
+    var retParams=getRespArray(uri);
+    x=retParams['x'];
+    y=retParams['y'];
+    nologo=retParams['nologo'];
+  }
+
+  livepollredirector();
+
+  setDimensions(x, y);
+
+  if(file!=null) {
+    fileInfoReq=createAjax();
+    ajaxGet(fileInfoReq, '/list?chkprofile=1&profile='+profile+'&file='+file, cbMPInfo, null, 3);
+  }
+
+  _elemd=document.getElementById('fms');
+  _elemd.style.width=xres;
+  _elemd.style.height=yres;
+
+  if(nologo!=1) {
+    document.getElementById('logodiv').innerHTML='<a href="http://openvcx.com"><div style="font-family: \'Maven Pro\', sans-serif; font-size: 48px; font-weight: bold; line-height: 46px; text-shadow: #999999 1px 3px 0px; color:#444444;">OpenVCX</div></a><br>&nbsp;<br>';
+    //document.getElementById('logodiv').innerHTML='<a href="http://openvcx.com"><img src="/img/logo3.jpg" border="0"></a><br>&nbsp;<br>';
+  }
+
+}
+
+</script>
+</head>
+<body class="bg" onload="javascript:initparams();">
+
+
+<table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td width="280" align="left">
+<div id="logodiv" align="left"></span>
+</td><td align="center" nowrap>
+<div style="font-size:1.288em;font-weight:bold; align:center">
+HTTP FLV Container - Live Video Streaming
+</div>
+</td><td width="280">&nbsp;</td>
+</td></tr></table>
+
+<div align="center">
+<div id="fms" class="vidtag" style="display:block;" href=""></div>
+	
+<script>
+
+
+       $f("fms", "/rsrc/flowplayer-3.2.5.swf", {
+
+	clip: {
+                autoPlay: true,
+		url: '$$http://host:port/path/media.container$$',
+		provider: 'lighttpd'
+	},
+
+	plugins: {
+
+                lighttpd: {
+                        url: '/rsrc/flowplayer.pseudostreaming-3.2.7.swf',
+                        rangeRequests: true
+                }
+	}
+
+});
+
+</script>
+
+<noscript>
+<h3>This page is a demo for OpenVSX Video Streaming Server.  It appears that you do not have javascript enabled.  This web page uses dynamic content and requires javascript to be enabled.</h3><h3>Please visit <a href="http://openvcx.com">http://openvcx.com</a> for more information.</h3>
+</noscript>
+
+
+<div id="fileinfo"></div>
+<div id="fileinfo2"></div>
+<div id="fileinfo3"></div>
+<div id="fileinfoshareid2" style="z-index:5;"></div>
+</div>
+
+</div>
+		
+</body>
+</html>

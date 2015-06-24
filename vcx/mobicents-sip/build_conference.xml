@@ -1,0 +1,62 @@
+<?xml version="1.0"?>
+
+<project name="sip-conference" default="war">
+
+    <property environment="env"/>
+    <property name="catalinaHome" value="${env.CATALINA_HOME}"/>
+    <property name="outputName" value="sip-conference"/>
+
+    <path id="compile.classpath">
+        <fileset dir="lib">
+            <include name="*.jar"/>
+        </fileset>
+    </path>
+
+    <target name="initialize">
+        <mkdir dir="dist/vidconference/conf"/>
+        <mkdir dir="build/vidconference/classes"/>
+        <mkdir dir="logs"/>
+        <mkdir dir="webapps"/>
+    </target>
+
+    <target name="compile" depends="initialize">
+        <javac destdir="build/vidconference/classes" debug="true" includeantruntime="false" 
+               srcdir="src/vidconference/java">
+            <compilerarg line="-Xlint:unchecked"/>
+            <classpath refid="compile.classpath"/>
+        </javac>
+    </target>
+
+    <target name="war" depends="compile">
+        <mkdir dir="dist/vidconference/WEB-INF/lib"/>
+
+        <copy todir="dist/vidconference/WEB-INF">
+            <fileset dir="src/vidconference">
+                <include name="sip.xml"/>
+                <include name="web.xml"/>
+            </fileset>
+            <fileset dir="build/vidconference"/>
+        </copy>
+        <jar destfile="dist/vidconference/${outputName}.war" basedir="dist/vidconference"/>
+    </target>
+
+    <target name="clean">
+        <delete dir="dist/vidconference" />
+        <delete dir="build/vidconference" />
+        <delete dir="webapps/${outputName}" />
+        <delete file="webapps/${outputName}.war" />
+    </target>
+
+    <target name="deploy" depends="clean, war">
+        <fail unless="env.CATALINA_HOME" message="CATALINA_HOME environment variable is not set!"/>
+
+        <delete dir="${catalinaHome}/webapps/${outputName}"/>
+        <delete file="${catalinaHome}/webapps/${outputName}.war"/>
+
+        <copy file="dist/vidconference/${outputName}.war" todir="${catalinaHome}/webapps"/>
+        <copy todir="${catalinaHome}/conf">
+            <fileset dir="dist/vidconference/conf"/>
+        </copy>
+    </target>
+
+</project>

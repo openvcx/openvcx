@@ -1,0 +1,183 @@
+x264 configure script
+
+checking whether gcc works... yes
+checking whether gcc supports for( int i = 0; i < 9; i++ ); with -std=gnu99... yes
+checking whether yasm supports vpperm xmm0, xmm0, xmm0, xmm0... yes
+checking whether gcc supports __asm__("pabsw %xmm0, %xmm0");... yes
+checking for pthread.h... yes
+checking for cpu_set_t p_aff; return CPU_COUNT(&p_aff); in sched.h... no
+Failed commandline was:
+--------------------------------------------------
+gcc conftest.c  -Wall -I. -I$(SRCPATH) -march=i686 -mfpmath=sse -msse -std=gnu99 -D_GNU_SOURCE -Werror   -lm -lpthread -o conftest
+cc1: warnings being treated as errors
+conftest.c: In function ‘main’:
+conftest.c:2: warning: implicit declaration of function ‘CPU_COUNT’
+--------------------------------------------------
+Failed program was:
+--------------------------------------------------
+#include <sched.h>
+int main () { cpu_set_t p_aff; return CPU_COUNT(&p_aff); return 0; }
+--------------------------------------------------
+checking for return log2f(2); in math.h... yes
+checking for sws_init_context(0,0,0); in libswscale/swscale.h... no
+Failed commandline was:
+--------------------------------------------------
+gcc conftest.c  -Wall -I. -I$(SRCPATH) -march=i686 -mfpmath=sse -msse -std=gnu99  -lswscale -lavutil   -lm -lpthread -o conftest
+conftest.c:1:32: error: libswscale/swscale.h: No such file or directory
+conftest.c: In function ‘main’:
+conftest.c:2: warning: implicit declaration of function ‘sws_init_context’
+--------------------------------------------------
+Failed program was:
+--------------------------------------------------
+#include <libswscale/swscale.h>
+int main () { sws_init_context(0,0,0); return 0; }
+--------------------------------------------------
+checking for -lpostproc... no
+Failed commandline was:
+--------------------------------------------------
+gcc conftest.c  -Wall -I. -I$(SRCPATH) -march=i686 -mfpmath=sse -msse -std=gnu99 -lpostproc   -lm -lpthread -o conftest
+/usr/bin/ld: cannot find -lpostproc
+collect2: ld returned 1 exit status
+--------------------------------------------------
+Failed program was:
+--------------------------------------------------
+int main () {  return 0; }
+--------------------------------------------------
+checking for -lavcodec... no
+Failed commandline was:
+--------------------------------------------------
+gcc conftest.c  -Wall -I. -I$(SRCPATH) -march=i686 -mfpmath=sse -msse -std=gnu99 -lavcodec   -lm -lpthread -o conftest
+/usr/bin/ld: cannot find -lavcodec
+collect2: ld returned 1 exit status
+--------------------------------------------------
+Failed program was:
+--------------------------------------------------
+int main () {  return 0; }
+--------------------------------------------------
+checking for -lavcore... no
+Failed commandline was:
+--------------------------------------------------
+gcc conftest.c  -Wall -I. -I$(SRCPATH) -march=i686 -mfpmath=sse -msse -std=gnu99 -lavcore   -lm -lpthread -o conftest
+/usr/bin/ld: cannot find -lavcore
+collect2: ld returned 1 exit status
+--------------------------------------------------
+Failed program was:
+--------------------------------------------------
+int main () {  return 0; }
+--------------------------------------------------
+checking for -lswscale... no
+Failed commandline was:
+--------------------------------------------------
+gcc conftest.c  -Wall -I. -I$(SRCPATH) -march=i686 -mfpmath=sse -msse -std=gnu99 -lswscale   -lm -lpthread -o conftest
+/usr/bin/ld: cannot find -lswscale
+collect2: ld returned 1 exit status
+--------------------------------------------------
+Failed program was:
+--------------------------------------------------
+int main () {  return 0; }
+--------------------------------------------------
+checking for -lavutil... no
+Failed commandline was:
+--------------------------------------------------
+gcc conftest.c  -Wall -I. -I$(SRCPATH) -march=i686 -mfpmath=sse -msse -std=gnu99 -lavutil   -lm -lpthread -o conftest
+/usr/bin/ld: cannot find -lavutil
+collect2: ld returned 1 exit status
+--------------------------------------------------
+Failed program was:
+--------------------------------------------------
+int main () {  return 0; }
+--------------------------------------------------
+checking for -lm... yes
+checking for -lz... yes
+checking for -lbz2... yes
+checking for -lpthread... yes
+checking for -lavifil32... no
+Failed commandline was:
+--------------------------------------------------
+gcc conftest.c  -Wall -I. -I$(SRCPATH) -march=i686 -mfpmath=sse -msse -std=gnu99 -lavifil32   -lm -lpthread -o conftest
+/usr/bin/ld: cannot find -lavifil32
+collect2: ld returned 1 exit status
+--------------------------------------------------
+Failed program was:
+--------------------------------------------------
+int main () {  return 0; }
+--------------------------------------------------
+checking for avformat_find_stream_info(0,0); avcodec_open2(0,0,0); in libavformat/avformat.h... no
+Failed commandline was:
+--------------------------------------------------
+gcc conftest.c  -Wall -I. -I$(SRCPATH) -march=i686 -mfpmath=sse -msse -std=gnu99  -L. -lavformat -lm -lz -lbz2 -lpthread   -lm -lpthread -o conftest
+conftest.c:1:34: error: libavformat/avformat.h: No such file or directory
+conftest.c: In function ‘main’:
+conftest.c:2: warning: implicit declaration of function ‘avformat_find_stream_info’
+conftest.c:2: warning: implicit declaration of function ‘avcodec_open2’
+--------------------------------------------------
+Failed program was:
+--------------------------------------------------
+#include <libavformat/avformat.h>
+int main () { avformat_find_stream_info(0,0); avcodec_open2(0,0,0); return 0; }
+--------------------------------------------------
+checking for FFMS_DestroyVideoSource(0); in ffms.h... no
+Failed commandline was:
+--------------------------------------------------
+gcc conftest.c  -Wall -I. -I$(SRCPATH) -march=i686 -mfpmath=sse -msse -std=gnu99  -lffms2   -lm -lpthread -o conftest
+conftest.c:1:18: error: ffms.h: No such file or directory
+conftest.c: In function ‘main’:
+conftest.c:2: warning: implicit declaration of function ‘FFMS_DestroyVideoSource’
+--------------------------------------------------
+Failed program was:
+--------------------------------------------------
+#include <ffms.h>
+int main () { FFMS_DestroyVideoSource(0); return 0; }
+--------------------------------------------------
+checking for FFMS_DestroyVideoSource(0); in ffms.h... no
+Failed commandline was:
+--------------------------------------------------
+gcc conftest.c  -Wall -I. -I$(SRCPATH) -march=i686 -mfpmath=sse -msse -std=gnu99  -lffms2 -lstdc++ -L. -lavformat -lm -lz -lbz2 -lpthread   -lm -lpthread -o conftest
+conftest.c:1:18: error: ffms.h: No such file or directory
+conftest.c: In function ‘main’:
+conftest.c:2: warning: implicit declaration of function ‘FFMS_DestroyVideoSource’
+--------------------------------------------------
+Failed program was:
+--------------------------------------------------
+#include <ffms.h>
+int main () { FFMS_DestroyVideoSource(0); return 0; }
+--------------------------------------------------
+checking for -lz... yes
+checking for gpac/isomedia.h... no
+Failed commandline was:
+--------------------------------------------------
+gcc conftest.c  -Wall -I. -I$(SRCPATH) -march=i686 -mfpmath=sse -msse -std=gnu99 -lgpac_static -lz   -lm -lpthread -o conftest
+conftest.c:1:27: error: gpac/isomedia.h: No such file or directory
+--------------------------------------------------
+Failed program was:
+--------------------------------------------------
+#include <gpac/isomedia.h>
+int main () {  return 0; }
+--------------------------------------------------
+checking for uint32_t test_vec __attribute__ ((vector_size (16))) = {0,1,2,3}; in stdint.h... yes
+checking for -fno-tree-vectorize... yes
+checking for fseeko(stdin,0,0); in stdio.h... yes
+checking for -Wshadow... yes
+
+platform:      X86
+system:        LINUX
+cli:           yes
+libx264:       internal
+shared:        no
+static:        no
+asm:           yes
+interlaced:    yes
+avs:           no
+lavf:          no
+ffms:          no
+gpac:          no
+gpl:           yes
+thread:        posix
+filters:       crop select_every 
+debug:         no
+gprof:         no
+strip:         no
+PIC:           no
+visualize:     no
+bit depth:     8
+chroma format: all

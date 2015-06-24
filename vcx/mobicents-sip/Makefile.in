@@ -1,0 +1,80 @@
+
+
+E = echo
+BUILD_DIR = bin
+SRC_DIR = 
+INCLUDE_DIRS =
+
+LIBS =
+LIB_OBJS = 
+SUBDIRS = 
+
+
+#targets
+OPENVCX= vcx 
+
+all: $(OPENVCX)
+
+
+#create executable
+${OPENVCX}: 
+	@${E} --------------------------------------- ;
+	@${E} Running ./build.sh deploy all;
+	./build.sh deploy all
+	@${E} --------------------------------------- ;
+	@if [ -r webapps/sip-conference.war ]; \
+	then                                           \
+	${E} ${OPENVCX} built successfully           ; \
+	else                                           \
+	${E} ${OPENVCX} build failed                 ; \
+	fi;
+	@${E} --------------------------------------- ;
+
+installer-build: ${OPENVCX}
+	@${E} --------------------------------------- ;
+	@if [ -r installer_output_path.tmp ]; \
+	then \
+	rm ./installer_output_path.tmp ; \
+	fi;
+	@${E} Running packaging script ../../packaging/pkg_all.sh;
+	../../packaging/pkg_all.sh unknown installer_output_path.tmp
+	@${E} --------------------------------------- ;
+	@if [ -r installer_output_path.tmp ]; \
+  	then                                           \
+        if [ -r `cat installer_output_path.tmp` ]; \
+  	then                                           \
+	${E} installer-build success. ; \
+	${E} Created self-extracting installer file: `cat installer_output_path.tmp` ; \
+	else                                           \
+	${E} installer-build failed.  Cannot find self-extracting file: `cat installer_output_path.tmp`  ; \
+	fi; \
+	else                                           \
+	${E} installer-build failed                 ; \
+	fi;
+	@${E} --------------------------------------- ;
+
+installer-run: installer-build
+	@${E} --------------------------------------- ;
+	@if [ -r installer_output_path.tmp ]; \
+  	then                                           \
+        if [ -r `cat installer_output_path.tmp` ]; \
+  	then                                           \
+        ${E}  Running self-extracting installer file: `cat installer_output_path.tmp` ; \
+        `cat installer_output_path.tmp` \
+	else                                           \
+	${E} installer-run failed.  Cannot find self-extracting file: `cat installer_output_path.tmp`  ; \
+	fi; \
+	else                                           \
+	${E} installer-run failed                ; \
+	fi;
+	@${E} --------------------------------------- ;
+
+install: installer-run
+	
+
+# clean everything
+clean:
+	@${E} --------------------------------------- ;
+	./build.sh clean all
+	@${E} --------------------------------------- ;
+

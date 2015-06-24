@@ -1,0 +1,102 @@
+; Sample stunnel configuration file for Win32 by Michal Trojnara 2002-2012
+; Some options used here may be inadequate for your particular configuration
+; This sample file does *not* represent stunnel.conf defaults
+; Please consult the manual for detailed description of available options
+
+; **************************************************************************
+; * Global options                                                         *
+; **************************************************************************
+
+; Debugging stuff (may useful for troubleshooting)
+debug = 5
+output=stunnel.log
+
+; Disable FIPS mode to allow non-approved protocols and algorithms
+;fips=no
+
+; **************************************************************************
+; * Service defaults may also be specified in individual service sections  *
+; **************************************************************************
+
+; Certificate/key is needed in server mode and optional in client mode
+cert=stunnel.pem
+;key=stunnel.pem
+
+; Authentication stuff needs to be configured to prevent MITM attacks
+; It is not enabled by default!
+;verify = 2
+; Don't forget to c_rehash CApath
+;CApath = certs
+; It's often easier to use CAfile
+;CAfile = certs.pem
+; Don't forget to c_rehash CRLpath
+;CRLpath = crls
+; Alternatively CRLfile can be used
+;CRLfile = crls.pem
+
+; Disable support for insecure SSLv2 protocol
+options = NO_SSLv2
+; Workaround for Eudora bug
+;options = DONT_INSERT_EMPTY_FRAGMENTS
+
+; These options provide additional security at some performance degradation
+;options = SINGLE_ECDH_USE
+;options = SINGLE_DH_USE
+
+; **************************************************************************
+; * Service definitions (at least one service has to be defined)           *
+; **************************************************************************
+
+; Example SSL server mode services
+
+;[pop3s]
+;accept  = 995
+;connect = 110
+
+;[imaps]
+;accept  = 993
+;connect = 143
+
+;[ssmtp]
+;accept  = 465
+;connect = 25
+
+; Example SSL client mode services
+
+;[gmail-pop3]
+;client = yes
+;accept = 127.0.0.1:110
+;connect = pop.gmail.com:995
+
+;[gmail-imap]
+;client = yes
+;accept = 127.0.0.1:143
+;connect = imap.gmail.com:993
+
+;[gmail-smtp]
+;client = yes
+;accept = 127.0.0.1:25
+;connect = smtp.gmail.com:465
+
+; Example SSL front-end to a web server
+
+;[https]
+;accept  = 443
+;connect = 80
+; "TIMEOUTclose = 0" is a workaround for a design flaw in Microsoft SSL
+; Microsoft implementations do not use SSL close-notify alert and thus
+; they are vulnerable to truncation attacks
+;TIMEOUTclose = 0
+
+; vim:ft=dosini
+
+; OpenVCX WSS (websockets over SSL specific redirect)
+[https]
+accept = 5063
+connect = 127.0.0.1:5062
+TIMEOUTclose = 0
+
+; OpenVCX TLS (TCP/SIP over SSL specific redirect)
+[https]
+accept = 5061
+connect = 127.0.0.1:5060

@@ -1,0 +1,182 @@
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<script type="text/javascript" src="/rsrc/config.js"></script>
+<script type="text/javascript" src="/rsrc/common.js"></script>
+<script type="text/javascript" src="/rsrc/flist.js"></script>
+<link rel="stylesheet" type="text/css" href="/rsrc/main.css">
+<title>OpenVSX Video Streaming Server Directory Listing</title>
+
+<script language="javascript">
+
+//var colvert=1;
+var colcnt=2;
+//var colwid=190;
+var timerimgroll;
+var imgrollidx=0;
+var imgrollsrc='';
+var imgrolldiv='';
+var imgrolltm=0;
+//var ipod=0;
+//var curmaxpp=10;
+//var curmaxpp_h=4;
+var curstartidx='';
+var curdir='';
+var curplayfile='';
+var curplaydivname='';
+var prevplaydiv=null;
+var curhvrnumtn=0;
+var uipwd='';
+var listReq;
+var mediaReq;
+var fileInfoReqFl;
+var file;
+
+var shownavigateback=1;
+//var shownavigate=1;
+
+var vidtagobj;
+var vidtagurl;
+
+function initparams() {
+
+  initconfig();
+
+  listReq=createAjax();
+  mediaReq=createAjax();
+
+  _sortboxdiv=parent.document.getElementById("sortbox");
+  if(_sortboxdiv==null)
+    _sortboxdiv=document.getElementById("sortbox");
+
+  _searchboxdiv=parent.document.getElementById("searchbox");
+  if(_searchboxdiv==null)
+    _searchboxdiv=document.getElementById("searchbox");
+
+  if(navigator.userAgent.match('iPhone') || navigator.userAgent.match('iPod')) {
+    //ipod=1;
+    //colcnt=3;
+    //curmaxpp=12;
+  } else if(navigator.userAgent.match('iPad')) {
+    //ipod=2;
+    //colcnt=5;
+    //curmaxpp=15;
+    loadjs('/rsrc/mplayerframe.js');
+    fileInfoReqFl=createAjax();
+  } else if(navigator.userAgent.match('Android') || navigator.userAgent.match('BlackBerry')) {
+    //ipod=3;
+    //colcnt=3;
+    //curmaxpp=12;
+  } else {
+    colcnt=1
+    if(colcnt==1) colwid=168; else colwid=190;
+  }
+
+  if(ipod > 0) {
+    document.getElementById("logoid").innerHTML='<a href="http://openvcx.com"><div style="font-family: \'Maven Pro\', sans-serif; font-size: 48px; font-weight: bold; line-height: 46px; text-shadow: #999999 1px 3px 0px; color:#444444;">OpenVCX</div></a>';
+    //document.getElementById("logoid").innerHTML='<a href="http://openvcx.com"><img src="/img/logo3.jpg" border="0"></a>';
+    document.getElementById("titleid").innerHTML='<h2>OpenVSX Video Streaming Server Demo</h2>';
+  }
+
+  var uri=window.location.href;
+  var retParams=getRespArray(uri);
+  var file=retParams['file'];
+  var dir=retParams['dir'];
+  var pw=retParams['pass'];
+  var _colcnt=retParams['col'];
+  if(_colcnt!=null&&_colcnt>0) 
+    colcnt=_colcnt;
+  if(pw!=null)
+    uipwd=pw;
+  if(dir!=null)
+    curdir=dir;
+  else if(file!=null)
+    curdir=getparentdir(file,'/');
+
+  var _colvert=retParams['colvert'];
+  if(_colvert!=null) {
+    colvert=_colvert;
+  }
+
+  if(showflist_h && ipod > 0) {
+    document.getElementById('listframediv_b').style.height='140px';
+
+    var strUrl='/flist_h.html?ipod='+ipod;
+    if(file!=null)
+      strUrl+='&file='+file;
+    str='<iframe id="listframe_h" name="listframe_h" scrolling="no" src="';
+    str+=strUrl+'" frameborder="0" width="100%" height="100%">';
+    str+='<p>Your browser does not support iframes.</p></iframe>';
+    document.getElementById('listframediv_b').innerHTML=str;
+  }
+
+  if(showsortbox)
+    drawsortbox(_sortboxdiv);
+  if(showsearchbox==true)
+    drawsearchbox(_searchboxdiv);
+
+  if(colvert==0) {
+   var _wid=truebody(document).clientWidth-20;
+   var _num=Math.floor(_wid/(Number(colwid)+12));
+   curmaxpp=_num;
+  }
+
+  listdir(curdir);
+}
+
+
+</script>
+
+</head>
+<body class="bg" onload="javascript:initparams();">
+
+<form name="playfrm">
+
+<table border="0" cellpadding="0" cellspacing="0" class="bg">
+<tr><td align="center">
+
+
+<table border="0" cellpadding="2" cellspacing="0"><tr><td rowspan="2">
+<div id="logoid" valign="bottom">
+</div>
+</td><td rowspan="2">&nbsp;</td>
+</td><td colspan="2" valign="bottom">
+<div id="titleid">
+</div>
+
+</td></tr><tr><td valign="bottom">
+<div id="searchbox">
+</div>
+</td><td valign="bottom">
+
+<div id="sortbox">
+</div>
+</td></tr></table>
+
+<div id="inlineplayerdiv" style="margin:0px 0px 0px 0px; padding: 0px"></div>
+
+<table border="0" cellpadding="1" cellspacing="1" width="100%">
+<tr><td>
+
+<div id="listframediv_b_title" style="margin:0px 0px 0px 0px; padding: 0px"></div>
+<div id="listframediv_b" style="width:100%; margin:0px 0px 0px 0px; padding: 0px"></div>
+
+</td></tr><tr><td>
+
+<div id="medialist" style=" margin:0px 0px 0px 0px; padding: 0px">
+&nbsp;
+<a id="list_dir" name="list_dir" onclick="javascript:listdir('');" href="#">.</a>
+</div>
+
+<noscript>
+<h3>This page is a demo for OpenVSX Video Streaming Server.  It appears that you do not have javascript enabled.  This web page uses dynamic content and requires javascript to be enabled.</h3><h3>Please visit <a href="http://openvcx.com">http://openvcx.com</a> for more information.</h3>
+</noscript>
+
+</td></tr></table>
+
+</td></tr></table>
+
+</form>
+
+</body>
+</html>

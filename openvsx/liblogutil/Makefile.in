@@ -1,0 +1,36 @@
+include ../makefiles/Makefile.conf
+
+SRC_DIR = src
+INCLUDE_DIRS += -I./include \
+               -I../libcommonutil/include 
+
+LIB_OBJS = ${BUILD_DIR}/logutil.o \
+           ${BUILD_DIR}/logutil_tid.o 
+
+
+ARCHIVE = ${BUILD_DIR}/liblogutil.a
+
+all: ${LIB_OBJS} $(ARCHIVE)
+
+# compile C++ source files into object files.
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
+	@if test ! -d $(BUILD_DIR); then $(MKDIR) $(BUILD_DIR); fi;
+	$(PRECC) $(CC) $(CFLAGS) $(DEFS) $(INCLUDE_DIRS)  -o $@ -c $<
+
+#create executable
+${ARCHIVE}: ${LIB_OBJS}
+	    $(AR) rc $(ARCHIVE) ${LIB_OBJS}
+	    $(RANLIB) $(ARCHIVE)
+	    @${E} --------------------------------------- ;
+	    @if [ -r $@ ];                                  \
+	    then                                            \
+	    ${E} $@ built successfully                    ; \
+	    else                                            \
+	    ${E} $@ build failed                          ; \
+	    fi;
+	    @${E} --------------------------------------- ;
+
+# clean everything
+clean:
+	${RM} ./${BUILD_DIR}
+

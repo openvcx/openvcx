@@ -1,0 +1,58 @@
+--- ../stunnel-4.56/src/client.c	2013-03-14 15:54:24.000000000 -0700
++++ ./src/client.c	2013-12-06 21:23:04.000000000 -0800
+@@ -501,6 +501,36 @@ static void new_chain(CLI *c) {
+ }
+ #endif
+ 
++static ssize_t writesocket_websocket_fromssl(int socket, const void *buffer, size_t length) {
++    int rc;
++    int flags = 0;
++    struct sockaddr_in sockaddr;
++    socklen_t sockaddrlen;
++
++    /**
++     * This is a specific work-around for the Mobicents SIP server which aims to prevent sending a 
++     * single byte at the start of the websockets protocol header which would be missing the payload length or extended 
++     * payload length field.  The Mobicents WebSocketFrameDecoder appears not to check if the payload length fields
++     * have been received before reading the websockets frame length.
++     * Refer to:  http://tools.ietf.org/html/rfc6455     Section 5.2.  Base Framing Protocol
++     */
++
++    if(length <= 2) {
++        return 0;
++    }
++
++    sockaddrlen = sizeof(sockaddr);
++    getsockname(socket, (struct sockaddr *) &sockaddr, &sockaddrlen);
++
++    s_log(LOG_DEBUG, "calling send (from ssl) fd:%d %s:%d length:%ld '%c%c%c%c' 0x%x 0x%x 0x%x 0x%x", socket, inet_ntoa(sockaddr.sin_addr), ntohs(sockaddr.sin_port), length, 
++          ((unsigned char *) buffer)[0], ((unsigned char *) buffer)[1], ((unsigned char *) buffer)[2], ((unsigned char *) buffer)[3],
++          ((unsigned char *) buffer)[0], ((unsigned char *) buffer)[1], ((unsigned char *) buffer)[2], ((unsigned char *) buffer)[3]);
++
++    rc = send(socket, buffer, length, flags);
++
++    return rc;
++}
++
+ /****************************** transfer data */
+ static void transfer(CLI *c) {
+     int watchdog=0; /* a counter to detect an infinite loop */
+@@ -702,13 +732,17 @@ static void transfer(CLI *c) {
+ 
+         /****************************** write to socket */
+         if(sock_open_wr && sock_can_wr) {
+-            num=writesocket(c->sock_wfd->fd, c->ssl_buff, c->ssl_ptr);
++
++            num=writesocket_websocket_fromssl(c->sock_wfd->fd, c->ssl_buff, c->ssl_ptr);
+             switch(num) {
+             case -1: /* error */
+                 if(parse_socket_error(c, "writesocket"))
+                     break; /* a non-critical error: retry */
+                 sock_open_rd=sock_open_wr=0;
+                 break;
++            case 0:
++                watchdog=0; /* reset watchdog */
++                break;
+             default:
+                 memmove(c->ssl_buff, c->ssl_buff+num, c->ssl_ptr-num);
+                 c->ssl_ptr-=num;

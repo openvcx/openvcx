@@ -1,0 +1,154 @@
+<html>
+<head>
+<link rel="stylesheet" type="text/css" href="/rsrc/main.css">
+<script type="text/javascript" src="/rsrc/config.js"></script>
+<script type="text/javascript" src="/rsrc/common.js"></script>
+<title>OpenVSX Video Streaming Server</title>
+
+<script language="Javascript">
+
+function initparams() {
+  var uri=window.location.href;
+  var retParams=getRespArray(uri);
+  var dir=retParams['dir'];
+  var file=retParams['file'];
+
+  if(file!=null) {
+    var maxx=0;
+    var maxy=0;
+    var strUrl='/live/'+file+'?nologo=1&maxx='+maxx+'&maxy='+maxy;
+    strUrl+='&file='+file;
+    var str='<iframe id="mplayerframe" name="mplayerframe" src="';
+    str+=strUrl+'" frameborder="0" width="100%" height="100%">';
+    str+='<p>Your browser does not support iframes.</p></iframe>';
+    document.getElementById('mplayerdiv').innerHTML=str;
+  }
+  
+  if(showflist) {
+    var strUrl='/flist.html';
+    if(dir!=null) 
+      strUrl=appendUriParam(strUrl, 'dir='+dir);
+    if(file!=null) 
+      strUrl=appendUriParam(strUrl, 'file='+file);
+
+    var str='<iframe id="listframe" name="listframe" src="';
+    str+=strUrl+'" frameborder="0" width="350" height="100%">'; 
+    str+='<p>Your browser does not support iframes.</p></iframe>';
+
+    document.getElementById('listframediv_r').innerHTML=str;
+  }
+
+  if(showflist_h) {
+    var strUrl='/flist_h.html';
+    if(file!=null) 
+      strUrl=appendUriParam(strUrl, 'file='+file);
+    str='<iframe id="listframe_h" name="listframe_h" scrolling="no" src="';
+    str+=strUrl+'" frameborder="0" width="100%" height="100%">';
+    str+='<p>Your browser does not support iframes.</p></iframe>';
+
+    document.getElementById('listframediv_b').innerHTML=str;
+  } else {
+    document.getElementById('listframediv_b').style.height='1px';
+    document.getElementById('listframediv_b_title').style.height='1px';
+  }
+
+}
+
+function getfileinfoshareobj(){
+  if(document.getElementById) {    
+    var obj = document.getElementById("fileinfoshareid");
+    if(obj == null) {
+      obj = parent.document.getElementById("fileinfoshareid");
+    }
+    return obj;
+  } else if(document.all)
+    return document.all.fileinfoshareid;
+}
+
+function hidesharelink() {
+  getfileinfoshareobj().style.visibility='hidden';
+}
+
+</script>
+</head>
+<body class="bg" onload="javascript:initparams();">
+
+<table border="0" cellpadding="0" cellspacing="0" style="width:100%; height:100%">
+<tr><td valign="top" style="width:100%;">
+
+
+<table border="0" cellpadding="0" cellspacing="0" style="width:100%;">
+<tr><td valign="top" style="padding: 6px 0px 0px 30px;">
+
+<a href="http://openvcx.com"><div style="font-family: \'Maven Pro\', sans-serif; font-size: 48px; font-weight: bold; line-height: 46px; text-shadow: #999999 1px 3px 0px; color:#444444;">OpenVCX</div></a>
+<!-- <a href="http://openvcx.com"><img src="/img/logo3.jpg" border="0"></a> -->
+
+</td><td valign="bottom">
+<h2>OpenVSX Video Streaming Server Demo</h2>
+</td></tr></table>
+
+<div id="fileinfoshareid" style="z-index:5;"></div>
+
+</td><td rowspan="3" valign="top" style="width:100%; height:100%;">
+
+<table border="0" cellpadding="0" cellspacing="0" style="width:100%; height:100%"><tr><td>
+
+<div id="listframediv_r" style="width:350px; height:100%; margin:0px 0px 0px 0px; padding: 0px">
+</div>
+
+</td></tr></table>
+
+
+</td></tr><tr><td valign="top" style="width:100%; height:100%;">
+
+<div id="mplayerdiv" style="width:100%; height:100%; margin: 0px 0px 0px 0px; padding: 0px">
+
+&nbsp;
+
+</div>
+
+<noscript>
+<h3>This page is a demo for OpenVSX Video Streaming Server.  It appears that you do not have javascript enabled.  This web page uses dynamic content and requires javascript to be enabled.</h3>
+<h3>Please visit <a href="http://openvcx.com">http://openvcx.com</a> for more information.</h3>
+</noscript>
+
+</td></tr><tr><td>
+<div id="listframediv_b_title" style="width:100%; margin:0px 0px 0px 0px; padding: 0px;"></div>
+<div id="listframediv_b" style="width:100%; height:140px; margin:0px 0px 0px 0px; padding: 0px"></div>
+</td></tr><tr><td colspan="2" style="padding: 4px 0px 0px 0px">
+
+
+<table border="0" cellpadding="2" cellspacing="0" style="width:100%; height:20px;"><tr><td valign="top" width="25%">
+<div id="cmdresp" style="margin: 0px 0px 0px 0px; padding: 0px 0px 0px 0px;">
+&nbsp;
+</div>
+</td><td valign="top" align="right">
+
+<table border="0" cellpadding="0" cellspacing="0"><tr><td valign="top"><tr><td align="right">
+<div id="parentcurdirstr" style="margin:0px 0px 0px 0px; padding:0px 0px 0px 0px;">
+&nbsp;
+</div>
+
+</td><td>&nbsp;&nbsp;</td><td valign="top" align="right">
+<div id="searchbox" style="margin: 0px 0px 0px 0px; padding: 0px;">
+&nbsp;
+</div>
+
+</td><td>&nbsp;&nbsp;</td><td valign="top" align="right">
+<div id="sortbox" style="margin: 0px 0px 0px 0px; padding: 0px;">
+&nbsp;
+</div>
+</td></tr></table>
+
+</td><td valign="top" align="right" nowrap width=15>
+&nbsp;
+</td></tr></table>
+
+</td></tr><tr><td colspan="2" align="center">
+<div class="footer">&copy;2014 OpenVSX Video Streaming Server</div>
+
+</td></tr></table>
+
+
+</body>
+</html>

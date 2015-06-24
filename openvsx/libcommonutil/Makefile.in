@@ -1,0 +1,47 @@
+
+include ../makefiles/Makefile.conf
+
+# compiler/linker flags
+LDFLAGS+=
+CFLAGS+=
+DEFS+=
+
+
+SRC_DIR = src
+INCLUDE_DIRS += -I./include \
+               -I../liblogutil/include 
+
+LIB_OBJS = ${BUILD_DIR}/fileops.o \
+	   ${BUILD_DIR}/common.o \
+	   ${BUILD_DIR}/pthread_compat.o \
+	   ${BUILD_DIR}/unixcompat.o \
+	   ${BUILD_DIR}/timers.o
+
+
+ARCHIVE = ${BUILD_DIR}/libcommonutil.a
+
+all: ${LIB_OBJS} $(ARCHIVE)
+
+# compile C++ source files into object files.
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
+	@if test ! -d $(BUILD_DIR); then $(MKDIR) $(BUILD_DIR); fi;
+	$(PRECC) $(CC) $(CFLAGS) $(DEFS) $(INCLUDE_DIRS) -o $@ -c $<
+
+#create executable
+${ARCHIVE}: ${LIB_OBJS}
+	    $(AR) cr $(ARCHIVE) ${LIB_OBJS}
+	    $(RANLIB) $(ARCHIVE)
+	    @${E} --------------------------------------- ;
+	    @if [ -r $@ ];                                  \
+	    then                                            \
+	    ${E} $@ built successfully                    ; \
+	    else                                            \
+	    ${E} $@ build failed                          ; \
+	    fi;
+	    @${E} --------------------------------------- ;
+
+
+# clean everything
+clean:
+	${RM} ./${BUILD_DIR}
+

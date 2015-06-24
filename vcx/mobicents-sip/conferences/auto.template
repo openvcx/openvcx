@@ -1,0 +1,291 @@
+#
+# Conference definition file conferences/auto.template
+#
+# This conference definition file defines the username part of a conference SIP URI. 
+# In this case the conference username part of the URI is '1234', where the full 
+# SIP URI can be '1234@exampledomain.com' or 'sip:1234@exampledomain.com' without any quotes.
+# The SIP URI domain part can be anything such as the SIP URI: '1234@anydomain.com'
+#
+# This file must exist for a caller to join the conference called '1234'.  
+# The file contents should specify the conference specific configuration, or can be empty. 
+#
+# The file suffix of '.conference' is optional and can be omitted.
+#
+# An external conference provisioning application can be used to create this file allowing 
+# users to join the conference and subsequently remove it.
+# 
+
+
+#
+# Optional list of SIP URIs (callers) permitted to join the conference separated by a comma.
+# To allow any SIP URI to join the conference leave this value blank or set to "*"
+#
+# For eg., if the caller SIP URI is 'user1@mydomain.com' the following allowedSIPUris
+# syntax would all validate for the given caller SIP URI:
+# user1,user1@*,user1@mydomain.com, *@mydomain.com
+#
+# allowedSIPUris=
+#
+#allowedSIPUris=user1@mydomain.com, user2@otherdomain.com
+
+
+#
+# Optional list of SIP URIs (callees) which will be invited to join the conference 
+# separated by a comma.  The server will create an outoing INVITE to each invited user. 
+#
+#inviteSIPUris=
+
+
+#
+# Optional boolean parameter which may be used to automatically include the called-party
+# (to) SIP URI in the list of SIP URIs which are to be invited to join the conference.
+# This may be set to "true" when establishing a two-way call.  Upon the caller being 
+# connected to the conference bridge the server will create an outoing INVITE to the
+# user identified by the called-party (to) SIP URI.
+#
+inviteCalledParty=true
+
+
+#
+# Optional conference SIP password
+#
+# If set, the conference password is used to validate the caller's SIP Digest authentication
+# account password.  To connect to the conference the caller SIP URI can be anything
+# but the password must match the conference password.  The user will be allowed to register
+# with any password but must be using the appropriate conference specific password to
+# connect to this conference.
+#
+#password=
+
+
+#
+# Optional conference participant limit.  
+# 
+# Used to restrict how many SIP audio and audio/video participants are allowed to join 
+# the conference.  Set to 2 for bridging two endpoints where conference behavior is not 
+# desired.
+#
+# maxUsers=
+#
+#maxUsers=
+
+
+#
+# Optional boolean parameter used to restrict participants from joining an auto-provisioned
+# conference.  This setting only affects a conference definition file placed in the auto/
+# directory.  If set to "false" the conference will be treated like a webcast originated by
+# the caller with the SIP URI From field matching the conference definition file name.  
+#
+#allowDialin=true
+
+
+#
+# Optional conference alias 
+#
+# The same name alias can be used in different conference definition files to bridge 
+# different setup configurations into the same conference.
+#
+# When a user calls the conference SIP URI '1234@exampledomain.com' the server attempts to load
+# the conference definition file 'conferences/1234.conference' and will join the user into the 
+# conference with the name '1234'.  When another user calls the conference SIP URI 
+# '4321@anotherdomain.com' the server will load the conference definition file '4321.conference' 
+# and will check for the name alias.  If the name alias parameter is set to '1234', the new user 
+# will join the same conference as the use calling '1234@exampledomain.com'.
+#
+#name=
+
+
+#
+# Optional boolean parameter which may be used to disable this conference definition file.
+# Setting disabled="true" has the same effect as removing this file.
+#
+#disabled=false
+
+
+#
+# Optional OpenVSX command line configuration arguments when starting the conference.
+#
+# The conference video mixer process is automatically started when the first user joins 
+# the call.  OpenVSX mixer, layout, and recording specific arguments can be given here.
+#
+# extraArgs=
+#
+#extraArgs=--mixervad=0
+
+
+#
+# Optional Maximum Transmission Unit of the RTP payload data
+#
+# This value severs a the default MTU of all conference users.  Individual conference
+# participant MTU is automatically selected and can be lower than this value
+# depending on the media packetization type.
+#
+# mtu=
+#
+#mtu=1230
+
+
+#
+# Conference Secure RTP (SRTP) policy
+#
+# "never" - SRTP will not be negotiated.   The server will never respond with an SAVP profile
+# even if receiving an INVITE with an SAVP profile.
+#
+# "supported" - The server will respond with an SAVP profile to an INVITE SDP containing an 
+# SAVP profile.  This is the default profile.
+#
+# "required" - SRTP is required for a caller to join the conference.  Any INVITE without SRTP 
+# support will be rejected.
+#
+#
+# If omitted, the default policy is "supported"
+#
+#SRTPPolicy=supported
+
+
+#
+# Optional boolean parameter enabling SSL DTLS-SRTP for the conference.  DTLS-SRTP does not
+# rely on SDP to exchange an SRTP key but instead uses public-key cryptography and 
+# certificates to negotiate SRTP keying material.  The default setting is set to "true".
+# When enabled the server will attempt to negotiate DTLS-SRTP if the peer SDP 
+# contains a fingerprint attribute.  If disabled the server will attempt to negotiate 
+# SRTP SDES if the peer SDP contains a crypto attribute.
+#
+#allowDTLS=true
+
+
+#
+# Optional boolean parameter controlling the preference of DTLS-SRTP over SRTP SDES when 
+# a peer SDP contains both 'a=fingerprint' and 'a=crypto' attributes.
+#
+#preferDTLSSRTP=false
+
+
+#
+# Optional parameter controlling live streaming of the conference 
+# to recvonly non-SIP web listeners.
+# Set to "auto" to enable all applicable live stream format types.
+#
+streamOutput=auto
+
+
+#
+# Optional parameter controlling conference recording.
+# Set to "true" to enable recording of the conference stream
+# to a file.  The conference recording will be stored in the 
+# 'mediaprox.record.dir' and the filename will be set automatically.
+# Alternatively, this can be set to a unique conference output
+# filepath without the media container specific extension.
+#
+record=true
+
+
+#
+# Optional parameter controlling the video layout configuration.
+# "p2pgrid" - Grid layout when number of participants is greater than two.
+# "grid" - Grid layout 
+# Default value is "p2pgrid"
+#
+#layout=p2pgrid
+
+
+#
+# Announcement audio file which is played when a participant joins
+# the conference number.  The filename should be relative to the
+# global configruation 'media.chime.dir'.
+#
+joinChime=chime2.mp4
+
+
+#
+# Announcement audio file which is played when a participant joins
+# the conference number.  The filename should be relative to the
+# global configruation 'media.chime.dir'.
+#
+leaveChime=chime7b.mp4
+
+
+#
+# Optional boolean parameter which controls stream ABR (Adaptive Bitrate) output.
+# ABR is enabled by default if the encoder configuration specifies either a min
+# bitrate, max bitrate, min framerate, max framerate.  ABR will dynamically adjust
+# the encoder bitrate of the output stream depending on the detected network
+# conditions.  ABR is only in effect for the video stream.
+# Set to "false" to disable for all participants.
+#
+#abr=true
+
+
+#
+# Optional boolean parameter useful for connecting an ICE client running
+# on localhost.  Set to "true" to ignore ICE srflx and prflx 
+# candidates and only use host candidates. 
+#
+#icePreferHost=false
+
+
+#
+# Optional boolean parameter enabling the use of a TURN server
+#
+#TURNRelayEnabled=false
+
+
+#
+# TURN server address:port
+#
+#TURNServer=
+
+
+#
+# TURN server username
+#
+#TURNUser=
+
+
+#
+# TURN server password 
+#
+#TURNPassword=
+
+
+#
+# Optional OpenVSX shared encoder configuration parameters.
+# At a minimum, the transcoder configuration should define the
+# resolution (vx=,vy=), and the output frame rate (vfr=).
+# Refer to example formats found in ${VSX_HOME}/etc/xcode.conf or
+# the OpenVSX User Guide ${VSX_HOME}/doc/VSX_userguide.pdf
+#
+# xcode=
+#
+#xcode=vc=vp8,vx=640,vy=480,vfr=15,vb=500,vth=1,vthd=1
+xcode="ar=48000,vx=640,vy=480,vfr=24"
+
+
+#
+# Codec specific encoder configuration(s)
+# If there is no shared encoder defined using 'xcode=' or if the 
+# joining participant does not support the shared encoder output, 
+# a dedicated encoder will be used with the encoder specific configuration.
+# Refer to example formats found in ${VSX_HOME}/etc/xcode.conf or
+# the OpenVSX User Guide ${VSX_HOME}/doc/VSX_userguide.pdf
+#
+# encoder=
+#
+# A device type specific encoder configuration can be assigned for a device 
+# type which has been defined in the system configuration file 
+# (conf/sip-conference.conf) with the parameter 'user.agent.device.stype'. 
+# The device type specific encoder configuration can be referenced by suffixing 
+# the 'encoder.' parameter with the name of the device type.
+#
+# for eg., encoder.webrtc_android=""
+#
+# encoder.[ device type identification string ]
+#
+#encoder.webrtc_android="vc=vp8,vb=200,vbvbuf=230,vbvmax=230,vx=160,vy=120,vfr=15,vgop=1800,vf=3,vp=0,vth=1,vlh=1,vthd=1,vbmax=300,vbmin=50,vfrmax=15,vfrmin=2,vgopmax=9000,vgopmin=1000"
+
+encoder="vc=vp8,vb=400,vbvbuf=460,vbvmax=460,vx=320,vy=240,vfr=15,vgop=1800,vf=3,vp=1,vth=1,vlh=1,vthd=1,vbmax=700,vbmin=50,vfrmax=15,vfrmin=2,vgopmax=9000,vgopmin=1000"
+encoder="vc=h264,vb=300,vbvbuf=400,vbvmax=400,vx=320,vy=240,vfr=15,vgop=1800,vf=3,vp=66,vlh=1,vth=1,vthd=1,vslmax=1220,vbmax=400,vbmin=50,vfrmax=15,vfrmin=2,vgopmax=9000,vgopmin=1000"
+encoder="vc=h263p,vb=300,vbt=30,vx=352,vy=288,vfr=15,vgmin=1200,vgop=1800"
+encoder="vc=h263,vb=120,vbt=30,vx=176,vy=144,vfr=15,vgmin=1200,vgop=1800"
+encoder="vc=mpg4,vb=300,vbt=30,vx=320,vy=240,vfr=15,vgmin=1200,vgop=1800"
+
