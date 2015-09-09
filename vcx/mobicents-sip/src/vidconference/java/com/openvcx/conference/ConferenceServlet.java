@@ -47,7 +47,14 @@ import java.util.Map;
 import javax.servlet.Servlet;
 import javax.servlet.ServletConfig;
 import javax.servlet.ServletException;
-import javax.servlet.sip.*;
+import javax.servlet.sip.SipServletListener;
+import javax.servlet.sip.SipServletRequest;
+import javax.servlet.sip.SipServletResponse;
+import javax.servlet.sip.SipServletContextEvent;
+import javax.servlet.sip.SipFactory;
+import javax.servlet.sip.ServletTimer;
+import javax.servlet.sip.TimerListener;
+import javax.servlet.sip.annotation.SipServlet;
 
 import org.apache.log4j.Logger;
 
@@ -56,7 +63,9 @@ import org.apache.log4j.Logger;
  * Mobicents SIP servlets interface to our conferencing server 
  *
  */
-public class ConferenceServlet extends SipServlet implements SipServletListener, Servlet, TimerListener {
+
+@SipServlet ( applicationName = "ConferenceServlet", name = "ConferenceServlet" )
+public class ConferenceServlet extends javax.servlet.sip.SipServlet implements SipServletListener, Servlet, TimerListener {
 
     private final Logger m_log = Logger.getLogger(getClass());
     private HandlerContext m_handler = null;

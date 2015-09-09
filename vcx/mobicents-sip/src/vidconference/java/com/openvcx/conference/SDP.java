@@ -1303,6 +1303,20 @@ public class SDP implements Cloneable {
         }
 
         /**
+         * @return <i>true</i> if the underlying address is of the type IPv6, </i>false</i> otherwise
+         */
+        public boolean isIPv6() {
+            return (m_address != null && m_address.getClass().getName().contains("Inet6Address")) ? true : false;
+        }
+
+        /**
+         * @return <i>true</i> if the underlying address is of the type IPv4, </i>false</i> otherwise
+         */
+        public boolean isIPv4() {
+            return (m_address != null && m_address.getClass().getName().contains("Inet4Address")) ? true : false;
+        }
+
+        /**
          * Retrieves the port associated with this instance
          * @return The port associated with this instance
          */
@@ -1487,6 +1501,7 @@ public class SDP implements Cloneable {
             ICERemoteCandidates iceRemoteCandidates = new ICERemoteCandidates();
 
             for(; index < arr.length; index += 3) {
+
                 iceRemoteCandidates.m_list.add(
                     new ICERemoteCandidate(Integer.valueOf(arr[index]),
                                            new ICEAddress(InetAddress.getByName(arr[index + 1]),

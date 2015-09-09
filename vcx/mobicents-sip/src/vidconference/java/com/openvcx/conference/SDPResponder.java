@@ -483,6 +483,11 @@ public class SDPResponder {
             //
             if((SDP.ICECandidate.TRANSPORT.udp == iceCandidate.getTransport())) {
 
+                if(iceCandidate.getICEAddress().isIPv6()) {
+                    m_log.debug("Skipping ICE IPv6 candidate: " + iceCandidate);
+                    continue;
+                }
+
                 if(false == bPreferIceHost && SDP.ICECandidate.TYPE.prflx == iceCandidate.getType()) {
                     setCandidateMatch(iceCandidateMatch[SDP.ICECandidate.TYPE.prflx.ordinal()], iceCandidate);
                 } else if(false == bPreferIceHost  && SDP.ICECandidate.TYPE.srflx == iceCandidate.getType()) {
