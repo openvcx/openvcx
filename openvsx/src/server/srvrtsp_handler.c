@@ -740,7 +740,7 @@ int rtsp_handle_setup_announced(RTSP_REQ_CTXT_T *pRtsp, const RTSP_REQ_T *pReq) 
   trackId = rtsp_get_track_id(&pReq->hr, uri, &puri);
 
   if(!(pProg = rtsp_find_prog(trackId, pSession, &pSdpProg))) {
-    snprintf(bufhdrs, sizeof(bufhdrs), "%s: Invalid "RTSP_TRACKID"\r\n", RTSP_HDR_SRVERROR); 
+    snprintf(bufhdrs, sizeof(bufhdrs), "%s: Invalid "RTSP_TRACKID" (%d)\r\n", RTSP_HDR_SRVERROR, trackId); 
     rc = -1;
   }
   
@@ -996,7 +996,7 @@ int rtsp_handle_setup(RTSP_REQ_CTXT_T *pRtsp, const RTSP_REQ_T *pReq) {
   } else if(trackId == RTSP_TRACKID_AUD) {
     pProg = &pRtsp->pSession->aud;
   } else {
-    snprintf(bufhdrs, sizeof(bufhdrs), "%s: Invalid "RTSP_TRACKID"\r\n", RTSP_HDR_SRVERROR); 
+    snprintf(bufhdrs, sizeof(bufhdrs), "%s: Invalid "RTSP_TRACKID" (%d)\r\n", RTSP_HDR_SRVERROR, trackId); 
     rc = -1;
   } 
 

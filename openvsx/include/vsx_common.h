@@ -223,6 +223,12 @@ extern const char *vsxlib_get_appnamewwwstr(char *buf, unsigned int len);
 extern pthread_mutex_t g_ssl_mtx;
 #endif // VSX_HAVE_SSL
 
+#if defined(__linux__) 
+// On some systems strcasestr may just return an inappropriate pointer to the beginning of the hay stack!
+#undef strcasestr
+#define strcasestr avc_strcasestr
+char *avc_strcasestr(const char *s, const char *find);
+#endif // __linux__
 
 
 
