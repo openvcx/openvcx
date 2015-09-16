@@ -189,7 +189,7 @@ int streamxmit_sendto(STREAM_RTP_DEST_T *pDest, const unsigned char *data, unsig
   //LOG(X_DEBUG("STREAMXMIT_SENDTO len:%d, rtcp:%d, drop:%d, pDest: 0x%x, srtp:0x%x, pSrtpShared: 0x%x, 0x%x, lenK:%d"), len, rtcp, drop, pDest, &pDest->srtps[rtcp ? 1 : 0], pDest->srtps[rtcp ? 1 : 0].pSrtpShared, SRTP_CTXT_PTR(&pDest->srtps[rtcp ? 1 : 0]), SRTP_CTXT_PTR(&pDest->srtps[rtcp ? 1 : 0])->k.lenKey);LOGHEX_DEBUG(data, MIN(16, len));
 
   if((rc = srtp_dtls_protect(pnetsock, data, len, encBuf, sizeof(encBuf),
-                      rtcp ? &pDest->saDstsRtcp : &pDest->saDsts, 
+                      (const struct sockaddr *) (rtcp ? &pDest->saDstsRtcp : &pDest->saDsts), 
                       pDest->srtps[rtcp ? 1 : 0].pSrtpShared,
                       rtcp ? SENDTO_PKT_TYPE_RTCP : SENDTO_PKT_TYPE_RTP)) < 0) {
     if(rc == -2) {
@@ -246,7 +246,7 @@ int streamxmit_sendto(STREAM_RTP_DEST_T *pDest, const unsigned char *data, unsig
 
   if(!pDest->asyncQ.doAsyncXmit && !drop) {
     if((rc = srtp_sendto(pnetsock, (void *) pData, len, 0, 
-                         rtcp ? &pDest->saDstsRtcp : &pDest->saDsts, NULL, 
+                         (const struct sockaddr *) (rtcp ? &pDest->saDstsRtcp : &pDest->saDsts), NULL, 
                          rtcp ? SENDTO_PKT_TYPE_RTCP : SENDTO_PKT_TYPE_RTP, 1)) < 0) {
       return -1;
     }
@@ -415,7 +415,7 @@ static int streamxmit_retransmitRtp(STREAM_RTP_DEST_T *pDest) {
   TIME_VAL tvNow;
   struct timeval tv;
   float kbps;
-  //char buf[256];
+  char tmp[128];
 
   tvNow = timer_GetTime();
   TV_FROM_TIMEVAL(tv, tvNow);
@@ -472,8 +472,8 @@ static int streamxmit_retransmitRtp(STREAM_RTP_DEST_T *pDest) {
           (kbps = (burstmeter_getBitrateBps(&pAsyncQ->retransmissionMeter)/THROUGHPUT_BYTES_IN_KILO_F)) >= pAsyncQ->retransmissionKbpsMax) {
 
           LOG(X_WARNING("RTP NACK retransmission bitrate %.3f >= %.3f  throttled pt:%d sequence:%d to %s:%d, for original %d ms ago."), 
-                     kbps, pAsyncQ->retransmissionKbpsMax, pDest->pRtpMulti->init.pt, 
-                      pktHdr->seqNum, inet_ntoa(pDest->saDstsRtcp.sin_addr), ntohs(pDest->saDstsRtcp.sin_port),
+                     kbps, pAsyncQ->retransmissionKbpsMax, pDest->pRtpMulti->init.pt, pktHdr->seqNum, 
+                     FORMAT_NETADDR(pDest->saDstsRtcp, tmp, sizeof(tmp)), ntohs(INET_PORT(pDest->saDstsRtcp)),
                      (tvNow - pktHdr->tvXmit) / TIME_VAL_MS);
 
           if(pDest->pstreamStats) {
@@ -496,12 +496,13 @@ static int streamxmit_retransmitRtp(STREAM_RTP_DEST_T *pDest) {
           LOG(X_DEBUG("RTP NACK retransmitting pt:%d sequence:%d, len:%d to %s:%d, original sent %d ms ago.  "
                       "Rate: %.3f pkts/s, %.3f b/s"), 
                     pDest->pRtpMulti->init.pt, pktHdr->seqNum, pQPkt->len, 
-                    inet_ntoa(pDest->saDstsRtcp.sin_addr), ntohs(pDest->saDstsRtcp.sin_port), (tvNow - pktHdr->tvXmit) / TIME_VAL_MS,
+                    FORMAT_NETADDR(pDest->saDstsRtcp, tmp, sizeof(tmp)), ntohs(INET_PORT(pDest->saDstsRtcp)), 
+                    (tvNow - pktHdr->tvXmit) / TIME_VAL_MS,
                     (float) burstmeter_getPacketratePs(&pAsyncQ->retransmissionMeter),
                     (float) burstmeter_getBitrateBps(&pAsyncQ->retransmissionMeter));
 
           if((rc = srtp_sendto(STREAM_RTP_PNETIOSOCK(*pDest), (void *) pQPkt->pData, pQPkt->len, 0,
-                              &pDest->saDsts, NULL, SENDTO_PKT_TYPE_RTP, 1)) < 0) {
+                              (const struct sockaddr *) &pDest->saDsts, NULL, SENDTO_PKT_TYPE_RTP, 1)) < 0) {
           
             pktHdr->doRetransmit = -1;
           } else {

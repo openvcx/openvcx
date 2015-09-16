@@ -25,16 +25,16 @@
 #include "vsx_common.h"
 
 
-static int http_req_send(NETIO_SOCK_T *pnetsock, struct sockaddr_in *psain, const char *method,
+static int http_req_send(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa, const char *method,
                          const char *uri, const char *connType, unsigned int range0,
                          unsigned int range1, const char *host, const char *authorization) {
 
   int rc;
   int sz = 0;
-  char tmp[256];
+  char tmps[2][256];
   char buf[2048];
 
-  if(!pnetsock || !psain || !uri || !method) {
+  if(!pnetsock || !psa || !uri || !method) {
     return -1;
   }
 
@@ -44,8 +44,8 @@ static int http_req_send(NETIO_SOCK_T *pnetsock, struct sockaddr_in *psain, cons
           "User-Agent: %s\r\n",
           method,
           uri, 
-          (host && host[0] != '\0') ? host : inet_ntoa(psain->sin_addr),
-          vsxlib_get_appnamewwwstr(tmp, sizeof(tmp))
+          (host && host[0] != '\0') ? host : FORMAT_NETADDR(*psa, tmps[0], sizeof(tmps[0])),
+          vsxlib_get_appnamewwwstr(tmps[1], sizeof(tmps[1]))
           )) < 0) {
     return -1;
   }
@@ -89,17 +89,17 @@ static int http_req_send(NETIO_SOCK_T *pnetsock, struct sockaddr_in *psain, cons
 
   LOG(X_DEBUG("HTTP%s %s to %s:%d%s"), 
               (pnetsock->flags & NETIO_FLAG_SSL_TLS) ? "S" : "", method,
-              inet_ntoa(psain->sin_addr), htons(psain->sin_port), uri);
+              FORMAT_NETADDR(*psa, tmps[0], sizeof(tmps[0])), htons(PINET_PORT(psa)), uri);
 
   VSX_DEBUG_HTTP(
     LOG(X_DEBUG("HTTP - Sending header %d bytes"), sz);
     LOGHEXT_DEBUG(buf, sz);
   );
 
-  if((rc = netio_send(pnetsock, psain, (unsigned char *) buf, sz)) < 0) {
+  if((rc = netio_send(pnetsock, psa, (unsigned char *) buf, sz)) < 0) {
     LOG(X_ERROR("Failed to send HTTP%s request data %d bytes to %s:%d "ERRNO_FMT_STR),
           (pnetsock->flags & NETIO_FLAG_SSL_TLS) ? "S" : "",
-          sz, inet_ntoa(psain->sin_addr), ntohs(psain->sin_port), ERRNO_FMT_ARGS);
+          sz, FORMAT_NETADDR(*psa, tmps[0], sizeof(tmps[0])), ntohs(PINET_PORT(psa)), ERRNO_FMT_ARGS);
     return -1;
   }
 
@@ -107,7 +107,8 @@ static int http_req_send(NETIO_SOCK_T *pnetsock, struct sockaddr_in *psain, cons
 }
 
 int httpcli_req_queryhdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttpResp, 
-                      struct sockaddr_in *psain, HTTPCLI_AUTH_CTXT_T *pAuthCliCtxt, const char *descr) {
+                      const struct sockaddr *psa, HTTPCLI_AUTH_CTXT_T *pAuthCliCtxt, const char *descr) {
+  char tmp[128];
   int rc = 0;
   const char *p = NULL;
 
@@ -118,13 +119,13 @@ int httpcli_req_queryhdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttpResp,
   if((rc = http_readhdr(pHdrCtxt)) <= 0 || pHdrCtxt->hdrslen == 0) {
     LOG(X_ERROR("Failed to read %s%s response headers (read:%d, recv rc:%d) from %s:%d"),
           descr, (pHdrCtxt->pnetsock->flags & NETIO_FLAG_SSL_TLS) ? "S" : "", pHdrCtxt->idxbuf, rc, 
-          inet_ntoa(psain->sin_addr), ntohs(psain->sin_port));
+          FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)));
     return -1;
   }
 
   VSX_DEBUG_HTTP(
     LOG(X_DEBUG("Read header %d bytes from %s:%d"), 
-                pHdrCtxt->hdrslen, inet_ntoa(psain->sin_addr), ntohs(psain->sin_port));
+                pHdrCtxt->hdrslen, FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)));
     LOGHEXT_DEBUG(pHdrCtxt->pbuf, pHdrCtxt->hdrslen)
   );
 
@@ -146,22 +147,22 @@ int httpcli_req_queryhdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttpResp,
     rc = -1;
     LOG(X_WARNING("%s Unauthorized code %d %s received from %s:%d"),
            descr, pHttpResp->statusCode, http_lookup_statuscode(pHttpResp->statusCode), 
-           inet_ntoa(psain->sin_addr), ntohs(psain->sin_port));
+           FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)));
   } else if(pHttpResp->statusCode < HTTP_STATUS_OK ||
             pHttpResp->statusCode >= HTTP_STATUS_BADREQUEST) {
     LOG(X_ERROR("%s Error Status code %d %s received from %s:%d"),
           descr, pHttpResp->statusCode, http_lookup_statuscode(pHttpResp->statusCode), 
-          inet_ntoa(psain->sin_addr), ntohs(psain->sin_port));
+          FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)));
     rc = -1;
   } else if(pHttpResp->statusCode >= HTTP_STATUS_MOVED_PERMANENTLY) {
     LOG(X_ERROR("%s Unhandled Status code %d %s received from %s:%d"),
           descr, pHttpResp->statusCode, http_lookup_statuscode(pHttpResp->statusCode), 
-          inet_ntoa(psain->sin_addr), ntohs(psain->sin_port));
+          FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)));
     rc = 1;
   } else {
     LOG(X_DEBUG("%s Status code %d %s received from %s:%d"),
           descr, pHttpResp->statusCode, http_lookup_statuscode(pHttpResp->statusCode), 
-          inet_ntoa(psain->sin_addr), ntohs(psain->sin_port));
+          FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)));
   }
 
   //fprintf(stderr, "%d '%s'\n", pHttpResp->statusCode, pHttpResp->version);
@@ -177,9 +178,9 @@ int httpcli_req_queryhdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttpResp,
 }
 
 static int req_queryhdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttpResp, 
-                              struct sockaddr_in *psain, HTTPCLI_AUTH_CTXT_T *pAuthCliCtxt) {
+                              const struct sockaddr *psa, HTTPCLI_AUTH_CTXT_T *pAuthCliCtxt) {
 
-  return httpcli_req_queryhdrs(pHdrCtxt, pHttpResp, psain, pAuthCliCtxt, "HTTP");
+  return httpcli_req_queryhdrs(pHdrCtxt, pHttpResp, psa, pAuthCliCtxt, "HTTP");
 }
 
 int httpcli_calcdigestauth(HTTPCLI_AUTH_CTXT_T *pAuthCliCtxt) {
@@ -332,7 +333,7 @@ int httpcli_authenticate(HTTP_RESP_T *pHttpResp, HTTPCLI_AUTH_CTXT_T *pAuthCliCt
 }
   
 int httpcli_gethdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttpResp,
-                  struct sockaddr_in *psain, const char *uri,
+                  const struct sockaddr *psa, const char *uri,
                   const char *connType, unsigned int range0,
                   unsigned int range1, const char *host,
                   HTTPCLI_AUTH_CTXT_T *pAuthCliCtxt) {
@@ -345,7 +346,7 @@ int httpcli_gethdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttpResp,
 
   do {
 
-    if((rc = http_req_send(pHdrCtxt->pnetsock, psain, HTTP_METHOD_GET, uri, connType, range0, 
+    if((rc = http_req_send(pHdrCtxt->pnetsock, psa, HTTP_METHOD_GET, uri, connType, range0, 
                            range1, host, pAuthCliCtxt ? pAuthCliCtxt->authorization : NULL) < 0)) {
       break;
     }
@@ -360,7 +361,7 @@ int httpcli_gethdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttpResp,
     pHdrCtxt->termcharidx = 0;
     pHdrCtxt->rcvclosed = 0;
 
-    if((rc = req_queryhdrs(pHdrCtxt, pHttpResp, psain, pAuthCliCtxt)) < 0) {
+    if((rc = req_queryhdrs(pHdrCtxt, pHttpResp, psa, pAuthCliCtxt)) < 0) {
       //LOG(X_DEBUG("--REQ_QUERY_H rc:%d, idxretry:%d, statuscode:%d"), rc, idxretry, pHttpResp->statusCode);
       if(pHttpResp->statusCode == HTTP_STATUS_UNAUTHORIZED && pAuthCliCtxt) {
 
@@ -376,22 +377,23 @@ int httpcli_gethdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttpResp,
   return rc;
 }
 
-int httpcli_connect(NETIO_SOCK_T *pnetsock, struct sockaddr_in *psain, const char *descr) {
+int httpcli_connect(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa, const char *descr) {
+  char tmp[128];
   int rc = 0;
 
-  if(!pnetsock || !psain) {
+  if(!pnetsock || !psa) {
     return -1;
   }
 
   LOG(X_DEBUG("%s%sonnecting %sto %s:%d"), descr ? descr : "", descr ? " c" : "C",
-      (pnetsock->flags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : "", inet_ntoa(psain->sin_addr), ntohs(psain->sin_port));
+   (pnetsock->flags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : "", FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)));
 
   if(PNETIOSOCK_FD(pnetsock) == INVALID_SOCKET &&
     (PNETIOSOCK_FD(pnetsock) = net_opensocket(SOCK_STREAM, SOCK_RCVBUFSZ_DEFAULT, 0, NULL)) == INVALID_SOCKET) {
     return -1;
   }
 
-  if((rc = net_connect(PNETIOSOCK_FD(pnetsock), psain)) < 0) {
+  if((rc = net_connect(PNETIOSOCK_FD(pnetsock), psa)) < 0) {
     //netio_closesocket(pnetsock);
     return rc;
   }
@@ -407,7 +409,7 @@ int httpcli_connect(NETIO_SOCK_T *pnetsock, struct sockaddr_in *psain, const cha
   }
 
   LOG(X_DEBUG("%s%sonnected %sto %s:%d"), descr ? descr : "", descr ? " c" : "C",
-      (pnetsock->flags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : "", inet_ntoa(psain->sin_addr), ntohs(psain->sin_port));
+    (pnetsock->flags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : "", FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)));
 
   return rc;
 }

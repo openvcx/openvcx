@@ -52,7 +52,7 @@
 #define STREAM_CAPTURE_IDLETMT_1STPKT_MS     30000
 
 typedef struct SOCKET_DESCR {
-  struct sockaddr_in        sain;
+  struct sockaddr_storage   sa;
   NETIO_SOCK_T              netsocket;
 } SOCKET_DESCR_T;
 

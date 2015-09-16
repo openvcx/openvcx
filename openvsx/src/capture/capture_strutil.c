@@ -25,56 +25,36 @@
 
 #include "vsx_common.h"
 
-static int parseIpPortStr(const char *localAddr, 
-                          struct in_addr *pLocalIp,
+static int parseIpPortStr(const char *localAddrStr, 
+                          struct sockaddr_storage *pLocalAddr,
                           uint16_t localPorts[], size_t maxLocalPorts, int requirePort) {
 
-  const char *p;
-  char buf[256];
-  size_t sz;
   size_t numPortsAdded = 0; 
+  int rc = 0;
+  char host[256];
+  char ports[256];
+  char uri[256];
 
-  pLocalIp->s_addr = INADDR_ANY;
+  host[0] = '\0';
+  ports[0] = '\0';
+  uri[0] = '\0';
   memset(localPorts, 0, sizeof(uint16_t) * maxLocalPorts);
 
-  if((p = strstr(localAddr, ":"))) {
-    if((sz = p - localAddr) >= sizeof(buf)) {
-      sz = sizeof(buf) - 1;
-    }
-    memcpy(buf, localAddr, sz);
-    buf[sz] = '\0';
-    if(!strstr(buf, ".")) {
-      return 0;
-    }
-    if((pLocalIp->s_addr = inet_addr(buf)) == INADDR_NONE) {
-      return 0;
-    }
-    p++;
-  } else if(!requirePort) {
-
-    if((pLocalIp->s_addr = inet_addr(localAddr)) == INADDR_NONE) {
-      return -1;
-    }
-    return 0;
-
-  } else {
-    p = localAddr;
-    for(sz = 0; p[sz] != '\0'; sz++) {
-      if(!(p[sz] >= '0' && p[sz] <= '9') ||
-           p[sz] == ' ' || p[sz] == '\t' ||
-           p[sz] == ',' || p[sz] == '-') {
-        if(inet_addr(p) != INADDR_NONE) {
-          // Handle ip addr only input
-          LOG(X_ERROR("No port specified in '%s'"), localAddr);
-          return -1;
-        }
-        return 0;
-      }
-    }
+  if((rc = strutil_parseAddress(localAddrStr, host, sizeof(host), ports, sizeof(ports), uri, sizeof(uri)) < 0)) {
+    return rc;
   }
 
-  if((numPortsAdded = capture_parsePortStr(p, localPorts, maxLocalPorts, 1)) < 0) {
-    LOG(X_ERROR("Invalid port specified in '%s'"), localAddr);
+  if(net_getaddress(host, pLocalAddr) != 0 ||
+     (pLocalAddr->ss_family != AF_INET6 && ((struct sockaddr_in *) pLocalAddr)->sin_addr.s_addr == INADDR_NONE)) {
+    LOG(X_ERROR("Invalid address specified in '%s'"), localAddrStr);
+    return -1;
+  } else if(!requirePort && ports[0] == '\0') {
+    LOG(X_ERROR("No port specified in '%s'"), localAddrStr);
+    return -1;
+  }
+
+  if((numPortsAdded = capture_parsePortStr(ports, localPorts, maxLocalPorts, 1)) < 0) {
+    LOG(X_ERROR("Invalid port specified in '%s'"), localAddrStr);
     return numPortsAdded;
   }
 
@@ -258,51 +238,22 @@ int capture_parsePayloadTypes(const char *str, int *vidPt, int *audPt) {
   return parseCtxt.rc;
 }
 
-int capture_parseAddr(const char *localAddr, struct sockaddr_in *psain, int defaultPort) {
-  int rc = 0;
-  int rctmp;
-  struct in_addr localIp;
-  unsigned short localPorts[1];
-
-  if(!localAddr || !psain) {
-    return -1;
-  }
-
-  memset(psain, 0, sizeof(struct sockaddr_in));
-
-  rctmp = defaultPort > 0 ? 0 : 1;
-
-  if((rc = parseIpPortStr(localAddr, &localIp, localPorts, 1, defaultPort > 0 ? 0 : 1)) >= rctmp) {
-    psain->sin_family = PF_INET;
-    psain->sin_addr = localIp;
-    if(rc == 0) {
-      //
-      // a valid defaultPort was given, and no ports were included in 'localAddr'
-      //
-      localPorts[0] = defaultPort;
-      rc = 1;
-    }
-    psain->sin_port = htons(localPorts[0]);
-  }
-
-  return rc;
-}
-
-int capture_parseLocalAddr(const char *localAddr, SOCKET_LIST_T *pSockList) {
+int capture_parseLocalAddr(const char *localAddrStr, SOCKET_LIST_T *pSockList) {
 
   int numPorts = 0;
-  struct in_addr localIp;
+  struct sockaddr_storage localAddr;
   unsigned short localPorts[SOCKET_LIST_MAX];
   size_t idx;
   int rc = -1;
 
-  if(!localAddr || !pSockList) {
+  if(!localAddrStr || !pSockList) {
     return -1; 
   }
 
   memset(pSockList, 0, sizeof(SOCKET_LIST_T));
+  memset(&localAddr, 0, sizeof(localAddr));
 
-  if((numPorts = parseIpPortStr(localAddr, &localIp, localPorts, SOCKET_LIST_MAX, 1)) > 0) {
+  if((numPorts = parseIpPortStr(localAddrStr, &localAddr, localPorts, SOCKET_LIST_MAX, 1)) > 0) {
 
     for(idx = 0; idx < sizeof(pSockList->netsockets) / sizeof(pSockList->netsockets[0]); idx++) {
 
@@ -310,9 +261,8 @@ int capture_parseLocalAddr(const char *localAddr, SOCKET_LIST_T *pSockList) {
       NETIOSOCK_FD(pSockList->netsockets[idx]) = INVALID_SOCKET;  
 
       if(idx < (size_t) numPorts) {
-        pSockList->salist[idx].sin_family = PF_INET;
-        pSockList->salist[idx].sin_addr = localIp;
-        pSockList->salist[idx].sin_port = htons(localPorts[idx]);
+        memcpy(&pSockList->salist[idx], &localAddr, sizeof(pSockList->salist[idx]));
+        INET_PORT(pSockList->salist[idx]) = htons(localPorts[idx]);
  
         //if(rtcp) {
         //  memcpy(&pSockList->salistRtcp[idx], &pSockList->salist[idx], sizeof(pSockList->salistRtcp[idx]));
@@ -326,7 +276,7 @@ int capture_parseLocalAddr(const char *localAddr, SOCKET_LIST_T *pSockList) {
     rc = 1;
   } else if(numPorts == 0) {
 
-    // The given localAddr string could be a name of a local interface
+    // The given localAddrStr string could be a name of a local interface
     rc = 0;
   } 
 
@@ -463,7 +413,7 @@ CAPTURE_FILTER_TRANSPORT_T capture_parseTransportStr(const char **ppstr) {
 
 
 int capture_getdestFromStr(const char *str,
-                           struct sockaddr_in *psaIn,
+                           struct sockaddr_storage *psa,
                            const char **ppuri,
                            char *hostbuf,
                            uint16_t dfltPort) {
@@ -472,6 +422,7 @@ int capture_getdestFromStr(const char *str,
   unsigned int sz = 0;
   const char *p;
   const char *p2 = NULL;
+  int rc = 0;
 
   if(!str) {
     return -1;
@@ -493,10 +444,7 @@ int capture_getdestFromStr(const char *str,
     hostbuf[0] = '\0';
   }
 
-  if(psaIn) {
-
-    memset(psaIn, 0, sizeof(struct sockaddr_in));
-    psaIn->sin_family = AF_INET;
+  if(psa) {
 
     if(sz >= sizeof(buf)) {
       sz = sizeof(buf) - 1;
@@ -508,9 +456,16 @@ int capture_getdestFromStr(const char *str,
       memcpy(hostbuf, buf, sz + 1);
     }
 
-    if(psaIn && (psaIn->sin_addr.s_addr = net_resolvehost(buf)) == INADDR_NONE) {
+    memset(psa, 0, sizeof(struct sockaddr_in));
+    if((rc = net_resolvehost(buf, psa)) != 0) {
+      return rc;
+    }
+/*
+    psa->sin_family = AF_INET;
+    if((psa->sin_addr.s_addr = net_resolvehost4(buf)) == INADDR_NONE) {
       return -1;
     }
+*/
 
   }
 
@@ -522,19 +477,19 @@ int capture_getdestFromStr(const char *str,
       sz= strlen(p);
     }
 
-    if(psaIn) {
+    if(psa) {
       if(sz >= sizeof(buf)) {
         sz = sizeof(buf) - 1;
       }
       memcpy(buf, p, sz);
       buf[sz] = '\0';
-      if((psaIn->sin_port = htons(atoi(buf))) == 0) {
+      if((PINET_PORT(psa)= htons(atoi(buf))) == 0) {
         LOG(X_ERROR("Invalid destination port '%s' in '%s'"), buf, str);
         return -1;
       }
     }
   } else {
-    psaIn->sin_port = htons(dfltPort);
+    INET_PORT(*psa) = htons(dfltPort);
   }
 
   if(ppuri) {
@@ -545,21 +500,23 @@ int capture_getdestFromStr(const char *str,
   return 0;
 }
 
-static char *log_format_pkt(char *buf, unsigned int sz, const struct sockaddr_in *pSaSrc, 
-                    const struct sockaddr_in *pSaDst, int in) {
+static char *log_format_pkt(char *buf, unsigned int sz, const struct sockaddr *pSaSrc, 
+                    const struct sockaddr *pSaDst, int in) {
   int rc;
+  char tmp[128];
+
   if(in) {
     if((rc = snprintf(buf, sz, "%s:%d -> :%d", 
-               pSaSrc ? inet_ntoa(pSaSrc->sin_addr) : "", 
-               pSaSrc ? htons(pSaSrc->sin_port) : 0,
-               pSaDst ? htons(pSaDst->sin_port) : 0)) <= 0 && sz > 0) {
+               pSaSrc ? FORMAT_NETADDR(*pSaSrc, tmp, sizeof(tmp)) : "", 
+               pSaSrc ? htons(PINET_PORT(pSaSrc)) : 0,
+               pSaDst ? htons(PINET_PORT(pSaDst)) : 0)) <= 0 && sz > 0) {
       buf[0] = '\0';
     }
   } else {
     if((rc = snprintf(buf, sz, ":%d -> %s:%d", 
-               pSaSrc ? htons(pSaSrc->sin_port) : 0,
-               pSaSrc ? inet_ntoa(pSaDst->sin_addr) : "", 
-               pSaDst ? htons(pSaDst->sin_port) : 0)) <= 0 && sz > 0) {
+               pSaSrc ? htons(PINET_PORT(pSaSrc)) : 0,
+               pSaSrc ? FORMAT_NETADDR(*pSaDst, tmp, sizeof(tmp)) : "", 
+               pSaDst ? htons(PINET_PORT(pSaDst)) : 0)) <= 0 && sz > 0) {
       buf[0] = '\0';
     }
 
@@ -569,8 +526,8 @@ static char *log_format_pkt(char *buf, unsigned int sz, const struct sockaddr_in
 }
 
 static char *log_format_pkt_sock(char *buf, unsigned int sz, const NETIO_SOCK_T *pnetsock,
-                    const struct sockaddr_in *pSaDst, int in) {
-  struct sockaddr_in saLocal;
+                    const struct sockaddr *pSaDst, int in) {
+  struct sockaddr_storage saLocal;
   int sztmp;
 
   memset(&saLocal, 0, sizeof(saLocal));
@@ -580,19 +537,19 @@ static char *log_format_pkt_sock(char *buf, unsigned int sz, const NETIO_SOCK_T 
     getsockname(PNETIOSOCK_FD(pnetsock), (struct sockaddr *) &saLocal,  (socklen_t *) &sztmp);
   }
 
-  return log_format_pkt(buf, sz, &saLocal, pSaDst, in);
+  return log_format_pkt(buf, sz, (const struct sockaddr *) &saLocal, pSaDst, in);
 }
 
-char *capture_log_format_pkt(char *buf, unsigned int sz, const struct sockaddr_in *pSaSrc, 
-                    const struct sockaddr_in *pSaDst) {
+char *capture_log_format_pkt(char *buf, unsigned int sz, const struct sockaddr *pSaSrc, 
+                    const struct sockaddr *pSaDst) {
   return log_format_pkt(buf, sz, pSaSrc, pSaDst, 1);
 }
 
-char *stream_log_format_pkt(char *buf, unsigned int sz, const struct sockaddr_in *pSaSrc, 
-                    const struct sockaddr_in *pSaDst) {
+char *stream_log_format_pkt(char *buf, unsigned int sz, const struct sockaddr *pSaSrc, 
+                    const struct sockaddr *pSaDst) {
   return log_format_pkt(buf, sz, pSaSrc, pSaDst, 0);
 }
 char *stream_log_format_pkt_sock(char *buf, unsigned int sz, const NETIO_SOCK_T *pnetsock,
-                    const struct sockaddr_in *pSaDst) {
+                    const struct sockaddr *pSaDst) {
   return log_format_pkt_sock(buf, sz, pnetsock, pSaDst, 0);
 }

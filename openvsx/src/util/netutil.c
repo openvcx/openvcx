@@ -24,7 +24,7 @@
 
 #include "vsx_common.h"
 
-static int add_multicast_group(SOCKET sock, struct in_addr *pinaddr) {
+static int add_multicast_group(SOCKET sock, const struct sockaddr *psa) {
 
 #if defined(WIN32)
 
@@ -33,21 +33,27 @@ static int add_multicast_group(SOCKET sock, struct in_addr *pinaddr) {
 
 #else
 
+  if(psa->sa_family == AF_INET6) {
+    LOG(X_ERROR("IPv6 multicast group addition not implemented"));
+    return -1;
+  }
+
   struct ip_mreq mcip;
+  char tmp[128];
 
   memset(&mcip, 0, sizeof(mcip));
 
-  mcip.imr_multiaddr.s_addr = pinaddr->s_addr;
+  mcip.imr_multiaddr.s_addr = ((const struct sockaddr_in *) psa)->sin_addr.s_addr;
   mcip.imr_interface.s_addr = INADDR_ANY;
 
   if(setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *) &mcip, 
      sizeof(mcip)) < 0) {
 
-    LOG(X_ERROR("Unable to add multicast membership for %s"), inet_ntoa(*pinaddr));
+    LOG(X_ERROR("Unable to add multicast membership for %s"), INET_NTOP(*psa, tmp, sizeof(tmp)));
     return -1;
   }
 
-  LOG(X_DEBUG("Subscribed to multicast membership for %s"), inet_ntoa(*pinaddr));
+  LOG(X_DEBUG("Subscribed to multicast membership for %s"), INET_NTOP(*psa, tmp, sizeof(tmp)));
 
   return 0;
 
@@ -55,33 +61,40 @@ static int add_multicast_group(SOCKET sock, struct in_addr *pinaddr) {
 
 }
 
-SOCKET net_opensocket(int socktype, unsigned int rcvbufsz, int sndbufsz,
-                      struct sockaddr_in *psain) {
+SOCKET net_opensocket(int socktype, unsigned int rcvbufsz, int sndbufsz, const struct sockaddr *psa) {
   int val;
   int sockbufsz = 0;
+  char tmp[128];
+  sa_family_t sa_family = AF_INET;
   SOCKET sock = INVALID_SOCKET;
 
   if(socktype != SOCK_STREAM && socktype != SOCK_DGRAM) {
     return INVALID_SOCKET;
   }
 
-  if((sock = socket(PF_INET, socktype, 0)) == INVALID_SOCKET) {
+  if(psa && psa->sa_family == AF_INET6) {
+    sa_family = psa->sa_family;
+  }
+
+  if((sock = socket(sa_family, socktype, 0)) == INVALID_SOCKET) {
     LOG(X_ERROR("Unable to create socket type %d"), socktype);
     return INVALID_SOCKET;
   }
 
-  if(psain) {
+  if(psa) {
 
     //
     // Handle IGMP multicast group subscription
     //
-    if(socktype == SOCK_DGRAM && IN_MULTICAST(htonl(psain->sin_addr.s_addr))) {
-      if(add_multicast_group(sock, &psain->sin_addr)  < 0) {
+    if(socktype == SOCK_DGRAM && INET_IS_MULTICAST(psa)) {
+      if(add_multicast_group(sock, psa)  < 0) {
         closesocket(sock);
+        LOG(X_ERROR("Failed to create socket family: %d %s:%d"), sa_family, 
+                    FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), htons(PINET_PORT(psa)));
+        LOGHEX_DEBUG(psa, sizeof(struct sockaddr_storage));
         return INVALID_SOCKET;
       }
     }
-
 
     val = 1;
     if(setsockopt (sock, SOL_SOCKET, SO_REUSEADDR,
@@ -101,19 +114,20 @@ SOCKET net_opensocket(int socktype, unsigned int rcvbufsz, int sndbufsz,
     }
 #endif // __APPLE__
 
-
-    //psain->sin_addr.s_addr = INADDR_ANY;
-
-    if(bind(sock, (struct sockaddr *) psain,
-                          sizeof(struct sockaddr_in)) < 0) {
+    if(bind(sock, psa, INET_SIZE(*psa)) < 0) {
       LOG(X_ERROR("Unable to bind to local port %s:%d "ERRNO_FMT_STR),
-                       inet_ntoa(psain->sin_addr), ntohs(psain->sin_port), ERRNO_FMT_ARGS);
+                       FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)), ERRNO_FMT_ARGS);
       closesocket(sock);
       return INVALID_SOCKET;
     }
 
-    //LOG(X_DEBUG("Bound listener to %s:%d"), inet_ntoa(psain->sin_addr), ntohs(psain->sin_port));
+     VSX_DEBUG_NET( LOG(X_DEBUG("NET - net_opensock: %s, family: %d (%d), fd: %d bound listener to %s:%d"), 
+                socktype == SOCK_STREAM ? "stream" : "dgram", sa_family, psa->sa_family, sock, 
+                FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa))) );
 
+  } else {
+     VSX_DEBUG_NET( LOG(X_DEBUG("NET - net_opensock: %s,family: %d, fd: %d"), 
+                        socktype == SOCK_STREAM ? "stream" : "dgram", sa_family, sock) );
   }
 
   if(rcvbufsz > 0) {
@@ -253,22 +267,29 @@ int net_recvnb(SOCKET sock, unsigned char *buf, unsigned int len,
   return rc;
 }
 
-int net_connect(SOCKET sock, struct sockaddr_in *psa) {
+int net_connect(SOCKET sock, const struct sockaddr *psa) {
+  char tmp[128];
 
   if(sock == INVALID_SOCKET || !psa) {
     return -1;
   }
 
-  psa->sin_family = PF_INET;
+  //
+  // Default to Ipv4
+  //
+  if(psa->sa_family == AF_UNSPEC) {
+    ((struct sockaddr *)  psa)->sa_family = AF_INET;
+  }
 
-  if(connect(sock, (struct sockaddr *) psa, (socklen_t) sizeof(struct sockaddr_in)) < 0) {
+  if(connect(sock, psa, (socklen_t) INET_SIZE(*psa)) < 0) {
 
     LOG(X_ERROR("Failed to connect to %s:%d "ERRNO_FMT_STR),
-            inet_ntoa(psa->sin_addr), ntohs(psa->sin_port), ERRNO_FMT_ARGS);
+            FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)), ERRNO_FMT_ARGS);
     return -1;
   }
 
-  //LOG(X_DEBUG("Connected to %s:%d"), inet_ntoa(psa->sin_addr), ntohs(psa->sin_port));
+  VSX_DEBUG_NET( LOG(X_DEBUG("NET - net_connect family: %d, fd: %d, connected to %s:%d"),
+                psa->sa_family, sock, FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa))) );
 
   return 0;
 }
@@ -304,10 +325,11 @@ int net_recvnb_exact(SOCKET sock, unsigned char *buf, unsigned int len,
   return idx;
 }
 
-int net_recv(SOCKET sock, const struct sockaddr_in *psa, 
-                    unsigned char *buf, unsigned int len) {
+int net_recv(SOCKET sock, const struct sockaddr *psa, 
+             unsigned char *buf, unsigned int len) {
   int rc = 0;
   int sockflags = 0;
+  char tmp[128];
 
 #if !defined(__APPLE__) && !defined(WIN32)
   sockflags = MSG_NOSIGNAL;
@@ -324,7 +346,7 @@ int net_recv(SOCKET sock, const struct sockaddr_in *psa,
     } else {
 
       LOG(X_ERROR("recv failed (%d) for %u bytes from %s:%d "ERRNO_FMT_STR), rc, len, 
-           psa ? inet_ntoa(psa->sin_addr) : "", psa ? ntohs(psa->sin_port) : 0, ERRNO_FMT_ARGS);
+           psa ? FORMAT_NETADDR(*psa, tmp, sizeof(tmp)) : "", psa ? ntohs(PINET_PORT(psa)) : 0, ERRNO_FMT_ARGS);
       return -1;
     }
   } 
@@ -334,7 +356,7 @@ int net_recv(SOCKET sock, const struct sockaddr_in *psa,
   return rc;
 }
 
-int net_recv_exact(SOCKET sock, const struct sockaddr_in *psa, 
+int net_recv_exact(SOCKET sock, const struct sockaddr *psa, 
                           unsigned char *buf, unsigned int len) {
   unsigned int idx = 0;
   int rc;
@@ -353,11 +375,11 @@ int net_recv_exact(SOCKET sock, const struct sockaddr_in *psa,
 }
 
 
-int net_send(SOCKET sock, const struct sockaddr_in *psa, 
-                     const unsigned char *buf, unsigned int len) {
+int net_send(SOCKET sock, const struct sockaddr *psa, const unsigned char *buf, unsigned int len) {
   int rc;
   int sockflags = 0;
   unsigned int idx = 0;
+  char tmp[128];
 
   if(len == 0) {
     return 0; 
@@ -383,14 +405,38 @@ int net_send(SOCKET sock, const struct sockaddr_in *psa,
       }
 #endif // __linux__
       LOG(X_ERROR("Failed to send %u bytes to %s:%d "ERRNO_FMT_STR), len, 
-        psa ? inet_ntoa(psa->sin_addr) : 0, psa ? ntohs(psa->sin_port) : 0, ERRNO_FMT_ARGS);
+        psa ? FORMAT_NETADDR(*psa, tmp, sizeof(tmp)) : 0, psa ? ntohs(PINET_PORT(psa)) : 0, ERRNO_FMT_ARGS);
       return -1;
     } else if(rc > 0) {
       idx += rc;
     }
   }
 
+  VSX_DEBUG_NET( LOG(X_DEBUG("NET - net_send %d/%d bytes, family: %d, fd: %d, to %s:%d"),
+                idx, len, psa->sa_family, sock, FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa))) );
+
   return (int) idx;
+}
+
+int net_sendto(SOCKET sock, const struct sockaddr *psa, const unsigned char *pData, unsigned int len, 
+               const char *descr) {
+  int rc = 0;
+  int flags = 0;
+  char tmp[128];
+
+  if(!psa) {
+    return -1;
+  }
+
+  if((rc = sendto(sock, pData, len, flags, psa, INET_SIZE(*psa))) != len) {
+    LOG(X_ERROR("sendto %s%s%s:%d for %d bytes failed with rc %d, "ERRNO_FMT_STR), descr ? descr : "", 
+          descr ? " " : "", FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)), len, rc, ERRNO_FMT_ARGS);
+  }
+
+  VSX_DEBUG_NET( LOG(X_DEBUG("NET - net_sendto %d/%d bytes, family: %d, fd: %d, to %s:%d"),
+                rc, len, psa->sa_family, sock, FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa))) );
+
+  return rc;
 }
 
 void net_closesocket(SOCKET *psock) {
@@ -398,8 +444,9 @@ void net_closesocket(SOCKET *psock) {
     if(*psock != 0) {
       // Be careful not to be calling close on 0 (stdin), which could end up having nasty side
       // effects on linux/mac
-      //LOG(X_DEBUG("NET_CLOSESOCKET FD:%d"), *psock);
+      VSX_DEBUG_NET( LOG(X_DEBUG("NET - net_closesocket , fd: %d"), *psock));
       closesocket(*psock);
+
     }
     *psock = INVALID_SOCKET;
   }
@@ -427,29 +474,32 @@ int net_issockremotelyclosed(SOCKET sock, int writer) {
   return 0;
 }
 
-SOCKET net_listen(struct sockaddr_in *psain, int backlog) {
+SOCKET net_listen(const struct sockaddr *psa, int backlog) {
 
   SOCKET socksrv;
+  char tmp[128];
 
-  if(!psain) {
+  if(!psa) {
     return INVALID_SOCKET;
   }
 
-  if((socksrv = net_opensocket(SOCK_STREAM, 0, 0, psain)) == INVALID_SOCKET) {
+  if((socksrv = net_opensocket(SOCK_STREAM, 0, 0, psa)) == INVALID_SOCKET) {
     return INVALID_SOCKET;
   }
 
   if(listen(socksrv, backlog) < 0) {
     LOG(X_ERROR("Unable to listen on local port %s:%d (backlog:%d"),
-          inet_ntoa(psain->sin_addr), ntohs(psain->sin_port), backlog);
+          FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)), backlog);
     closesocket(socksrv);
     return INVALID_SOCKET;
   }
+  VSX_DEBUG_NET( LOG(X_DEBUG("NET - net_listen: family: %d, fd: %d, on %s:%d"),
+                psa->sa_family, socksrv, FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa))) );
 
   return socksrv;
 }
 
-in_addr_t net_resolvehost(const char *host) {
+static in_addr_t net_resolvehost4(const char *host) {
   struct hostent *pHost;
   struct in_addr addr;
 
@@ -476,6 +526,92 @@ in_addr_t net_resolvehost(const char *host) {
   return addr.s_addr;
 }
 
+int net_resolvehost(const char *host, struct sockaddr_storage *pstorage) {
+  int rc = -1;
+
+  if(!host || !pstorage) {
+    return -1;
+  }
+
+  if(net_isipv6(host)) {
+    pstorage->ss_family = AF_INET6;
+    //((struct sockaddr_in6 *) pstorage)->sin6_len = sizeof(struct sockaddr_in6);
+    if(inet_pton(AF_INET6, host, &((struct sockaddr_in6 *) pstorage)->sin6_addr) == 1) {
+      rc = 0;
+    } else {
+      LOG(X_ERROR("inet_pton failed for IPv6 '%s'"), host);
+      // Set IPv6 address to all '0' for IN6_IS_ADDR_UNSPECIFIED to be true
+      memset(& ((struct sockaddr_in6 *) pstorage)->sin6_addr.s6_addr[0], 0, ADDR_LEN_IPV6);
+    }
+  } else {
+    pstorage->ss_family = AF_INET;
+    //((struct sockaddr_in *) pstorage)->sin_len = sizeof(struct sockaddr_in);
+    if((((struct sockaddr_in *) pstorage)->sin_addr.s_addr = net_resolvehost4(host)) != INADDR_NONE) {
+      rc = 0;
+    }
+  }
+
+  return rc;
+}
+
+int net_getaddress(const char *strhostonly, struct sockaddr_storage *pstorage) {
+  int rc = -1;
+
+  if(!strhostonly || !pstorage) {
+    return -1;
+  }
+
+  memset(pstorage, 0, sizeof(struct sockaddr_storage));
+
+  if(net_isipv6(strhostonly)) {
+    pstorage->ss_family = AF_INET6;
+    //((struct sockaddr_in6 *) pstorage)->sin6_len = sizeof(struct sockaddr_in6);
+    if(inet_pton(AF_INET6, strhostonly, &((struct sockaddr_in6 *) pstorage)->sin6_addr) == 1) {
+      rc = 0;
+    } else {
+      // Set IPv6 address to all '0' for IN6_IS_ADDR_UNSPECIFIED to be true
+      LOG(X_ERROR("inet_pton failed for IPv6 address: '%s'"), strhostonly);
+      memset(& ((struct sockaddr_in6 *) pstorage)->sin6_addr.s6_addr[0], 0, ADDR_LEN_IPV6);
+    }
+  } else {
+    pstorage->ss_family = AF_INET;
+    //((struct sockaddr_in *) pstorage)->sin_len = sizeof(struct sockaddr_in);
+    if(inet_pton(AF_INET, strhostonly, &((struct sockaddr_in *) pstorage)->sin_addr) == 1) {
+    //((struct sockaddr_in *) pstorage)->sin_addr.s_addr = inet_addr(strhostonly);
+    //if(IS_ADDR4_VALID(((struct sockaddr *) pstorage)->sin-addr)) {
+      rc = 0;
+    } else {
+      LOG(X_ERROR("inet_pton failed for IPv4 address: '%s'"), strhostonly);
+      ((struct sockaddr_in *) pstorage)->sin_addr.s_addr = INADDR_NONE;
+    }
+  }
+  return rc;
+}
+
+int net_isipv6(const char *str) {
+  const char *p = str;
+  int numc = 0;
+
+  if(p) {
+    while(*p != '\0') {
+
+      if(*p == ':') {
+        numc++;
+      } else if((*p < '0' || *p > '9') && (*p < 'a' || *p > 'f') && (*p < 'A' || *p > 'F')) {
+        return 0;
+      }
+  
+      p++;
+    }
+  }
+
+  if(numc >= 2) {
+    return 1;
+  }
+
+  return 0;
+}
+  
 int net_setsocknonblock(SOCKET sock, int on) {
 #ifdef WIN32
 
@@ -511,7 +647,7 @@ int net_setsocknonblock(SOCKET sock, int on) {
   return 0;
 }
 
-int net_setqos(SOCKET sock, const struct sockaddr_in *psain, uint8_t dscp) {
+static int net_setqos4(SOCKET sock, const struct sockaddr_in *psain, uint8_t dscp) {
   int rc = -1;
 
   if(sock == INVALID_SOCKET) {
@@ -591,6 +727,18 @@ int net_setqos(SOCKET sock, const struct sockaddr_in *psain, uint8_t dscp) {
   return rc;
 }
 
+int net_setqos(SOCKET sock, const struct sockaddr *psa, uint8_t dscp) {
+
+  if(psa && psa->sa_family == AF_INET6) {
+    //TODO: implement ipv6 qos
+    return 0;
+  } else {
+    return net_setqos4(sock, (const struct sockaddr_in *) psa, dscp);
+  }
+
+}
+
+
 static in_addr_t g_local_ip = INADDR_NONE;
 static char g_local_ipstr[32];
 static char g_local_hostname[128];
@@ -615,7 +763,7 @@ int net_setlocaliphost(const char *ipstr) {
   return 0;
 }
 
-in_addr_t net_getlocalip() {
+in_addr_t net_getlocalip4() {
   in_addr_t addr;
   char *dev = NULL;
 
@@ -636,7 +784,7 @@ const char *net_getlocalhostname() {
     return g_local_hostname;
   } else {
     memset(&inaddr, 0, sizeof(inaddr));
-    inaddr.s_addr = net_getlocalip();
+    inaddr.s_addr = net_getlocalip4();
     if(g_local_ipstr[0] == '\0' && (p = inet_ntoa(inaddr))) {
       strncpy(g_local_ipstr, p, sizeof(g_local_ipstr) - 1);
     }
@@ -669,6 +817,12 @@ int net_getlocalmediaport(int numpairs) {
 }
 
 
+
+/*
+//
+// deprecated in favor of INET_NTOP macro or inet_ntop
+//
+
 #if !defined(WIN32)
 static pthread_mutex_t g_inet_ntoa_mtx = PTHREAD_MUTEX_INITIALIZER;
 #endif // WIN32
@@ -696,4 +850,42 @@ char *net_inet_ntoa(struct in_addr in, char *buf) {
 
   return buf;
 }
+*/
 
+/*
+int net_copy_addr(IP_ADDR_T *pAddrDest, const struct sockaddr *psa) {
+
+  if(psa->sa_family == AF_INET6) {
+    pAddrDest->family = psa->sa_family;
+    memcpy(& pAddrDest->ip_un.addr6.s6_addr[0], &psa->sin6_addr.s6_addr[0], ADDR_LEN_IPV6);
+  } else {
+    pAddrDest->family = AF_INET;
+    pAddrDest->ip_un.adr4.s_addr = psa->sin_addr.s_addr;
+  }
+
+}
+*/
+
+/*
+char *net_inet_ntop(const struct sockaddr *psa, char *buf) {
+  char *p;
+
+  if(!psa || !buf) {
+    return NULL;
+  }
+
+#if !defined(WIN32)
+  pthread_mutex_lock(&g_inet_ntoa_mtx);
+#endif // WIN32
+
+  if(!(p = INET_NTOP(psa, buf, SAFE_INET_NTOP_LEN_MAX - 1))) {
+    buf[0] = '\0';
+  }
+
+#if !defined(WIN32)
+  pthread_mutex_unlock(&g_inet_ntoa_mtx);
+#endif // WIN32
+
+  return buf;
+}
+*/

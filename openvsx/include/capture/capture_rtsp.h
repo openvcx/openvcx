@@ -55,7 +55,7 @@ int rtsp_alloc_listener_ports(RTSP_SESSION_T *pRtspSession, int staticLocalPort,
                               int rtpmux, int rtcpmux, int isvid, int isaud);
 int rtsp_setup_transport_str(RTSP_SESSION_TYPE_T sessionType, RTSP_CTXT_MODE_T ctxtmode,
                              RTSP_TRANSPORT_SECURITY_TYPE_T rtspsecuritytype, 
-                             const RTSP_SESSION_PROG_T *pProg, struct in_addr *paddr,
+                             const RTSP_SESSION_PROG_T *pProg, const struct sockaddr *paddr,
                              char *buf, unsigned int szbuf);
 int capture_rtsp_onsetupdone(RTSP_CLIENT_SESSION_T *pSession, CAPTURE_DESCR_COMMON_T *pCommon);
 

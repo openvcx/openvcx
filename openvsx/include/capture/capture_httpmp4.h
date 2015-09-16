@@ -59,7 +59,7 @@ typedef struct CAP_HTTP_MP4_STREAM {
 
 int http_mp4_recv(CAP_ASYNC_DESCR_T *pCfg,
                   NETIO_SOCK_T *pNetSock,
-                  struct sockaddr_in *psa,
+                  const struct sockaddr *psa,
                   FILE_OFFSET_T contentLen,
                   HTTP_PARSE_CTXT_T *pHdrCtxt,
                   const char *outPath);

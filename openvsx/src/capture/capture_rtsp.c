@@ -173,7 +173,7 @@ static int rtsp_req_send(RTSP_CLIENT_SESSION_T *pSession,
   //
   strncpy(pSession->authCliCtxt.lastMethod, strMethod, sizeof(pSession->authCliCtxt.lastMethod) - 1);
 
-  rc = netio_send(&pSession->sd.netsocket, &pSession->sd.sain, (unsigned char *) buf, sz);
+  rc = netio_send(&pSession->sd.netsocket, (const struct sockaddr *) &pSession->sd.sa, (unsigned char *) buf, sz);
 
   return rc;
 }
@@ -189,7 +189,8 @@ static int rtsp_read_resp(RTSP_CLIENT_SESSION_T *pSession, HTTP_PARSE_CTXT_T *pH
   const char *p;
   const char *p2;
 
-  if((rc = httpcli_req_queryhdrs(pHdrCtxt, pRtspResp, &pSession->sd.sain, &pSession->authCliCtxt, "RTSP")) < 0) {
+  if((rc = httpcli_req_queryhdrs(pHdrCtxt, pRtspResp, (const struct sockaddr *) &pSession->sd.sa, 
+                                 &pSession->authCliCtxt, "RTSP")) < 0) {
 
       if(pRtspResp->statusCode == HTTP_STATUS_UNAUTHORIZED) {
         httpcli_authenticate(pRtspResp, &pSession->authCliCtxt);
@@ -604,10 +605,11 @@ int rtsp_alloc_listener_ports(RTSP_SESSION_T *pRtspSession, int staticLocalPort,
 
 int rtsp_setup_transport_str(RTSP_SESSION_TYPE_T sessionType, RTSP_CTXT_MODE_T ctxtmode, 
                              RTSP_TRANSPORT_SECURITY_TYPE_T rtspsecuritytype, 
-                             const RTSP_SESSION_PROG_T *pProg, struct in_addr *paddr,
+                             const RTSP_SESSION_PROG_T *pProg, const struct sockaddr *paddr,
                              char *buf, unsigned int szbuf) {
   int rc = 0;
   unsigned int idx = 0;
+  char tmp[128];
 
   if(!pProg || !buf) {
     return -1;
@@ -630,7 +632,8 @@ int rtsp_setup_transport_str(RTSP_SESSION_TYPE_T sessionType, RTSP_CTXT_MODE_T c
       idx += rc;
     }
 
-    if(paddr && (rc = snprintf(&buf[idx], szbuf - idx, ";%s=%s", RTSP_SOURCE, inet_ntoa(*paddr))) > 0) {
+    if(paddr && (rc = snprintf(&buf[idx], szbuf - idx, ";%s=%s", RTSP_SOURCE, 
+                FORMAT_NETADDR(*paddr, tmp, sizeof(tmp)))) > 0) {
       idx += rc;
     }
 
@@ -784,7 +787,7 @@ static CONNECT_RETRY_RC_T stream_rtsp_req_announce(STREAMER_CFG_T *pStreamerCfg,
       LOGHEXT_DEBUG(bufsdp, sdplen);
     )
 
-    if(netio_send(&pSession->sd.netsocket, &pSession->sd.sain, (unsigned char *) bufsdp, sdplen) < 0) {
+    if(netio_send(&pSession->sd.netsocket, (const struct sockaddr *) &pSession->sd.sa, (unsigned char *) bufsdp, sdplen) < 0) {
       LOG(X_DEBUG("Failed to send RTSP ANNOUNCE SDP length %d"), sdplen);
       return CONNECT_RETRY_RC_ERROR;    
     }
@@ -1095,7 +1098,7 @@ static int stream_rtsp_announce(STREAMER_CFG_T *pStreamerCfg) {
     memcpy(&reqCtxt.srtpKts[idx], &pDestCfg->srtps[idx].kt, sizeof(reqCtxt.srtpKts[idx]));
   }
 
-  if(capture_getdestFromStr(pDestCfg->dstHost, &session.sd.sain, NULL, NULL, pDestCfg->ports[0]) < 0) {
+  if(capture_getdestFromStr(pDestCfg->dstHost, &session.sd.sa, NULL, NULL, pDestCfg->ports[0]) < 0) {
     return -1;
   }
 
@@ -1112,7 +1115,7 @@ static int stream_rtsp_announce(STREAMER_CFG_T *pStreamerCfg) {
   retryCtxt.pConnectedActionArg = &retryCbCtxt;;
   retryCtxt.pAuthCliCtxt = &session.authCliCtxt;
   retryCtxt.pnetsock = &session.sd.netsocket;
-  retryCtxt.psa = &session.sd.sain;
+  retryCtxt.psa = (struct sockaddr *) &session.sd.sa;
   retryCtxt.connectDescr = "RTSP";
   retryCtxt.pconnectretrycntminone = &pStreamerCfg->rtspannounce.connectretrycntminone;
 
@@ -1242,7 +1245,7 @@ int capture_rtsp_setup(CAPTURE_DESCR_COMMON_T *pCommon, const STREAMER_CFG_T *pS
 
   }
 
-  if(capture_getdestFromStr(pCommon->localAddrs[0], &pSession->sd.sain, NULL, NULL, RTSP_PORT_DEFAULT) < 0) {
+  if(capture_getdestFromStr(pCommon->localAddrs[0], &pSession->sd.sa, NULL, NULL, RTSP_PORT_DEFAULT) < 0) {
     return -1;
   }
 
@@ -1259,7 +1262,7 @@ int capture_rtsp_setup(CAPTURE_DESCR_COMMON_T *pCommon, const STREAMER_CFG_T *pS
   retryCtxt.pConnectedActionArg = &retryCbCtxt;
   retryCtxt.pAuthCliCtxt = &pSession->authCliCtxt;
   retryCtxt.pnetsock = &pSession->sd.netsocket;
-  retryCtxt.psa = &pSession->sd.sain;
+  retryCtxt.psa = (struct sockaddr *) &pSession->sd.sa;
   retryCtxt.connectDescr = "RTSP";
   retryCtxt.pconnectretrycntminone = &pCommon->connectretrycntminone;
 
@@ -1366,8 +1369,8 @@ int capture_rtsp_onpkt_interleaved(RTSP_CLIENT_SESSION_T *pSession, CAP_ASYNC_DE
   uint16_t dataLen;
   int is_rtcp = 0;
   struct timeval tv;
-  struct sockaddr_in saSrc; 
-  struct sockaddr_in saDst; 
+  struct sockaddr_storage saSrc; 
+  struct sockaddr_storage saDst; 
   const CAPTURE_STREAM_T *pStream = NULL;
   RTSP_SESSION_PROG_T *pProg = NULL;
   CAPTURE_STATE_T *pState = NULL;
@@ -1398,22 +1401,23 @@ int capture_rtsp_onpkt_interleaved(RTSP_CLIENT_SESSION_T *pSession, CAP_ASYNC_DE
     pProg = &pSession->s.aud;
   }
 
-  memcpy(&saSrc, &pSession->sd.sain, sizeof(saSrc));
-  saSrc.sin_port = htons(pProg->ports[is_rtcp]);
-  memcpy(&saDst, &pSession->sd.sain, sizeof(saDst));
-  saDst.sin_port = htons(pProg->localports[is_rtcp]);
+  memcpy(&saSrc, &pSession->sd.sa, sizeof(saSrc));
+  INET_PORT(saSrc) = htons(pProg->ports[is_rtcp]);
+  memcpy(&saDst, &pSession->sd.sa, sizeof(saDst));
+  INET_PORT(saDst) = htons(pProg->localports[is_rtcp]);
 
-  if(htons(saDst.sin_port) < RTP_MIN_PORT) {
-     saDst.sin_port = htons(RTP_MIN_PORT);
+  if(htons(INET_PORT(saDst)) < RTP_MIN_PORT) {
+     INET_PORT(saDst) = htons(RTP_MIN_PORT);
   }
 
-  if(htons(saSrc.sin_port) < RTP_MIN_PORT) {
-    saSrc.sin_port = saDst.sin_port;
+  if(htons(INET_PORT(saSrc)) < RTP_MIN_PORT) {
+    INET_PORT(saSrc) = INET_PORT(saDst);
   }
 
   gettimeofday(&tv, NULL);
 
-  VSX_DEBUG_RTSP( LOG(X_DEBUGV("RTSP - capture_rtsp_onpkt_interleaved ctxtmode:%d, channelId: %d, is_rtcp:%d, :%d -> :%d, len:%d, pProg; 0x%x, vid: 0x%x, aud: 0x%x"), pCfg->pcommon->rtsp.ctxtmode, channelId, is_rtcp, htons(saSrc.sin_port), htons(saDst.sin_port), dataLen, pProg, &pSession->s.vid, &pSession->s.aud) );
+  VSX_DEBUG_RTSP( LOG(X_DEBUGV("RTSP - capture_rtsp_onpkt_interleaved ctxtmode:%d, channelId: %d, is_rtcp:%d, :%d -> :%d, len:%d, pProg; 0x%x, vid: 0x%x, aud: 0x%x"), pCfg->pcommon->rtsp.ctxtmode, channelId, is_rtcp, htons(INET_PORT(saSrc)), 
+         htons(INET_PORT(saDst)), dataLen, pProg, &pSession->s.vid, &pSession->s.aud) );
 
   if(pCfg->pcommon->rtsp.ctxtmode == RTSP_CTXT_MODE_SERVER_CAPTURE) {
     pthread_mutex_lock(&pCfg->pStreamerCfg->sharedCtxt.mtxRtcpHdlr);
@@ -1427,11 +1431,13 @@ int capture_rtsp_onpkt_interleaved(RTSP_CLIENT_SESSION_T *pSession, CAP_ASYNC_DE
   if(rc >= 0) {
     if(is_rtcp) {
       if(!(pStream  = capture_process_rtcp(pCfg->pStreamerCfg->sharedCtxt.pRtcpNotifyCtxt, 
-                                           &saSrc, &saDst, (RTCP_PKT_HDR_T *) &buf[4], dataLen))) {
+                                           (const struct sockaddr *) &saSrc, (const struct sockaddr *) &saDst, 
+                                           (RTCP_PKT_HDR_T *) &buf[4], dataLen))) {
         LOG(X_WARNING("RTSP interleaved RTCP packet on channel %d, len:%d  not processed"), channelId, dataLen);
       }
     } else {
-      if(!(pStream = capture_onUdpSockPkt(pState, &buf[4], dataLen, 0, &saSrc, &saDst, &tv, NULL))) {
+      if(!(pStream = capture_onUdpSockPkt(pState, &buf[4], dataLen, 0, (const struct sockaddr *) &saSrc, 
+                                          (const struct sockaddr *) &saDst, &tv, NULL))) {
         LOG(X_WARNING("RTSP interleaved RTP packet on channel %d, len:%d not processed"), channelId, dataLen);
       }
     }
@@ -1518,9 +1524,10 @@ static void cap_rtsp_srv_proc(void *pfuncarg) {
   CLIENT_CONN_T *pConn = (CLIENT_CONN_T *) pfuncarg;
   CAP_ASYNC_DESCR_T *pCfg = (CAP_ASYNC_DESCR_T *) pConn->pUserData;
   RTSP_REQ_CTXT_T rtspCtxt;
+  char tmp[128];
 
   LOG(X_INFO("Starting RTSP capture connection from %s:%d"),
-         inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port));
+         FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
 
   memset(&rtspCtxt, 0, sizeof(rtspCtxt));
   rtspCtxt.pStreamerCfg = pCfg->pStreamerCfg;
@@ -1536,18 +1543,19 @@ static void cap_rtsp_srv_proc(void *pfuncarg) {
 
   netio_closesocket(&pConn->sd.netsocket);
 
-  LOG(X_DEBUG("RTSP capture connection ended %s:%d"), inet_ntoa(pConn->sd.sain.sin_addr),
-                                        ntohs(pConn->sd.sain.sin_port));
+  LOG(X_DEBUG("RTSP capture connection ended %s:%d"), FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)),
+                                                      ntohs(INET_PORT(pConn->sd.sa)));
 }
 
 static int capture_rtsp_server(CAP_ASYNC_DESCR_T *pCfg) {
   int rc = 0;
   POOL_T pool;
   SRV_LISTENER_CFG_T listenCfg;
-  char buf[SAFE_INET_NTOA_LEN_MAX];
+  //char buf[SAFE_INET_NTOA_LEN_MAX];
   CLIENT_CONN_T *pConn;
   NETIO_SOCK_T *pnetsock = NULL;
-  struct sockaddr_in *psaSrv = NULL;
+  const struct sockaddr *psaSrv = NULL;
+  char tmp[128];
   char bufses[32];
 
   if(!pCfg || !pCfg->pcommon) {
@@ -1561,7 +1569,7 @@ static int capture_rtsp_server(CAP_ASYNC_DESCR_T *pCfg) {
   pCfg->pcommon->rtsp.runMonitor =  STREAMER_STATE_FINISHED;
 
   pnetsock = &pCfg->pcommon->rtsp.sd.netsocket;
-  psaSrv = &pCfg->pcommon->rtsp.sd.sain;
+  psaSrv = (const struct sockaddr *) &pCfg->pcommon->rtsp.sd.sa;
 
   memset(&pool, 0, sizeof(pool));
   if(pool_open(&pool, 2, sizeof(CLIENT_CONN_T), 1) != 0) {
@@ -1591,7 +1599,7 @@ static int capture_rtsp_server(CAP_ASYNC_DESCR_T *pCfg) {
   }
 
   memset(&listenCfg, 0, sizeof(listenCfg));
-  memcpy(&listenCfg.sain, psaSrv, sizeof(listenCfg.sain));
+  memcpy(&listenCfg.sa, psaSrv, INET_SIZE(*psaSrv));
   listenCfg.pnetsockSrv = pnetsock;
   listenCfg.pConnPool = &pool;
   listenCfg.urlCapabilities = URL_CAP_RTSPLIVE;
@@ -1600,7 +1608,7 @@ static int capture_rtsp_server(CAP_ASYNC_DESCR_T *pCfg) {
   LOG(X_INFO("RTSP %scapture listener available at "URL_RTSP_FMT_STR"%s%s"),
            ((pnetsock->flags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : ""),
             URL_RTSP_FMT2_ARGS((pnetsock->flags & NETIO_FLAG_SSL_TLS), 
-           net_inet_ntoa(psaSrv->sin_addr, buf)), ntohs(psaSrv->sin_port), 
+           FORMAT_NETADDR(*psaSrv, tmp, sizeof(tmp))), ntohs(PINET_PORT(psaSrv)), 
            (IS_AUTH_CREDENTIALS_SET(listenCfg.pAuthStore) ? " (Using auth)" : ""), bufses);
 
   //

@@ -36,7 +36,7 @@ typedef struct HTTPLIVE_CLIENT {
   unsigned int            nextidx;
   pthread_mutex_t         mtx;
   NETIO_SOCK_T            netsock;
-  struct sockaddr_in      sa;
+  struct sockaddr_storage sa;
   char                    hostbuf[CAPTURE_HTTP_HOSTBUF_MAXLEN];
   char                    uriprefix[256];
   int                     running;
@@ -95,6 +95,7 @@ static const char *get_m3u8(CAP_ASYNC_DESCR_T *pCfg,
   unsigned int contentLen = 0;
   unsigned int tmtms = 0;
   unsigned char *pdata = NULL;
+  char tmp[128];
 
   gettimeofday(&tv0, NULL);
 
@@ -102,7 +103,7 @@ static const char *get_m3u8(CAP_ASYNC_DESCR_T *pCfg,
 
   if(pHdrCtxt->hdrslen == 0) {
 
-    if((httpcli_gethdrs(pHdrCtxt, pHttpResp, &pCfg->pSockList->salist[0], puri,
+    if((httpcli_gethdrs(pHdrCtxt, pHttpResp, (const struct sockaddr *) &pCfg->pSockList->salist[0], puri,
           http_getConnTypeStr(HTTP_CONN_TYPE_CLOSE), 0, 0, pCfg->pcommon->addrsExtHost[0], NULL)) < 0) {
       return NULL;
     }
@@ -131,8 +132,8 @@ static const char *get_m3u8(CAP_ASYNC_DESCR_T *pCfg,
     gettimeofday(&tv1, NULL);
     if(tmtms > 0 && consumed < contentLen && TIME_TV_DIFF_MS(tv1, tv0) > (unsigned int) tmtms) {
       LOG(X_WARNING("HTTP %s:%d%s timeout %d ms exceeded"),
-           inet_ntoa(pCfg->pSockList->salist[0].sin_addr),
-           ntohs(pCfg->pSockList->salist[0].sin_port), puri, tmtms);
+           FORMAT_NETADDR(pCfg->pSockList->salist[0], tmp, sizeof(tmp)),
+           ntohs(INET_PORT(pCfg->pSockList->salist[0])), puri, tmtms);
       pdata = NULL;
       break;
     }
@@ -260,7 +261,7 @@ static int get_ts(HTTPLIVE_CLIENT_T *pClient, const char *puri) {
   hdrCtxt.szbuf = sizeof(buf);
   hdrCtxt.tmtms = 0;
 
-  if((httpcli_gethdrs(&hdrCtxt, &httpResp, &pClient->sa, puri,
+  if((httpcli_gethdrs(&hdrCtxt, &httpResp, (const struct sockaddr *) &pClient->sa, puri,
           http_getConnTypeStr(HTTP_CONN_TYPE_KEEPALIVE), 0, 0, pClient->hostbuf, NULL)) < 0) {
     return -1;
   }
@@ -283,7 +284,7 @@ static int get_ts(HTTPLIVE_CLIENT_T *pClient, const char *puri) {
   //fprintf(stderr, "TS contentlen:%d pdata:0x%x idxb:%d hdrslen:%d\n", contentLen, pdata, hdrCtxt.idxbuf, hdrCtxt.hdrslen);  
 
   if(rc >= 0 && pClient->pCfg->running == 0) {
-    rc = http_recvloop(pClient->pCfg, &pClient->netsock, &pClient->sa, 
+    rc = http_recvloop(pClient->pCfg, &pClient->netsock, (const struct sockaddr *) &pClient->sa, 
                        pClient->pStreamsOut, pClient->pStream, 
                        hdrCtxt.hdrslen, hdrCtxt.idxbuf - hdrCtxt.hdrslen, 
                        contentLen,
@@ -364,7 +365,8 @@ static void httplive_mediaproc(void *pArg) {
 
       //fprintf(stderr, "----MEDIA GET for '%s' '%s'\n", path, puri);
 
-        if((rc = httpcli_connect(&pClient->netsock, &pClient->sa, "HTTPLive media thread")) < 0) {
+        if((rc = httpcli_connect(&pClient->netsock, (const struct sockaddr *) &pClient->sa, 
+                                "HTTPLive media thread")) < 0) {
           break;
         }
 
@@ -429,8 +431,8 @@ int http_gethttplive(CAP_ASYNC_DESCR_T *pCfg,
     if(NETIOSOCK_FD(pCfg->pSockList->netsockets[0]) == INVALID_SOCKET) {
 
 //fprintf(stderr, "GOING TO CONNECT FOR M3U...\n");
-      if((rc = httpcli_connect(&pCfg->pSockList->netsockets[0], &pCfg->pSockList->salist[0], 
-                               "HTTPLive playlist thread")) < 0) {
+      if((rc = httpcli_connect(&pCfg->pSockList->netsockets[0], 
+                     (const struct sockaddr *) &pCfg->pSockList->salist[0], "HTTPLive playlist thread")) < 0) {
         break;
       }
 

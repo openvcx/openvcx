@@ -85,10 +85,11 @@ int srtp_dtls_protect(const NETIO_SOCK_T *pnetsock,
                       unsigned int lengthIn,
                       unsigned char *pDataOut,
                       unsigned int lengthOut,
-                      const struct sockaddr_in *dest_addr,
+                      const struct sockaddr *pdest_addr,
                       const SRTP_CTXT_T *pSrtp,
                       enum SENDTO_PKT_TYPE pktType) {
   int rc = 0;
+  char tmp[128];
 
   if(!pnetsock || !pDataIn) {
     return -1;
@@ -108,7 +109,7 @@ int srtp_dtls_protect(const NETIO_SOCK_T *pnetsock,
                  pktType == SENDTO_PKT_TYPE_RTCP ? "rtcp " :
                  pktType == SENDTO_PKT_TYPE_RTCP ? "stun" :
                  pktType == SENDTO_PKT_TYPE_STUN ? "turn" : ""),
-                inet_ntoa(dest_addr->sin_addr), ntohs(dest_addr->sin_port), lengthIn);
+                FORMAT_NETADDR(*pdest_addr, tmp, sizeof(tmp)), ntohs(PINET_PORT(pdest_addr)), lengthIn);
       return -1;
 
     } else if(!(pnetsock->flags & NETIO_FLAG_SRTP)) {
@@ -151,16 +152,19 @@ int srtp_sendto(const NETIO_SOCK_T *pnetsock,
                 void *pData,
                 size_t length,
                 int flags,
-                const struct sockaddr_in *dest_addr,
+                const struct sockaddr *pdest_addr,
                 const SRTP_CTXT_T *pSrtp,
                 enum SENDTO_PKT_TYPE pktType,
                 int no_protect) {
+
   int rc = 0;
   unsigned char encodedBuf[PACKETGEN_PKT_UDP_DATA_SZ];
   unsigned char turnBuf[PACKETGEN_PKT_UDP_DATA_SZ];
   unsigned int lengthOut = sizeof(encodedBuf);
-  const struct sockaddr_in *out_addr = dest_addr;
+  const struct sockaddr *pout_addr = pdest_addr;
   unsigned int lengthBeforeTurn;
+  const char *sendto_descr = NULL;
+  //char tmp[128];
 
   if(!pnetsock) {
     return -1;
@@ -191,7 +195,7 @@ int srtp_sendto(const NETIO_SOCK_T *pnetsock,
 
   if(!no_protect) {
     if((rc = srtp_dtls_protect(pnetsock, pData, length, encodedBuf, lengthOut,
-                      out_addr, pSrtp, pktType)) < 0) {
+                      pout_addr, pSrtp, pktType)) < 0) {
       return rc;
     } else if(rc > 0) {
       pData = (void *) encodedBuf;
@@ -205,9 +209,9 @@ int srtp_sendto(const NETIO_SOCK_T *pnetsock,
 
   if(pktType != SENDTO_PKT_TYPE_TURN && pktType != SENDTO_PKT_TYPE_STUN_BYPASSTURN &&
      pnetsock->turn.use_turn_indication_out == 1 && length > 0 && pData) {
-    out_addr = &pnetsock->turn.saTurnSrv;
+    pout_addr = (struct sockaddr *) &pnetsock->turn.saTurnSrv;
 
-    if(out_addr->sin_port == 0 || !IS_ADDR_VALID(out_addr->sin_addr)) {
+    if(PINET_PORT(pout_addr) == 0 || !INET_ADDR_VALID(*pout_addr)) {
       LOG(X_ERROR("TURN server address not set for socket output for length %d"), length);
       return -1;
     }
@@ -224,16 +228,26 @@ int srtp_sendto(const NETIO_SOCK_T *pnetsock,
   if(length > 0 && pData) {
 
   //char logbuf[128]; LOG(X_DEBUG("SRTP_SENDTO fd:%d %s (orig: %s:%d) len:%d, use_turn_indication_out:%d, stunFlags: 0x%x"), PNETIOSOCK_FD(pnetsock), stream_log_format_pkt_sock(logbuf, sizeof(logbuf), pnetsock, out_addr), inet_ntoa(dest_addr->sin_addr), htons(dest_addr->sin_port), length, pnetsock->turn.use_turn_indication_out, PSTUNSOCK(pnetsock)->stunFlags);
-    if((rc = sendto(PNETIOSOCK_FD(pnetsock), pData, length, flags, (const struct sockaddr *) out_addr,
-                  sizeof(struct sockaddr_in))) < (int) length) {
-
-      LOG(X_ERROR("sendto %s%s:%d for %d bytes failed with rc: %d "ERRNO_FMT_STR),
-                (pktType == SENDTO_PKT_TYPE_RTP ? "rtp " :
+    //if((rc = sendto(PNETIOSOCK_FD(pnetsock), pData, length, flags, (const struct sockaddr *) pout_addr,
+    //              sizeof(struct sockaddr_in))) < (int) length) {
+    if(flags != 0) {
+      LOG(X_WARNING("sendto flag: 0x%x discarded!"), flags);
+    }
+    sendto_descr = (pktType == SENDTO_PKT_TYPE_RTP ? "rtp " :
                  pktType == SENDTO_PKT_TYPE_RTCP ? "rtcp " :
                  (pktType == SENDTO_PKT_TYPE_STUN || pktType == SENDTO_PKT_TYPE_STUN_BYPASSTURN) ? "stun " :
                  pktType == SENDTO_PKT_TYPE_TURN ? "turn " :
-                 pktType == SENDTO_PKT_TYPE_DTLS ? "dtls " : ""),
-                inet_ntoa(out_addr->sin_addr), ntohs(out_addr->sin_port), length, rc, ERRNO_FMT_ARGS);
+                 pktType == SENDTO_PKT_TYPE_DTLS ? "dtls " : "");
+                
+    if((rc = netio_sendto((NETIO_SOCK_T *) pnetsock, pout_addr, pData, length, sendto_descr)) < (int) length) {
+
+      //LOG(X_ERROR("sendto %s%s:%d for %d bytes failed with rc: %d "ERRNO_FMT_STR),
+      //          (pktType == SENDTO_PKT_TYPE_RTP ? "rtp " :
+      //           pktType == SENDTO_PKT_TYPE_RTCP ? "rtcp " :
+      //           (pktType == SENDTO_PKT_TYPE_STUN || pktType == SENDTO_PKT_TYPE_STUN_BYPASSTURN) ? "stun " :
+      //           pktType == SENDTO_PKT_TYPE_TURN ? "turn " :
+      //           pktType == SENDTO_PKT_TYPE_DTLS ? "dtls " : ""),
+      //          FORMAT_NETADDR(*pout_addr, tmp, sizeof(tmp)), ntohs(PINET_PORT(pout_addr)), length, rc, ERRNO_FMT_ARGS);
 
     } else if(lengthBeforeTurn != length) {
       //

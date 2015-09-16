@@ -102,9 +102,9 @@ int dtls_netsock_init(const STREAM_DTLS_CTXT_T *pDtlsCtxt, NETIO_SOCK_T *pnetsoc
                       const DTLS_KEY_UPDATE_CTXT_T *pKeysUpdateCtxt);
 int dtls_netsock_setmtu(NETIO_SOCK_T *pnetsock, int mtu);
 int dtls_netsock_setclient(NETIO_SOCK_T *pnetsock, int client);
-int dtls_netsock_handshake(NETIO_SOCK_T *pnetsock, const struct sockaddr_in *dest_addr);
+int dtls_netsock_handshake(NETIO_SOCK_T *pnetsock, const struct sockaddr *dest_addr);
 int dtls_netsock_ondata(NETIO_SOCK_T *pnetsock, const unsigned char *pData, unsigned int len, 
-                        const struct sockaddr_in *psaSrc);
+                        const struct sockaddr *psaSrc);
 int dtls_netsock_write(NETIO_SOCK_T *pnetsock, const unsigned char *pDataIn, unsigned int lenIn, 
                        unsigned char *pDataOut, unsigned int lenOut);
 

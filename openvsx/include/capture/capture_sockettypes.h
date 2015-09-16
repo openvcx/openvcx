@@ -32,31 +32,25 @@
 #define SOCKET_LIST_MAX         10
 #define SOCKET_LIST_PREBUF_SZ   64
 
-/*
-typedef struct SOCKET_DESCR {
-  struct sockaddr_in        sain;
-  NETIO_SOCK_T              netsocket;
-} SOCKET_DESCR_T;
-*/
 
 typedef struct SOCKET_LIST {
-  struct sockaddr_in        salist[SOCKET_LIST_MAX];
+  struct sockaddr_storage   salist[SOCKET_LIST_MAX];
   NETIO_SOCK_T              netsockets[SOCKET_LIST_MAX];
-  struct sockaddr_in        salistRtcp[SOCKET_LIST_MAX];
-  struct sockaddr_in        saRemoteRtcp[SOCKET_LIST_MAX];
+  struct sockaddr_storage   salistRtcp[SOCKET_LIST_MAX];
+  struct sockaddr_storage   saRemoteRtcp[SOCKET_LIST_MAX];
   NETIO_SOCK_T              netsocketsRtcp[SOCKET_LIST_MAX];
   size_t                    numSockets;
 } SOCKET_LIST_T;
 
 
-#define CAPTURE_RTCP_NETIOSOCK(psl, i)  ((psl)->salistRtcp[i].sin_port == (psl)->salist[i].sin_port ? \
+#define CAPTURE_RTCP_NETIOSOCK(psl, i)  (INET_PORT((psl)->salistRtcp[i]) == INET_PORT((psl)->salist[i]) ? \
                                         (psl)->netsockets[i] : (psl)->netsocketsRtcp[i])
-#define CAPTURE_RTCP_PNETIOSOCK(psl, i)  ((psl)->salistRtcp[i].sin_port == (psl)->salist[i].sin_port ? \
+#define CAPTURE_RTCP_PNETIOSOCK(psl, i)  (INET_PORT((psl)->salistRtcp[i]) == INET_PORT((psl)->salist[i]) ? \
                                          &(psl)->netsockets[i] : &(psl)->netsocketsRtcp[i])
 
-#define CAPTURE_RTCP_FD(psl, i)  ((psl)->salistRtcp[i].sin_port == (psl)->salist[i].sin_port ? \
+#define CAPTURE_RTCP_FD(psl, i)  (INET_PORT((psl)->salistRtcp[i]) == INET_PORT((psl)->salist[i]) ? \
                                      NETIOSOCK_FD((psl)->netsockets[i]) : NETIOSOCK_FD((psl)->netsocketsRtcp[i]))
-#define CAPTURE_RTCP_PFD(psl, i)  ((psl)->salistRtcp[i].sin_port == (psl)->salist[i].sin_port ? \
+#define CAPTURE_RTCP_PFD(psl, i)  (INET_PORT((psl)->salistRtcp[i]) == INET_PORT((psl)->salist[i]) ? \
                                       &NETIOSOCK_FD((psl)->netsockets[i]) : &NETIOSOCK_FD((psl)->netsocketsRtcp[i]))
 
 typedef struct CAP_ASYNC_DESCR {

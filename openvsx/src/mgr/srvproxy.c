@@ -76,8 +76,7 @@ static int connect_remote(SOCKET_DESCR_T *pAddr) {
 
   if(!pAddr) {
     return -1;
-  } else if(pAddr->sain.sin_addr.s_addr == INADDR_NONE ||
-     htons(pAddr->sain.sin_port) <= 0) {
+  } else if(!INET_ADDR_VALID(pAddr->sa) || htons(INET_PORT(pAddr->sa))) {
     LOG(X_ERROR("Remote destination not configured"));
     return -1;
   }
@@ -87,13 +86,13 @@ static int connect_remote(SOCKET_DESCR_T *pAddr) {
     return -1;
   }
 
-  if((rc = net_connect(NETIOSOCK_FD(pAddr->netsocket), &pAddr->sain)) < 0) {
+  if((rc = net_connect(NETIOSOCK_FD(pAddr->netsocket), (const struct sockaddr *) &pAddr->sa)) < 0) {
     netio_closesocket(&pAddr->netsocket);
     return rc;
   }
 
   LOG(X_DEBUG("Connected to remote source %s:%d"),
-      net_inet_ntoa(pAddr->sain.sin_addr, buf), ntohs(pAddr->sain.sin_port));
+              FORMAT_NETADDR(pAddr->sa, buf, sizeof(buf)), ntohs(INET_PORT(pAddr->sa)));
 
   return 0;
 }
@@ -106,7 +105,7 @@ static int sendbytes(SOCKET_DESCR_T *pAddrDst, PROXY_CONNECTION_T *pProxy,
     return -1;
   }
 
-  rc = netio_send(&pAddrDst->netsocket, &pAddrDst->sain, pBuf, len);
+  rc = netio_send(&pAddrDst->netsocket, (const struct sockaddr *) &pAddrDst->sa, pBuf, len);
 
   if(rc > 0) {
     if(pAddrDst == pProxy->pAddrClient) {
@@ -284,8 +283,7 @@ static int cbOnRcvDataRtmp(void *pArg, int idxSrc,
 
   if(idxSrc == 0 && NETIOSOCK_FD(pProxy->pAddrRemote->netsocket) <= 0) {
 
-    if(pProxy->pAddrRemote->sain.sin_addr.s_addr == INADDR_NONE ||
-       htons(pProxy->pAddrRemote->sain.sin_port) <= 0) {
+    if(!INET_ADDR_VALID(pProxy->pAddrRemote->sa) || htons(INET_PORT(pProxy->pAddrRemote->sa)) <= 0) {
       LOG(X_ERROR("Remote destination not configured"));
       return -1;
     }
@@ -354,8 +352,8 @@ static int proxyloop(PROXY_CONNECTION_T *pProxy) {
           if((ircv = netio_recv(&pAddrSet[idx]->netsocket, NULL, buf, sizeof(buf))) <= 0) {
             LOG(X_ERROR("Proxy failed to read from %s %s:%d"),
               (idx == 0 ? DESCR_CLIENT : DESCR_REMOTE),
-              net_inet_ntoa(pAddrSet[idx]->sain.sin_addr, (char *)buf), 
-              htons(pAddrSet[idx]->sain.sin_port));
+              FORMAT_NETADDR(pAddrSet[idx]->sa, (char *)buf, sizeof(buf)), 
+              htons(INET_PORT(pAddrSet[idx]->sa)));
             return -1;
           }
 
@@ -412,7 +410,7 @@ static int proxyloop(PROXY_CONNECTION_T *pProxy) {
 
 static int get_remote_conn(const char *pvirtRsrc, 
                            SRV_MGR_CONN_T *pConn,
-                           struct sockaddr_in *psaout, 
+                           struct sockaddr_storage *psaout, 
                            enum STREAM_METHOD streamMethod) {
   int rc = 0;
   META_FILE_T metaFile;
@@ -560,8 +558,7 @@ int initUserDataRtsp(void *pProxyArg, void *pArg) {
   }
 
   //fprintf(stderr, "CALLING get_remote_conn url:'%s' virtRsrc:'%s'\n", pHttpReq->url, virtRsrc);
-  if((rc = get_remote_conn(virtRsrc, pConn, &pProxy->pAddrRemote->sain, 
-                           STREAM_METHOD_RTSP)) < 0) {
+  if((rc = get_remote_conn(virtRsrc, pConn,  &pProxy->pAddrRemote->sa, STREAM_METHOD_RTSP)) < 0) {
     return rc;
   }
 
@@ -603,7 +600,7 @@ int initUserDataHttp(void *pProxyArg, void *pArg) {
   }
 
   //fprintf(stderr, "CALLING HTTP get_remote_conn url:'%s' virtRsrc:'%s'\n", pHttpReq->url, virtRsrc);
-  if((rc = get_remote_conn(virtRsrc, pConn, &pProxy->pAddrRemote->sain, method)) < 0) {
+  if((rc = get_remote_conn(virtRsrc, pConn, &pProxy->pAddrRemote->sa, method)) < 0) {
     return rc;
   }
 
@@ -687,7 +684,7 @@ static int mgr_rtmp_handle_conn(RTMP_CTXT_T *pRtmp, SRV_MGR_CONN_T *pConn) {
   //
   if((rc = rtmp_handshake_srv(pRtmp)) < 0) {
     LOG(X_ERROR("RTMP handshake failed for %s:%d"),
-        net_inet_ntoa(pRtmp->pSd->sain.sin_addr, path), ntohs(pRtmp->pSd->sain.sin_port));
+        FORMAT_NETADDR(pRtmp->pSd->sa, path, sizeof(path)), ntohs(INET_PORT(pRtmp->pSd->sa)));
     return rc;
   }
 
@@ -715,7 +712,7 @@ static int mgr_rtmp_handle_conn(RTMP_CTXT_T *pRtmp, SRV_MGR_CONN_T *pConn) {
   //
   // Use the 'app' parameter as the unique resource name
   //
-  if((rc = get_remote_conn(path, pConn, &sdSrv.sain, STREAM_METHOD_RTMP)) < 0) {
+  if((rc = get_remote_conn(path, pConn, &sdSrv.sa, STREAM_METHOD_RTMP)) < 0) {
     return rc;
   }
 
@@ -733,7 +730,7 @@ static int mgr_rtmp_handle_conn(RTMP_CTXT_T *pRtmp, SRV_MGR_CONN_T *pConn) {
 
   if(rc >= 0 && (rc = rtmp_handshake_cli(&rtmpCli.ctxt, 1)) < 0) {
     LOG(X_ERROR("RTMP handshake with proxy failed for %s:%d"),
-      net_inet_ntoa(rtmpCli.ctxt.pSd->sain.sin_addr, path), ntohs(rtmpCli.ctxt.pSd->sain.sin_port));
+      FORMAT_NETADDR(rtmpCli.ctxt.pSd->sa, path, sizeof(path)), ntohs(INET_PORT(rtmpCli.ctxt.pSd->sa)));
   }
   if(rc >= 0 && (rc = mgr_rtmp_connect(&rtmpCli))) {
 
@@ -768,7 +765,7 @@ void srvmgr_rtmpclient_proc(void *pfuncarg) {
   RTMP_CTXT_T rtmpCtxt;
 
   LOG(X_DEBUG("Handling RTMP connection from %s:%d"), 
-       net_inet_ntoa(pConn->conn.sd.sain.sin_addr, buf), ntohs(pConn->conn.sd.sain.sin_port));
+       FORMAT_NETADDR(pConn->conn.sd.sa, buf, sizeof(buf)), ntohs(INET_PORT(pConn->conn.sd.sa)));
 
   memset(&rtmpCtxt, 0, sizeof(rtmpCtxt));
 
@@ -781,7 +778,7 @@ void srvmgr_rtmpclient_proc(void *pfuncarg) {
   netio_closesocket(&pConn->conn.sd.netsocket);
 
   LOG(X_DEBUG("RTMP Connection ended %s:%d"), 
-      net_inet_ntoa(pConn->conn.sd.sain.sin_addr, buf), ntohs(pConn->conn.sd.sain.sin_port));
+      FORMAT_NETADDR(pConn->conn.sd.sa, buf, sizeof(buf)), ntohs(INET_PORT(pConn->conn.sd.sa)));
 
 }
 
@@ -835,34 +832,34 @@ static int mgr_http_handle_conn(SRV_MGR_CONN_T *pConn) {
 void srvmgr_rtspclient_proc(void *pfuncarg) {
 
   SRV_MGR_CONN_T *pConn = (SRV_MGR_CONN_T *) pfuncarg;
-  char buf[SAFE_INET_NTOA_LEN_MAX];
+  char tmp[128];
 
   LOG(X_DEBUG("Handling RTSP connection from %s:%d"), 
-       net_inet_ntoa(pConn->conn.sd.sain.sin_addr, buf), ntohs(pConn->conn.sd.sain.sin_port));
+       FORMAT_NETADDR(pConn->conn.sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->conn.sd.sa)));
 
   mgr_rtsp_handle_conn(pConn);
 
   netio_closesocket(&pConn->conn.sd.netsocket);
 
   LOG(X_DEBUG("RTSP Connection ended %s:%d"), 
-      net_inet_ntoa(pConn->conn.sd.sain.sin_addr, buf), ntohs(pConn->conn.sd.sain.sin_port));
+      FORMAT_NETADDR(pConn->conn.sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->conn.sd.sa)));
 
 }
 
 void srvmgr_httpclient_proc(void *pfuncarg) {
 
   SRV_MGR_CONN_T *pConn = (SRV_MGR_CONN_T *) pfuncarg;
-  char buf[SAFE_INET_NTOA_LEN_MAX];
+  char tmp[128];
 
   LOG(X_DEBUG("Handling HTTP (proxy) connection from %s:%d"), 
-       net_inet_ntoa(pConn->conn.sd.sain.sin_addr, buf), ntohs(pConn->conn.sd.sain.sin_port));
+       FORMAT_NETADDR(pConn->conn.sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->conn.sd.sa)));
 
   mgr_http_handle_conn(pConn);
 
   netio_closesocket(&pConn->conn.sd.netsocket);
 
   LOG(X_DEBUG("HTTP (proxy) Connection ended %s:%d"), 
-      net_inet_ntoa(pConn->conn.sd.sain.sin_addr, buf), ntohs(pConn->conn.sd.sain.sin_port));
+      FORMAT_NETADDR(pConn->conn.sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->conn.sd.sa)));
 
 }
 
@@ -870,20 +867,17 @@ void srvmgr_httpclient_proc(void *pfuncarg) {
 void srvmgr_rtmpproxy_proc(void *pArg) {
   NETIO_SOCK_T netsocksrv;  
   int rc;
-  struct sockaddr_in sa;
-  char buf[SAFE_INET_NTOA_LEN_MAX];
+  struct sockaddr_storage sa;
+  char tmp[128];
   SRV_MGR_LISTENER_CFG_T *pSrvListen = (SRV_MGR_LISTENER_CFG_T *) pArg;
 
   pSrvListen->listenCfg.urlCapabilities = URL_CAP_RTMPLIVE;
 
-  memset(&sa, 0, sizeof(sa));
   memset(&netsocksrv, 0, sizeof(netsocksrv));
-  sa.sin_family = PF_INET;
-  sa.sin_addr = pSrvListen->listenCfg.sain.sin_addr;
-  sa.sin_port = pSrvListen->listenCfg.sain.sin_port;
+  memcpy(&sa, &pSrvListen->listenCfg.sa, sizeof(sa));
   netsocksrv.flags = pSrvListen->listenCfg.netflags;
 
-  if((NETIOSOCK_FD(netsocksrv) = net_listen(&sa, 10)) == INVALID_SOCKET) {
+  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, 10)) == INVALID_SOCKET) {
     return;
   }
 
@@ -891,7 +885,7 @@ void srvmgr_rtmpproxy_proc(void *pArg) {
 
   LOG(X_INFO("Listening for RTMP (proxy) requests on rtmp%s://%s:%d"),
      ((pSrvListen->listenCfg.netflags & NETIO_FLAG_SSL_TLS) ? "s" : ""),
-     net_inet_ntoa(sa.sin_addr, buf), ntohs(sa.sin_port));
+     FORMAT_NETADDR(sa, tmp, sizeof(tmp)), ntohs(INET_PORT(sa)));
 
   //
   // Service any client connections on the http listening port
@@ -900,7 +894,7 @@ void srvmgr_rtmpproxy_proc(void *pArg) {
 
   LOG(X_WARNING("RTMP%s %s:%d listener thread exiting with code: %d"),
                ((pSrvListen->listenCfg.netflags & NETIO_FLAG_SSL_TLS) ? "S" : ""),
-               net_inet_ntoa(sa.sin_addr, buf), ntohs(sa.sin_port), rc);
+               FORMAT_NETADDR(sa, tmp, sizeof(tmp)), ntohs(INET_PORT(sa)), rc);
 
   pSrvListen->listenCfg.pnetsockSrv = NULL;
   netio_closesocket(&netsocksrv);
@@ -910,20 +904,17 @@ void srvmgr_rtmpproxy_proc(void *pArg) {
 void srvmgr_rtspproxy_proc(void *pArg) {
   NETIO_SOCK_T netsocksrv;
   int rc;
-  struct sockaddr_in sa;
-  char buf[SAFE_INET_NTOA_LEN_MAX];
+  struct sockaddr_storage sa;
+  char tmp[128];
   SRV_MGR_LISTENER_CFG_T *pSrvListen = (SRV_MGR_LISTENER_CFG_T *) pArg;
 
   pSrvListen->listenCfg.urlCapabilities = URL_CAP_RTSPLIVE;
 
-  memset(&sa, 0, sizeof(sa));
   memset(&netsocksrv, 0, sizeof(netsocksrv));
-  sa.sin_family = PF_INET;
-  sa.sin_addr = pSrvListen->listenCfg.sain.sin_addr;
-  sa.sin_port = pSrvListen->listenCfg.sain.sin_port;
+  memcpy(&sa, &pSrvListen->listenCfg.sa, sizeof(sa));
   netsocksrv.flags = pSrvListen->listenCfg.netflags;
 
-  if((NETIOSOCK_FD(netsocksrv) = net_listen(&sa, 10)) == INVALID_SOCKET) {
+  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, 10)) == INVALID_SOCKET) {
     return;
   }
 
@@ -931,7 +922,7 @@ void srvmgr_rtspproxy_proc(void *pArg) {
 
   LOG(X_INFO("Listening for RTSP (proxy) requests on rtmp%s://%s:%d"),
      ((pSrvListen->listenCfg.netflags & NETIO_FLAG_SSL_TLS) ? "s" : ""),
-     net_inet_ntoa(sa.sin_addr, buf), ntohs(sa.sin_port));
+     FORMAT_NETADDR(sa, tmp, sizeof(tmp)), ntohs(INET_PORT(sa)));
 
   //
   // Service any client connections on the http listening port
@@ -940,7 +931,7 @@ void srvmgr_rtspproxy_proc(void *pArg) {
 
   LOG(X_WARNING("RTSP%s %s:%d listener thread exiting with code: %d"),
                ((pSrvListen->listenCfg.netflags & NETIO_FLAG_SSL_TLS) ? "S" : ""),
-               net_inet_ntoa(sa.sin_addr, buf), ntohs(sa.sin_port), rc);
+               FORMAT_NETADDR(sa, tmp, sizeof(tmp)), ntohs(INET_PORT(sa)), rc);
 
   pSrvListen->listenCfg.pnetsockSrv = NULL;
   netio_closesocket(&netsocksrv);
@@ -950,28 +941,25 @@ void srvmgr_rtspproxy_proc(void *pArg) {
 void srvmgr_httpproxy_proc(void *pArg) {
   NETIO_SOCK_T netsocksrv;
   int rc;
-  struct sockaddr_in sa;
-  char buf[SAFE_INET_NTOA_LEN_MAX];
+  struct sockaddr_storage sa;
+  char tmp[128];
   SRV_MGR_LISTENER_CFG_T *pSrvListen = (SRV_MGR_LISTENER_CFG_T *) pArg;
 
   pSrvListen->listenCfg.urlCapabilities = URL_CAP_FLVLIVE;
 
-  memset(&sa, 0, sizeof(sa));
   memset(&netsocksrv, 0, sizeof(netsocksrv));
-  sa.sin_family = PF_INET;
-  sa.sin_addr = pSrvListen->listenCfg.sain.sin_addr;
-  sa.sin_port = pSrvListen->listenCfg.sain.sin_port;
+  memcpy(&sa, &pSrvListen->listenCfg.sa, sizeof(sa));
   netsocksrv.flags = pSrvListen->listenCfg.netflags;
 
-  if((NETIOSOCK_FD(netsocksrv) = net_listen(&sa, 10)) == INVALID_SOCKET) {
+  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, 10)) == INVALID_SOCKET) {
     return;
   }
 
   pSrvListen->listenCfg.pnetsockSrv = &netsocksrv;
 
   LOG(X_INFO("Listening for HTTP (proxy) requests on "URL_HTTP_FMT_STR),
-      URL_HTTP_FMT_ARGS2(&pSrvListen->listenCfg, net_inet_ntoa(sa.sin_addr, buf)),
-     net_inet_ntoa(sa.sin_addr, buf), ntohs(sa.sin_port));
+      URL_HTTP_FMT_ARGS2(&pSrvListen->listenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))),
+            ntohs(INET_PORT(sa)));
 
   //
   // Service any client connections on the http listening port
@@ -980,7 +968,7 @@ void srvmgr_httpproxy_proc(void *pArg) {
 
   LOG(X_WARNING("HTTP%s (proxy) %s:%d listener thread exiting with code: %d"),
                ((pSrvListen->listenCfg.netflags & NETIO_FLAG_SSL_TLS) ? "S" : ""),
-               net_inet_ntoa(sa.sin_addr, buf), ntohs(sa.sin_port), rc);
+               FORMAT_NETADDR(sa, tmp, sizeof(tmp)), ntohs(INET_PORT(sa)), rc);
 
   pSrvListen->listenCfg.pnetsockSrv = NULL;
   netio_closesocket(&netsocksrv);

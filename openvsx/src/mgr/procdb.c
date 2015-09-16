@@ -36,7 +36,7 @@ int http_getpage(const char *addr, uint16_t port, const char *uri,
                  char *buf, unsigned int szbuf, unsigned int tmtms) {
   int rc = 0;
   NETIO_SOCK_T netsock;
-  struct sockaddr_in sa;
+  struct sockaddr_storage sa;
   HTTP_PARSE_CTXT_T hdrCtxt;
   HTTP_RESP_T httpResp;
   unsigned int contentLen = 0;
@@ -52,16 +52,21 @@ int http_getpage(const char *addr, uint16_t port, const char *uri,
     uri = "/";
   }
 
+
+  memset(&sa, 0, sizeof(sa));
+  if((rc = net_getaddress(addr, &sa)) < 0) {
+    return rc;
+  }
+  INET_PORT(sa) = htons(port);
+
+  //TODO: this will not work for ipv6 socket with current function prototype
   memset(&netsock, 0, sizeof(netsock));
   if((NETIOSOCK_FD(netsock) = net_opensocket(SOCK_STREAM, 0, 0, NULL)) == INVALID_SOCKET) {
     return -1;
   }
 
-  memset(&sa, 0, sizeof(sa));
-  sa.sin_addr.s_addr = inet_addr(addr);
-  sa.sin_port = htons(port);
-
-  if((rc = net_connect(NETIOSOCK_FD(netsock), &sa)) != 0) {
+  if((rc = net_connect(NETIOSOCK_FD(netsock), (const struct sockaddr *) &sa)) != 0) {
+    net_closesocket(&NETIOSOCK_FD(netsock));
     return rc;
   }
 
@@ -74,9 +79,9 @@ int http_getpage(const char *addr, uint16_t port, const char *uri,
   hdrCtxt.szbuf = sizeof(hdr);
   hdrCtxt.tmtms = tmtms;
 
-  VSX_DEBUG_MGR(LOG(X_DEBUG("MGR - Sending local status command: '%s' to: %d"), uri, htons(sa.sin_port)));
+  VSX_DEBUG_MGR(LOG(X_DEBUG("MGR - Sending local status command: '%s' to: %d"), uri, htons(INET_PORT(sa))));
 
-  if((httpcli_gethdrs(&hdrCtxt, &httpResp, &sa, uri, NULL, 0, 0, NULL, NULL)) < 0) {
+  if((httpcli_gethdrs(&hdrCtxt, &httpResp, (const struct sockaddr *) &sa, uri, NULL, 0, 0, NULL, NULL)) < 0) {
     return -1;
   }
 
@@ -115,8 +120,8 @@ int http_getpage(const char *addr, uint16_t port, const char *uri,
 
     gettimeofday(&tv1, NULL);
     if(tmtms > 0 && consumed < contentLen && TIME_TV_DIFF_MS(tv1, tv0) > tmtms) {
-      LOG(X_WARNING("HTTP %s:%d%s timeout %d ms exceeded"), net_inet_ntoa(sa.sin_addr, hdr), 
-           ntohs(sa.sin_port), uri, tmtms);
+      LOG(X_WARNING("HTTP %s:%d%s timeout %d ms exceeded"), FORMAT_NETADDR(sa, hdr, sizeof(hdr)), 
+           ntohs(INET_PORT(sa)), uri, tmtms);
       break;
       rc = -1;
     }

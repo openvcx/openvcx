@@ -29,8 +29,8 @@
 #include "stream_rtsptypes.h"
 
 typedef struct RTSP_HTTP_SESSION_COOKIE {
-  struct sockaddr_in            sain;
-  char                          sessionCookie[RTSP_HTTP_SESSION_COOKIE_MAX];
+  struct sockaddr_storage    sa;
+  char                       sessionCookie[RTSP_HTTP_SESSION_COOKIE_MAX];
 } RTSP_HTTP_SESSION_COOKIE_T;
 
 #define RTSP_HTTP_POST_BUFFER_SZ            1536
@@ -113,11 +113,11 @@ int rtspsrv_playSessionTrack(STREAM_RTSP_SESSIONS_T *pRtsp, const char sessionId
                              int trackId, int lock);
 
 RTSP_HTTP_SESSION_T *rtspsrv_newHttpSession(STREAM_RTSP_SESSIONS_T *pRtsp, const char *sessionCookie,
-                                               const struct sockaddr_in *psain);
+                                               const struct sockaddr *psa);
 int rtspsrv_deleteHttpSession(STREAM_RTSP_SESSIONS_T *pRtsp, const char *sessionCookie,
-                              const struct sockaddr_in *psain);
+                              const struct sockaddr *psa);
 RTSP_HTTP_SESSION_T *rtspsrv_findHttpSession(STREAM_RTSP_SESSIONS_T *pRtsp, const char *sessionCookie,
-                                                const struct sockaddr_in *psain, int lock);
+                                             const struct sockaddr *psa, int lock);
 void rtspsrv_initSession(const STREAM_RTSP_SESSIONS_T *pRtsp, RTSP_SESSION_T *pSes);
 
 

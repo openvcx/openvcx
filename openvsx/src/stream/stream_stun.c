@@ -29,7 +29,7 @@
 
 static int stun_create_binding_response(const STUN_MESSAGE_INTEGRITY_PARAM_T *pIntegrity, 
                                         const STUN_MSG_T *pBindingReq,
-                                        const struct sockaddr_in *psaSrc,
+                                        const struct sockaddr *psaSrc,
                                         unsigned char *pout, unsigned int lenout) {
   int rc = 0;
   STUN_MSG_T pktXmit;
@@ -49,10 +49,17 @@ static int stun_create_binding_response(const STUN_MESSAGE_INTEGRITY_PARAM_T *pI
   pAttr = &pktXmit.attribs[pktXmit.numAttribs];
   //memset(pAttr, 0, sizeof(STUN_ATTRIB_T));
   pAttr->type = STUN_ATTRIB_MAPPED_ADDRESS;
-  pAttr->length = 8;
-  STUN_ATTRIB_VALUE_MAPPED_ADDRESS(*pAttr).family = STUN_MAPPED_ADDRESS_FAMILY_IPV4;
-  STUN_ATTRIB_VALUE_MAPPED_ADDRESS(*pAttr).port = htons(psaSrc->sin_port);
-  STUN_ATTRIB_VALUE_MAPPED_ADDRESS(*pAttr).u_addr.ipv4.s_addr = psaSrc->sin_addr.s_addr;
+  STUN_ATTRIB_VALUE_MAPPED_ADDRESS(*pAttr).port = htons(PINET_PORT(psaSrc));
+  if(psaSrc->sa_family == AF_INET6) {
+    pAttr->length = 20;
+    STUN_ATTRIB_VALUE_MAPPED_ADDRESS(*pAttr).family = STUN_MAPPED_ADDRESS_FAMILY_IPV6;
+    memcpy(& STUN_ATTRIB_VALUE_MAPPED_ADDRESS(*pAttr).u_addr.ipv6[0], 
+           &((const struct sockaddr_in6 *) psaSrc)->sin6_addr.s6_addr[0], ADDR_LEN_IPV6);
+  } else {
+    pAttr->length = 8;
+    STUN_ATTRIB_VALUE_MAPPED_ADDRESS(*pAttr).family = STUN_MAPPED_ADDRESS_FAMILY_IPV4;
+    STUN_ATTRIB_VALUE_MAPPED_ADDRESS(*pAttr).u_addr.ipv4.s_addr = ((const struct sockaddr_in *) psaSrc)->sin_addr.s_addr;
+  }
   pktXmit.numAttribs++;
 
   //
@@ -79,14 +86,14 @@ static int stun_create_binding_response(const STUN_MESSAGE_INTEGRITY_PARAM_T *pI
 }
 
 static int stun_onrcv_binding_request(const STUN_MESSAGE_INTEGRITY_PARAM_T *pIntegrity, const STUN_MSG_T *pMsg, 
-                                      const struct sockaddr_in *psaSrc, const struct sockaddr_in *psaLocal, 
+                                      const struct sockaddr *psaSrc, const struct sockaddr *psaLocal, 
                                       NETIO_SOCK_T *pnetsock, int is_turn) {
   int rc = 0;
   int len = 0;
   char logbuf[128];
   unsigned char buf[STUN_MAX_SZ];
   unsigned char *pout = buf;
-  const struct sockaddr_in *psaReplyTo = psaSrc;
+  const struct sockaddr *psaReplyTo = psaSrc;
 
   PSTUNSOCK(pnetsock)->stunFlags |= STUN_SOCKET_FLAG_RCVD_BINDINGREQ;
   PSTUNSOCK(pnetsock)->tmLastRcv = timer_GetTime();
@@ -97,10 +104,11 @@ static int stun_onrcv_binding_request(const STUN_MESSAGE_INTEGRITY_PARAM_T *pInt
   // responding to TURN data / channel encapsulated messages
   //
   if(!(pnetsock->turn.use_turn_indication_in || pnetsock->turn.use_turn_indication_out) ||
-     !(pnetsock->turn.saTurnSrv.sin_addr.s_addr == PSTUNSOCK(pnetsock)->sainLastRcv.sin_addr.s_addr &&
-      pnetsock->turn.saTurnSrv.sin_port == PSTUNSOCK(pnetsock)->sainLastRcv.sin_port)) {
+      !INET_IS_SAMEADDR(pnetsock->turn.saTurnSrv, PSTUNSOCK(pnetsock)->sainLastRcv) ||
+       INET_PORT(pnetsock->turn.saTurnSrv) != INET_PORT(PSTUNSOCK(pnetsock)->sainLastRcv)) {
+
 //TOOD: if the packet comes from the TURN peer's relay port then we should still set replies to the new port and turn off turn_indication_out 
-    memcpy(&PSTUNSOCK(pnetsock)->sainLastRcv, psaSrc, sizeof(struct sockaddr_in));
+    memcpy(&PSTUNSOCK(pnetsock)->sainLastRcv, psaSrc, INET_SIZE(*psaSrc));
   }
 
   //
@@ -147,8 +155,8 @@ static int stun_onrcv_binding_request(const STUN_MESSAGE_INTEGRITY_PARAM_T *pInt
 }
 
 static int stun_onrcv_binding_response(STUN_CTXT_T *pStun, const STUN_MESSAGE_INTEGRITY_PARAM_T *pIntegrity, 
-                                       const STUN_MSG_T *pMsg, const struct sockaddr_in *psaSrc, 
-                                       const struct sockaddr_in *psaLocal, NETIO_SOCK_T *pnetsock, int is_turn) {
+                                       const STUN_MSG_T *pMsg, const struct sockaddr *psaSrc, 
+                                       const struct sockaddr *psaLocal, NETIO_SOCK_T *pnetsock, int is_turn) {
   int rc = 0;
   char logbuf[128];
 
@@ -209,19 +217,25 @@ static const char *stun_msglabel(int method) {
 }
 
 static char *stun_print_packet(const STUN_MSG_T *pStunPkt, unsigned int rawLen, 
-                               const struct sockaddr_in *psaSrc, const struct sockaddr_in *psaLocal, char *buf, 
+                               const struct sockaddr *psaSrc, const struct sockaddr *psaLocal, char *buf, 
                                unsigned int sz) {
 
   const STUN_ATTRIB_T *pAttr = NULL;
   //int pktClass = STUN_MSG_CLASS(pStunPkt->type);
   int pktMethod = STUN_MSG_METHOD(pStunPkt->type);
+  char tmp[128];
   char buftmp[2][128];
 
   if(pStunPkt->type == TURN_MSG_TYPE_DATA_REQUEST &&
     (pAttr = stun_findattrib(pStunPkt, TURN_ATTRIB_XOR_PEER_ADDRESS))) {
 
     snprintf(buftmp[1], sizeof(buftmp[1]), " (original-peer-address: %s:%d)", 
-             inet_ntoa(TURN_ATTRIB_VALUE_XOR_PEER_ADDRESS(*pAttr).u_addr.ipv4), 
+             //inet_ntoa(TURN_ATTRIB_VALUE_XOR_PEER_ADDRESS(*pAttr).u_addr.ipv4), 
+             inet_ntop(TURN_ATTRIB_VALUE_XOR_PEER_ADDRESS(*pAttr).family == STUN_MAPPED_ADDRESS_FAMILY_IPV6 ?
+                       AF_INET6 : AF_INET,
+                       TURN_ATTRIB_VALUE_XOR_PEER_ADDRESS(*pAttr).family == STUN_MAPPED_ADDRESS_FAMILY_IPV6 ?
+                       &TURN_ATTRIB_VALUE_XOR_PEER_ADDRESS(*pAttr).u_addr.ipv6[0] :
+                       &TURN_ATTRIB_VALUE_XOR_PEER_ADDRESS(*pAttr).u_addr.ipv4.s_addr, tmp, sizeof(tmp)),
              TURN_ATTRIB_VALUE_XOR_PEER_ADDRESS(*pAttr).port);
 
   } else {
@@ -238,7 +252,7 @@ static char *stun_print_packet(const STUN_MSG_T *pStunPkt, unsigned int rawLen,
 
 
 int stun_onrcv(STUN_CTXT_T *pCtxt, TURN_CTXT_T *pTurn, const unsigned char *pData, unsigned int len, 
-               const struct sockaddr_in *psaSrc, const struct sockaddr_in *psaLocal, 
+               const struct sockaddr *psaSrc, const struct sockaddr *psaLocal, 
                NETIO_SOCK_T *pnetsock, int is_turn) {
   int rc = 0;
   int ignored = 0;
@@ -247,7 +261,7 @@ int stun_onrcv(STUN_CTXT_T *pCtxt, TURN_CTXT_T *pTurn, const unsigned char *pDat
   char buf[512];
   STUN_MESSAGE_INTEGRITY_PARAM_T *pHmac = NULL;
   STUN_MSG_T pktRcv;
-  //const struct sockaddr_in *psaReplyTo = psaSrc;
+  //const struct sockaddr *psaReplyTo = psaSrc;
 
   if(!pCtxt || !pData || !psaSrc || !pnetsock) {
     return -1;
@@ -487,10 +501,11 @@ static int stun_create_binding_request(const STUN_MESSAGE_INTEGRITY_PARAM_T *pIn
 }
 
 static int stun_send_stun_binding_request(STUN_CTXT_T *pStun, TURN_CTXT_T *pTurn, NETIO_SOCK_T *pnetsock, 
-                                          const struct sockaddr_in *psadst, TIME_VAL tm) {
+                                          const struct sockaddr *psadst, TIME_VAL tm) {
   char logbuf[3][128];
+  char tmp[128];
   int len;
-  struct sockaddr_in saLocal;
+  struct sockaddr_storage saLocal;
   TIME_VAL tmnow;
   int do_send_direct = 1;
   int do_send_turn = 0;
@@ -548,7 +563,7 @@ static int stun_send_stun_binding_request(STUN_CTXT_T *pStun, TURN_CTXT_T *pTurn
      (!pnetsock->turn.turn_channel && !pnetsock->turn.have_permission)) {
 
     LOG(X_DEBUG("STUN request via TURN (%s:%d) to %s not yet sent because TURN relay is not active"),
-         inet_ntoa(pnetsock->turn.saTurnSrv.sin_addr), htons(pnetsock->turn.saTurnSrv.sin_port),
+         FORMAT_NETADDR(pnetsock->turn.saTurnSrv, tmp, sizeof(tmp)), htons(INET_PORT(pnetsock->turn.saTurnSrv)),
          stream_log_format_pkt_sock(logbuf[1], sizeof(logbuf[1]), pnetsock, psadst));
 
     PSTUNSOCK(pnetsock)->tmLastXmit = tmnow;
@@ -577,7 +592,7 @@ static int stun_send_stun_binding_request(STUN_CTXT_T *pStun, TURN_CTXT_T *pTurn
   if(do_send_direct || do_send_turn) {
     PSTUNSOCK(pnetsock)->stunFlags |= STUN_SOCKET_FLAG_SENT_BINDINGREQ;
     PSTUNSOCK(pnetsock)->tmLastXmit = tm;
-    memcpy(&PSTUNSOCK(pnetsock)->sainLastXmit, psadst, sizeof(struct sockaddr_in));
+    memcpy(&PSTUNSOCK(pnetsock)->sainLastXmit, psadst, INET_SIZE(*psadst));
 
     if(g_verbosity > VSX_VERBOSITY_NORMAL) {
       len = sizeof(saLocal);
@@ -591,7 +606,7 @@ static int stun_send_stun_binding_request(STUN_CTXT_T *pStun, TURN_CTXT_T *pTurn
         snprintf(logbuf[2], sizeof(logbuf[2]), "pass:'%s', ", pStun->integrity.pass);
       }
       LOG(X_DEBUG("Sent STUN Binding Request to %s, id:"STUN_ID_FMT_STR", length: %d, %s%s"), 
-           stream_log_format_pkt(logbuf[0], sizeof(logbuf[0]), &saLocal, psadst),
+           stream_log_format_pkt(logbuf[0], sizeof(logbuf[0]), (const struct sockaddr *) &saLocal, psadst),
            STUN_ID_FROMBUF_FMT_ARGS(pStun->bufLastReq), rc, logbuf[1], logbuf[2]);
     }
 
@@ -607,31 +622,31 @@ typedef struct STUN_SENDER_WRAP {
 
 static int check_stun_addr(STREAM_RTP_DEST_T *pDest, int is_rtcp) {
   int rc = 0;
-  char tmpbuf[64];
-  struct sockaddr_in *dest_addr = NULL;
-  struct sockaddr_in *dest_addr_peer = NULL;
-  struct sockaddr_in *dest_addr_peer_rtcp = NULL;
-  struct sockaddr_in *dest_addr_rtcppeer = NULL;
-  struct sockaddr_in *new_addr = NULL;
+  char tmpbuf[2][64];
+  struct sockaddr_storage *pdest_addr = NULL;
+  struct sockaddr_storage *pdest_addr_peer = NULL;
+  struct sockaddr_storage *pdest_addr_peer_rtcp = NULL;
+  struct sockaddr_storage *pdest_addr_rtcppeer = NULL;
+  struct sockaddr_storage *pnew_addr = NULL;
   NETIO_SOCK_T *pnetsock = NULL;
   STUN_SOCKET_T *pstunsock = NULL;
   //TIME_VAL tmnow = timer_GetTime();
 
   if(is_rtcp) {
     pnetsock = STREAM_RTCP_PNETIOSOCK(*pDest);
-    dest_addr = &pDest->saDstsRtcp;
-    dest_addr_rtcppeer  = &pDest->saDsts;
+    pdest_addr = &pDest->saDstsRtcp;
+    pdest_addr_rtcppeer  = &pDest->saDsts;
     if(pDest->pDestPeer) {
-      dest_addr_peer = &pDest->pDestPeer->saDstsRtcp;
-      dest_addr_peer_rtcp = &pDest->pDestPeer->saDsts;
+      pdest_addr_peer = &pDest->pDestPeer->saDstsRtcp;
+      pdest_addr_peer_rtcp = &pDest->pDestPeer->saDsts;
     }
   } else {
     pnetsock = STREAM_RTP_PNETIOSOCK(*pDest);
-    dest_addr = &pDest->saDsts;
-    dest_addr_rtcppeer = &pDest->saDstsRtcp;
+    pdest_addr = &pDest->saDsts;
+    pdest_addr_rtcppeer = &pDest->saDstsRtcp;
     if(pDest->pDestPeer) {
-      dest_addr_peer = &pDest->pDestPeer->saDsts;
-      dest_addr_peer_rtcp = &pDest->pDestPeer->saDstsRtcp;
+      pdest_addr_peer = &pDest->pDestPeer->saDsts;
+      pdest_addr_peer_rtcp = &pDest->pDestPeer->saDstsRtcp;
     }
   }
   pstunsock = PSTUNSOCK(pnetsock);
@@ -640,12 +655,12 @@ static int check_stun_addr(STREAM_RTP_DEST_T *pDest, int is_rtcp) {
     return 0;
   }
 
-  if(dest_addr_rtcppeer && dest_addr_rtcppeer->sin_port == 0) {
-    dest_addr_rtcppeer = NULL;
+  if(pdest_addr_rtcppeer && PINET_PORT(pdest_addr_rtcppeer) == 0) {
+    pdest_addr_rtcppeer = NULL;
   }
 
-  if(dest_addr_peer_rtcp && dest_addr_peer_rtcp->sin_port == 0) {
-    dest_addr_peer_rtcp = NULL;
+  if(pdest_addr_peer_rtcp && PINET_PORT(pdest_addr_peer_rtcp) == 0) {
+    pdest_addr_peer_rtcp = NULL;
   }
 
   //
@@ -655,42 +670,44 @@ static int check_stun_addr(STREAM_RTP_DEST_T *pDest, int is_rtcp) {
   if(!(pstunsock->stunFlags & STUN_SOCKET_FLAG_UPDATED_DESTADDR) &&
      !(pstunsock->stunFlags & STUN_SOCKET_FLAG_RCVD_BINDINGRESP) &&
      (pstunsock->stunFlags & STUN_SOCKET_FLAG_SENT_BINDINGRESP) &&
-      IS_ADDR_VALID(pstunsock->sainLastRcv.sin_addr) &&
-      (dest_addr->sin_addr.s_addr != pstunsock->sainLastRcv.sin_addr.s_addr ||
-       dest_addr->sin_port != pstunsock->sainLastRcv.sin_port)) {
+      INET_ADDR_VALID(pstunsock->sainLastRcv) &&
+      (!INET_IS_SAMEADDR(*pdest_addr, pstunsock->sainLastRcv) ||
+        PINET_PORT(pdest_addr) != INET_PORT(pstunsock->sainLastRcv))) {
 
-    new_addr = &pstunsock->sainLastRcv;
-    snprintf(tmpbuf, sizeof(tmpbuf), "%s:%d", inet_ntoa(dest_addr->sin_addr), htons(dest_addr->sin_port));
+    pnew_addr = &pstunsock->sainLastRcv;
+    snprintf(tmpbuf[0], sizeof(tmpbuf[0]), "%s:%d", FORMAT_NETADDR(*pdest_addr, tmpbuf[1], sizeof(tmpbuf[1])),
+             htons(PINET_PORT(pdest_addr)));
     LOG(X_WARNING("STUN changing %s output destination from %s to %s:%d"),
-         is_rtcp ? "RTCP" : "RTP", tmpbuf, inet_ntoa(new_addr->sin_addr), htons(new_addr->sin_port));
+         is_rtcp ? "RTCP" : "RTP", tmpbuf[0], FORMAT_NETADDR(pnew_addr, tmpbuf[1], sizeof(tmpbuf[1])), 
+          htons(PINET_PORT(pnew_addr)));
 
     //
     // If we're using rtp-mux then we should update the peer audio/video address here
     //
-    if(dest_addr_peer && dest_addr->sin_port == dest_addr_peer->sin_port) {
+    if(pdest_addr_peer && PINET_PORT(pdest_addr) == PINET_PORT(pdest_addr_peer)) {
       LOG(X_DEBUG("STUN changing peer %s output destination"), is_rtcp ? "RTCP" : "RTP");
 
       //
       // If we're using rtp-mux and rtcp-mux then we should update the peer complementary rtp/rtcp address also
       //
-      if(dest_addr_peer_rtcp && dest_addr_peer->sin_port == dest_addr_peer_rtcp->sin_port) {
+      if(pdest_addr_peer_rtcp && PINET_PORT(pdest_addr_peer) == PINET_PORT(pdest_addr_peer_rtcp)) {
         LOG(X_DEBUG("STUN changing peer %s output destination"), !is_rtcp ? "RTCP" : "RTP");
-        memcpy(dest_addr_peer_rtcp, new_addr, sizeof(struct sockaddr_in));
+        memcpy(pdest_addr_peer_rtcp, pnew_addr, INET_SIZE(*pnew_addr));
       }
 
-      memcpy(dest_addr_peer, new_addr, sizeof(struct sockaddr_in));
+      memcpy(pdest_addr_peer, pnew_addr, INET_SIZE(*pnew_addr));
 
     }
 
     //
     // If we're using rtcp-mux then we should update the complementary rtp/rtcp address also
     //
-    if(dest_addr_rtcppeer && dest_addr->sin_port == dest_addr_rtcppeer->sin_port) {
+    if(pdest_addr_rtcppeer && PINET_PORT(pdest_addr) == PINET_PORT(pdest_addr_rtcppeer)) {
       LOG(X_DEBUG("STUN changing %s output destination"), !is_rtcp ? "RTCP" : "RTP");
-      memcpy(dest_addr_rtcppeer, new_addr, sizeof(struct sockaddr_in));
+      memcpy(pdest_addr_rtcppeer, pnew_addr, INET_SIZE(*pnew_addr));
     }
 
-    memcpy(dest_addr, new_addr, sizeof(struct sockaddr_in));
+    memcpy(pdest_addr, pnew_addr, INET_SIZE(*pnew_addr));
 
     pstunsock->stunFlags |= STUN_SOCKET_FLAG_UPDATED_DESTADDR;
 
@@ -701,10 +718,11 @@ static int check_stun_addr(STREAM_RTP_DEST_T *pDest, int is_rtcp) {
 }
 
 
-static int is_dest_duplicate(const struct sockaddr_in sadests[], unsigned int sz, const struct sockaddr_in *psadest) {
+static int is_dest_duplicate(const struct sockaddr_storage sadests[], unsigned int sz, 
+                             const struct sockaddr_storage *psadest) {
   unsigned int idx;
   for(idx = 0; idx < sz; idx++) {
-    if(!memcmp(&sadests[idx], psadest, sizeof(sadests[0]))) {
+    if(!memcmp(&sadests[idx], psadest, INET_SIZE(sadests[idx]))) {
       return 1; 
     }
   }
@@ -742,7 +760,7 @@ void stream_stun_sender_proc(void *pArg) {
   TIME_VAL tm;
   unsigned int minNewPingIntervalMs;
   unsigned int minActivePingIntervalMs;
-  struct sockaddr_in sadests[IXCODE_VIDEO_OUT_MAX * 2 * 2];
+  struct sockaddr_storage sadests[IXCODE_VIDEO_OUT_MAX * 2 * 2];
 
   memcpy(&wrap, pArg, sizeof(wrap));
   pRtp = wrap.pRtp;
@@ -801,7 +819,7 @@ void stream_stun_sender_proc(void *pArg) {
               //}
 
               if(stun_send_stun_binding_request(&pDest->stun, &pDest->turns[0], pnetsock, 
-                                                       &pDest->saDsts, tm) < 0) {
+                                                (const struct sockaddr *) &pDest->saDsts, tm) < 0) {
                 pthread_mutex_unlock(pmtx);
                 break;
               }
@@ -813,7 +831,7 @@ void stream_stun_sender_proc(void *pArg) {
             numDests++;
           }
 
-          if(pDest->sendrtcpsr && pDest->saDstsRtcp.sin_port != pDest->saDsts.sin_port &&
+          if(pDest->sendrtcpsr && INET_PORT(pDest->saDstsRtcp) != INET_PORT(pDest->saDsts) &&
             !is_dest_duplicate(sadests, numSent, &pDest->saDstsRtcp)) {
 
             pnetsock = STREAM_RTCP_PNETIOSOCK(*pDest);
@@ -830,7 +848,8 @@ void stream_stun_sender_proc(void *pArg) {
                 check_stun_addr(pDest, 1);
               //}
 
-              if(stun_send_stun_binding_request(&pDest->stun, &pDest->turns[1], pnetsock, &pDest->saDstsRtcp, tm) < 0) {
+              if(stun_send_stun_binding_request(&pDest->stun, &pDest->turns[1], pnetsock, 
+                                                (const struct sockaddr *) &pDest->saDstsRtcp, tm) < 0) {
                 pthread_mutex_unlock(pmtx);
                 break;
               }

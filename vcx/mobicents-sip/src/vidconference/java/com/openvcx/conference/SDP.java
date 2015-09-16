@@ -68,7 +68,8 @@ public class SDP implements Cloneable {
     private DeviceType m_deviceType;
     private String m_rawDocument;
 
-    private static final String TRANSPORT_IP_DEFAULT = "IN IP4";
+    private static final String TRANSPORT_TYPE_IPV4 = "IN IP4";
+    private static final String TRANSPORT_TYPE_IPV6 = "IN IP6";
     private static final String NEWLINE = "\r\n";
 
     private static final String TRANSPORT_RTP_AVP = "RTP/AVP";
@@ -76,6 +77,8 @@ public class SDP implements Cloneable {
     private static final String TRANSPORT_RTP_SAVP = "RTP/SAVP";
     private static final String TRANSPORT_RTP_SAVPF = "RTP/SAVPF";
 
+    public static final String STRINADDR_ANY_IPV4    = "0.0.0.0";
+    public static final String STRINADDR_ANY_IPV6    = "0:0:0:0:0:0:0:0";
 
     /**
      *
@@ -1278,13 +1281,44 @@ public class SDP implements Cloneable {
             setPort(port);
         }
 
-        public ICEAddress(String strAddress) throws UnknownHostException {
-            String [] arr = strAddress.split(":");
-            setAddress(InetAddress.getByName(arr[0]));
-            if(arr.length > 0) {
-                 setPort(Integer.valueOf(arr[1]));
+        /**
+         * @param strIpAddressAndPort
+         *      ipv4: x.x.x.x, x.x.x.x:port
+         *      ipv6: y:y:y:y:y:y, [y:y;y:y:y:y]:port
+         */
+        public ICEAddress(String strIpAddressAndPort) throws UnknownHostException {
+            String ip = null;
+            String port = null;
+
+            if(strIpAddressAndPort.length() > 0 && strIpAddressAndPort.charAt(0) == '[') {
+                strIpAddressAndPort = strIpAddressAndPort.substring(1);
+
+                String [] arr = strIpAddressAndPort.split("]");
+                ip = arr[0];
+                if(arr.length > 1) {
+                    port = arr[1];
+                    if(port.charAt(0) == ':') {
+                        port = port.substring(1);
+                    }
+                }
+            } else {
+                String [] arr = strIpAddressAndPort.split(":");
+                ip = arr[0];
+                if(arr.length == 2) {
+                    // [ipv4]:[port] 
+                    port = arr[1];
+                } else if(arr.length > 2) {
+                    // [ipv6] without port
+                    ip = strIpAddressAndPort;
+                }
+            }
+
+            setAddress(InetAddress.getByName(ip));
+            if(port != null) {
+                setPort(Integer.valueOf(port));
             }
         }
+
 
         /**
          * Retrieves the IP address associated with this instance
@@ -1338,7 +1372,7 @@ public class SDP implements Cloneable {
          */
         public boolean isValid() throws UnknownHostException {
             if(m_port <= 0 || null == m_address || 
-               m_address.hashCode() == InetAddress.getByName("0.0.0.0").hashCode()) {
+               (isIPv4() && m_address.hashCode() == InetAddress.getByName(STRINADDR_ANY_IPV4).hashCode())) {
                 return false;
             } else {
                 return true;
@@ -3346,11 +3380,25 @@ public class SDP implements Cloneable {
             return address; 
         } else {  
             try {
-                return InetAddress.getByName("0.0.0.0");
+                return InetAddress.getByName(STRINADDR_ANY_IPV4);
             } catch(UnknownHostException e) {
                 return null;
             }
         }
+    }
+
+    private static String getTransportIpType(String ipAddress) {
+        String transportIpType = TRANSPORT_TYPE_IPV4;
+        try {
+            ICEAddress address = new ICEAddress();
+            address.setAddress(InetAddress.getByName(ipAddress));
+            if(address.isIPv6()) {
+                transportIpType = TRANSPORT_TYPE_IPV6;
+            }
+        } catch(UnknownHostException e) {
+        }
+
+        return transportIpType;
     }
 
     /**
@@ -3361,7 +3409,7 @@ public class SDP implements Cloneable {
         if(null == m_audio) {
             m_audio = new Media(MediaType.MEDIA_TYPE_AUDIO);
         }
-        m_audio.parseConnect(TRANSPORT_IP_DEFAULT + " " + ipAddress);
+        m_audio.parseConnect(getTransportIpType(ipAddress) + " " + ipAddress);
     }
 
     /**
@@ -3372,7 +3420,7 @@ public class SDP implements Cloneable {
         if(null == m_video) {
             m_video = new Media(MediaType.MEDIA_TYPE_VIDEO);
         }
-        m_video.parseConnect(TRANSPORT_IP_DEFAULT + " " + ipAddress);
+        m_video.parseConnect(getTransportIpType(ipAddress) + " " + ipAddress);
     }
 
     /**
@@ -3740,9 +3788,14 @@ public class SDP implements Cloneable {
             System.out.println(sdp.serialize());
 
             }
+
+           String addrStr = "0:0:0:0:0:0:0:0";
+           SDP.ICEAddress iceA = new SDP.ICEAddress(addrStr);
+           iceA.setAddress(InetAddress.getByName(addrStr));
 */
 
         } catch(Exception e) {
+            System.out.println(e);
             e.printStackTrace();
         }
 

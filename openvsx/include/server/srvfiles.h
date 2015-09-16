@@ -78,7 +78,7 @@ const SRV_LISTENER_CFG_T *srv_ctrl_findlistener(const SRV_LISTENER_CFG_T *arrCfg
 
 #define URL_HTTP_FMT_PROTO_HOST(sockflags, location) ((sockflags) & NETIO_FLAG_SSL_TLS) ? "s" : "", (location)
 #define URL_HTTP_FMT_ARGS2(p, location)              URL_HTTP_FMT_PROTO_HOST( (p)->netflags, (location)), \
-                                                     ntohs((p)->sain.sin_port)
+                                                     ntohs(INET_PORT((p)->sa))
 #define URL_HTTP_FMT_ARGS(p)                         URL_HTTP_FMT_ARGS2(p, net_getlocalhostname())   
                                    
 

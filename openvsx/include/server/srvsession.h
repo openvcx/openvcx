@@ -50,7 +50,7 @@ typedef struct SESSION_CACHE {
   SESSION_DESCR_T         *plist;
 } SESSION_CACHE_T;
 
-SESSION_DESCR_T *session_add(SESSION_CACHE_T *pCache, struct sockaddr_in *pSocakAddr);
+SESSION_DESCR_T *session_add(SESSION_CACHE_T *pCache, struct sockaddr *pSocakAddr);
 SESSION_DESCR_T *session_find(const SESSION_CACHE_T *pCache, const char *cookie);
 
 

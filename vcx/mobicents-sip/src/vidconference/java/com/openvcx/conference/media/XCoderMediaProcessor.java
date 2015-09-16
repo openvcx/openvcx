@@ -278,21 +278,30 @@ public class XCoderMediaProcessor implements IMediaProcessor, ISDPNaming {
         //
 
         SDP.MediaCandidate candidate;
+
         if(null != (candidate = sdpLocal.getAudioCandidate())) {
+
+            String sdpConnectIpAddress = SDP.STRINADDR_ANY_IPV4;
 
             if(null != sdpRemote) {
                 bIsRtcpMux = sdpRemote.getAudioMedia().isRtcpMux();
                 bIsAVPF = sdpRemote.getAudioMedia().isMediaAVPF();
+
+                if(null != sdpRemote.getAudioMedia() && sdpRemote.getAudioMedia().getTarget().isIPv6()) {
+                    sdpConnectIpAddress = SDP.STRINADDR_ANY_IPV6;
+                }
+
             } else {
                 bIsRtcpMux = sdpLocal.getAudioMedia().isRtcpMux();
                 bIsAVPF = sdpLocal.getAudioMedia().isMediaAVPF();
             }
 
+
             Codec codec = candidate.getCodec().clone();
             codec.setFmtp(null);
             //codec.setChannelCount(1); // Assume always mono, even w/ Opus
             sdpListener.setAudioPort(sdpLocal.getAudioMedia().getTarget().getPort());
-            sdpListener.setAudioAddress("0.0.0.0");
+            sdpListener.setAudioAddress(sdpConnectIpAddress);
             sdpListener.addAudioCandidate(codec);
 
             //
@@ -330,9 +339,16 @@ public class XCoderMediaProcessor implements IMediaProcessor, ISDPNaming {
 
         if(null != (candidate = sdpLocal.getVideoCandidate())) {
 
+            String sdpConnectIpAddress = SDP.STRINADDR_ANY_IPV4;
+
             if(null != sdpRemote) {
                 bIsRtcpMux = sdpRemote.getVideoMedia().isRtcpMux();
                 bIsAVPF = sdpRemote.getVideoMedia().isMediaAVPF();
+
+                if(null != sdpRemote.getAudioMedia() && sdpRemote.getAudioMedia().getTarget().isIPv6()) {
+                    sdpConnectIpAddress = SDP.STRINADDR_ANY_IPV6;
+                }
+
             } else {
                 bIsRtcpMux = sdpLocal.getVideoMedia().isRtcpMux();
                 bIsAVPF = sdpLocal.getVideoMedia().isMediaAVPF();
@@ -341,7 +357,8 @@ public class XCoderMediaProcessor implements IMediaProcessor, ISDPNaming {
             Codec codec = candidate.getCodec().clone();
             codec.setFmtp(null);
             sdpListener.setVideoPort(sdpLocal.getVideoMedia().getTarget().getPort());
-            sdpListener.setVideoAddress("0.0.0.0");
+
+            sdpListener.setVideoAddress(sdpConnectIpAddress);
             sdpListener.addVideoCandidate(codec);
             sdpListener.getVideoMedia().setRtcpMux(bIsRtcpMux);
             sdpListener.getVideoMedia().setTransportType(SDP.createTransportType(false, bIsAVPF));
@@ -746,7 +763,8 @@ public class XCoderMediaProcessor implements IMediaProcessor, ISDPNaming {
     }
 
     private String getPipStartUrl(SDP sdpLocal, SDP sdpRemote, String sdpLocalPath, 
-                                  Conference conference, IUser user, String idUpdate, TURNRelay turnRelay) throws IOException {
+                                  Conference conference, IUser user, String idUpdate, TURNRelay turnRelay) 
+                                      throws IOException {
         SDP.MediaCandidate candidate;
         boolean bHaveXcodeConfig = false;
         StringBuffer urlString = null;

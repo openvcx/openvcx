@@ -52,6 +52,7 @@ static int sendRtcpSr(STREAM_XMIT_NODE_T *pStream, unsigned int idxDest) {
   OUTFMT_FRAME_DATA_T frameData;
   TIME_VAL tvNow = timer_GetTime();
   unsigned char buf[256];
+  char tmp[128];
   int len = 0;
   STREAM_RTP_DEST_T *pdest = &pStream->pRtpMulti->pdests[idxDest];
 
@@ -73,7 +74,7 @@ static int sendRtcpSr(STREAM_XMIT_NODE_T *pStream, unsigned int idxDest) {
 
   VSX_DEBUG_RTCP( LOG(X_DEBUG("RTCP - sendto rtcp sr pt:%d [dest:%d] %s:%d len:%d pkt:%u,%u ts:%u"), 
                (pStream->pRtpMulti->pRtp->pt & RTP_PT_MASK),idxDest, 
-               inet_ntoa(pdest->saDstsRtcp.sin_addr), ntohs(pdest->saDstsRtcp.sin_port), len, 
+               FORMAT_NETADDR(pdest->saDstsRtcp, tmp, sizeof(tmp)), ntohs(INET_PORT(pdest->saDstsRtcp)), len, 
                htonl(pdest->rtcp.sr.pktcnt), htonl(pdest->rtcp.sr.octetcnt),  htonl(pdest->rtcp.sr.rtpts)));
 
   pdest->rtcp.tmLastSrSent = tvNow;
@@ -97,7 +98,7 @@ static int sendRtcpSr(STREAM_XMIT_NODE_T *pStream, unsigned int idxDest) {
       //
       // In the case of RTSP interleaved, the port is actually the chnanel id
       //
-      frameData.channelId = pdest->saDstsRtcp.sin_port;
+      frameData.channelId = INET_PORT(pdest->saDstsRtcp);
       liveq_addpkt(pStream->pLiveQ2, *pdest->outCb.pliveQIdx, &frameData);
     }
     pthread_mutex_unlock(&pStream->pRtpMulti->mtx);
@@ -260,7 +261,7 @@ static int sendPktUdpRtp(STREAM_XMIT_NODE_T *pStream, unsigned int idxDest,
       //
       // In the case of RTSP interleaved, the port is actually the channel id
       //
-      frameData.channelId = pStream->pRtpMulti->pdests[idxDest].saDsts.sin_port;
+      frameData.channelId = INET_PORT(pStream->pRtpMulti->pdests[idxDest].saDsts);
       liveq_addpkt(pStream->pLiveQ2, 
                    *pStream->pRtpMulti->pdests[idxDest].outCb.pliveQIdx,
                    &frameData);
@@ -306,10 +307,9 @@ static int sendPktUdpRtp(STREAM_XMIT_NODE_T *pStream, unsigned int idxDest,
   }
   if(dupped) {
     fprintf(stderr, "DUP RTP pt:%d, seq:%u, ts:%u, loss:%.2f%%\n", pStream->pRtpMulti->pRtp->pt&0x7f, htons(pStream->pRtpMulti->pRtp->sequence_num), htonl(pStream->pRtpMulti->pRtp->timeStamp), pkt_dup_percent *100.0f); 
-     sendto(STREAM_RTP_FD(pStream->pRtpMulti->pdests[idxDest]),   
-                    (void *) pData, len, 0,
-                    (struct sockaddr *) &pStream->pRtpMulti->pdests[idxDest].saDsts,
-                    sizeof(pStream->pRtpMulti->pdests[idxDest].saDsts));
+     netio_sendto(STREAM_RTP_PNETIOSOCK(pStream->pRtpMulti->pdests[idxDest]),   
+                  (struct sockaddr *) &pStream->pRtpMulti->pdests[idxDest].saDsts,
+                  (void *) pData, len, NULL);
   }
 #endif // OO_RTP
 

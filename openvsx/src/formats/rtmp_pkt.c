@@ -667,7 +667,7 @@ int rtmp_send_chunkdata(RTMP_CTXT_T *pRtmp, const uint8_t rtmpStreamIdx,
     //fprintf(stderr, "rtmp data chunk hdr len:%d\n", pRtmp->out.idx);
     //avc_dumpHex(stderr, pRtmp->out.buf, pRtmp->out.idx, 1);
 
-    if((rc = netio_send(&pRtmp->pSd->netsocket, &pRtmp->pSd->sain, pRtmp->out.buf,
+    if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, pRtmp->out.buf,
                         pRtmp->out.idx)) < 0) {
       return -1;
     }
@@ -685,7 +685,8 @@ int rtmp_send_chunkdata(RTMP_CTXT_T *pRtmp, const uint8_t rtmpStreamIdx,
     //fprintf(stderr, "rtmp data chunk [%d] len:%d chunkSz:%d\n", idxData, lenXmit, pRtmp->chunkSz);
     //avc_dumpHex(stderr, &pData[idxData], lenXmit, 1);
 
-    if((rc = netio_send(&pRtmp->pSd->netsocket, &pRtmp->pSd->sain, &pData[idxData], lenXmit)) < 0) {
+    if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, 
+                        &pData[idxData], lenXmit)) < 0) {
       return -1;
     }
 

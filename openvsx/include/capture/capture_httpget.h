@@ -57,7 +57,7 @@ typedef struct CONNECT_RETRY_CTXT {
   void                      *pConnectedActionArg;
   HTTPCLI_AUTH_CTXT_T       *pAuthCliCtxt;
   NETIO_SOCK_T              *pnetsock;
-  struct sockaddr_in        *psa;
+  const struct sockaddr     *psa;
   uint64_t                  *pByteCtr;
   const char                *connectDescr;
   const int                 *pconnectretrycntminone;
@@ -72,7 +72,7 @@ int connect_with_retry(CONNECT_RETRY_CTXT_T *pRetryCtxt);
 
 unsigned char *http_read_net(CAP_HTTP_COMMON_T *pCommon,
                              NETIO_SOCK_T *pnetsock,
-                             struct sockaddr_in *psa,
+                             const struct sockaddr *psa,
                              unsigned int bytesToRead,
                              unsigned char *bufout,  
                              unsigned int szbuf,
@@ -95,7 +95,7 @@ int http_gethttplive(CAP_ASYNC_DESCR_T *pCfg,
 
 int http_recvloop(CAP_ASYNC_DESCR_T *pCfg,
                   NETIO_SOCK_T *pnetsock,
-                  struct sockaddr_in *psa,
+                  const struct sockaddr *psa,
                   CAPTURE_CBDATA_T *pStreamsOut,
                   CAPTURE_STREAM_T *pStream,
                   unsigned int offset,
@@ -128,7 +128,7 @@ int capture_httpget(CAP_ASYNC_DESCR_T *pCapCfg);
  *  hostbuf  - Optional output buffer to store hostname / IP Address 
  *  dfltPort - Default port if not given in input URL
  */
-int capture_getdestFromStr(const char *str, struct sockaddr_in *psaIn,
+int capture_getdestFromStr(const char *str, struct sockaddr_storage *psa,
                            const char **ppuri, char *hostbuf, uint16_t dfltPort);
 
 

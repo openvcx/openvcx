@@ -80,7 +80,7 @@ int stream_stats_destroy(STREAM_STATS_T **ppStats, pthread_mutex_t *pmtx) {
   return 0;
 }
 
-static STREAM_STATS_T *stream_stats_create(const struct sockaddr_in *psaRemote, 
+static STREAM_STATS_T *stream_stats_create(const struct sockaddr *psaRemote, 
                                            unsigned int numWr, unsigned int numRd,
                                            int rangeMs1, int rangeMs2) {
   STREAM_STATS_T *pStats = NULL;
@@ -125,7 +125,7 @@ static STREAM_STATS_T *stream_stats_create(const struct sockaddr_in *psaRemote,
   }
 
   if(psaRemote) {
-    memcpy(&pStats->saRemote, psaRemote, sizeof(pStats->saRemote));
+    memcpy(&pStats->saRemote, psaRemote, INET_SIZE(psaRemote));
   }
   pStats->numWr = numWr;
   pStats->numRd  = numRd;
@@ -487,13 +487,17 @@ static int stream_monitor_attach(STREAM_STATS_MONITOR_T *pMonitor, STREAM_STATS_
   return rc;
 }
 
+//
+// TODO: ipv6 support
+//
 STREAM_STATS_T *stream_monitor_createattach(STREAM_STATS_MONITOR_T *pMonitor, 
-                                            const struct sockaddr_in *psaRemote,
+                                            const struct sockaddr *psaRemote,
                                             STREAM_METHOD_T method,
                                             STREAM_MONITOR_ABR_TYPE_T abrEnabled) {
   unsigned int numWr = 1;
   unsigned int numRd = 1;
   STREAM_STATS_T *pStats;
+  char tmp[128];
 
   if(!pMonitor || !pMonitor->active || !psaRemote) {
     return NULL;
@@ -509,7 +513,7 @@ STREAM_STATS_T *stream_monitor_createattach(STREAM_STATS_MONITOR_T *pMonitor,
 
   if(abrEnabled == STREAM_MONITOR_ABR_ENABLED) {
     LOG(X_DEBUG("ABR is enabled for output -> %s://%s:%d"), 
-        devtype_methodstr(method), inet_ntoa(psaRemote->sin_addr), htons(psaRemote->sin_port));
+        devtype_methodstr(method), FORMAT_NETADDR(*psaRemote, tmp, sizeof(tmp)), htons(PINET_PORT(psaRemote)));
   }
 
   if(method == STREAM_METHOD_UDP) {
@@ -757,6 +761,7 @@ static int stream_stats_dump(char *buf, unsigned int szbuf, STREAM_STATS_T *pSta
   float fracLost, f;
   unsigned int idxbuf = 0;
   STREAM_RTP_INIT_T *pRtpInit;
+  char tmps[2][128];
   char buftmp[2048];
 
   if(pStats->tvstart.tv_sec > 0) {
@@ -769,10 +774,10 @@ static int stream_stats_dump(char *buf, unsigned int szbuf, STREAM_STATS_T *pSta
 
   if((urlidx && (rc = snprintf(&buf[idxbuf], szbuf - idxbuf, "&method%d=%s&duration%d=%s&host%d=%s:%d", 
                  urlidx, devtype_methodstr(pStats->method), urlidx, buftmp, urlidx,
-                 inet_ntoa(pStats->saRemote.sin_addr), htons(pStats->saRemote.sin_port))) > 0) ||
+                 FORMAT_NETADDR(pStats->saRemote, tmps[0], sizeof(tmps[0])), htons(INET_PORT(pStats->saRemote)))) > 0) ||
      (!urlidx && (rc = snprintf(&buf[idxbuf], szbuf - idxbuf, "%7s %s -> %15s:%d", 
        devtype_methodstr(pStats->method), buftmp, 
-       inet_ntoa(pStats->saRemote.sin_addr), htons(pStats->saRemote.sin_port))) > 0)) {
+       FORMAT_NETADDR(pStats->saRemote, tmps[1], sizeof(tmps[1])), htons(INET_PORT(pStats->saRemote)))) > 0)) {
     idxbuf += rc;
   }
 

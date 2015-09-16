@@ -28,8 +28,8 @@
 
 #define RTCP_SDES_TXT   VSX_APPNAME
 
-#define RTP_SET_IP_LEN(pRtp) (pRtp)->packet.pip->ip_len =  \
-                        htons((unsigned short) (pRtp)->payloadLen + 20 + (((pRtp)->packet.pip->ip_hl) * 4))
+#define RTP_SET_IP4_LEN(pRtp) (pRtp)->packet.u_ip.pip4->ip_len =  \
+                        htons((unsigned short) (pRtp)->payloadLen + 20 + (((pRtp)->packet.u_ip.pip4->ip_hl) * 4))
 
 #define RTP_SET_UDP_LEN(pRtp) (pRtp)->packet.pudp->len =  \
                         htons((unsigned short) (pRtp)->payloadLen + 20)
@@ -166,7 +166,7 @@ int stream_rtp_init(STREAM_RTP_MULTI_T *pRtp, const STREAM_RTP_INIT_T *pInit, in
       return -1;
     }
 
-    if((rc = pktgen_InitUdpPacket(&pRtp->packet,
+    if((rc = pktgen_InitUdpPacketIpv4(&pRtp->packet,
                                   pktgen_GetLocalMac(),
                                   (const unsigned char *) "\0\0\0\0\0\0",
                                   pRtp->init.raw.haveVlan,
@@ -182,10 +182,16 @@ int stream_rtp_init(STREAM_RTP_MULTI_T *pRtp, const STREAM_RTP_INIT_T *pInit, in
 
   } else {
 
+#if defined(VSX_HAVE_IPV6) && (VSX_HAVE_IPV > 0) 
+  #define IP_HDR_SIZE IPV4_HDR_SIZE
+#else
+  #define IP_HDR_SIZE IPV6_HDR_SIZE
+#endif // (VSX_HAVE_IPV6) 
+
     memset(&pRtp->packet, 0, sizeof(pRtp->packet));
     pRtp->packet.peth = (struct ether_header *) &pRtp->packet.data;
-    pRtp->packet.pip =  (struct ip *) ((unsigned char *)pRtp->packet.peth  + 14);
-    pRtp->packet.pudp = (struct udphdr *) ((unsigned char *)pRtp->packet.pip  + 20);
+    pRtp->packet.u_ip.pip4 =  (struct ip *) ((unsigned char *)pRtp->packet.peth  + 14);
+    pRtp->packet.pudp = (struct udphdr *) ((unsigned char *)pRtp->packet.u_ip.pip4  + IP_HDR_SIZE);
 
   }
 
@@ -216,36 +222,47 @@ int stream_rtp_init(STREAM_RTP_MULTI_T *pRtp, const STREAM_RTP_INIT_T *pInit, in
   return rc;
 }
 
-static in_addr_t get_dest_ip(const STREAM_DEST_CFG_T *pDestCfg) {
-  in_addr_t dstIp = INADDR_NONE;
+static int get_dest_addr(const STREAM_DEST_CFG_T *pDestCfg, struct sockaddr_storage *pDst) {
+  int rc = -1;
 
-  if(pDestCfg->dstPort > 0) {
+  if(pDst &&  pDestCfg->dstPort > 0) {
+
+    memset(pDst, 0, sizeof(struct sockaddr_storage));
+
     if(pDestCfg->haveDstAddr) {
-      dstIp = pDestCfg->u.dstAddr.s_addr;
+
+      memcpy(pDst, &pDestCfg->u.dstAddr, sizeof(struct sockaddr_storage));
+      PINET_PORT(pDst) = htons(pDestCfg->dstPort);
+      rc = 0;
+
     } else if(pDestCfg->u.pDstHost) {
-      dstIp = net_resolvehost(pDestCfg->u.pDstHost);
+
+      if((rc = net_resolvehost(pDestCfg->u.pDstHost, pDst)) == 0) {
+        PINET_PORT(pDst) = htons(pDestCfg->dstPort);
+      }
     }
   }
-  return dstIp;
+  return rc;
 }
 
 int stream_rtp_updatedest(STREAM_RTP_DEST_T *pDest, const STREAM_DEST_CFG_T *pDestCfg) {
   int rc = 0;
   int updatedRtp = 0;
   int rtcpOffset = 0;
-  struct in_addr saddr;
+  struct sockaddr_storage dstAddr;
   int16_t rtcpPort;
-  char tmp[64];
+  char tmp[128];
+  char tmp2[128];
   char descrRtp[128];
   char descrRtcp[128];
   STREAM_RTP_MULTI_T *pRtp;
 
-  saddr.s_addr = INADDR_NONE;
+  memset(&dstAddr, 0, sizeof(dstAddr));
   descrRtp[0] = descrRtcp[0] = '\0';
 
   if(!pDest || !pDestCfg || !(pRtp = pDest->pRtpMulti) || pDestCfg->noxmit || pRtp->init.raw.haveRaw) {
     return -1;
-  } else if(pDestCfg->dstPort > 0 && (saddr.s_addr = get_dest_ip(pDestCfg)) == INADDR_NONE) {
+  } else if(pDestCfg->dstPort > 0 && get_dest_addr(pDestCfg, &dstAddr) != 0) {
     return -1;
   }
 
@@ -257,24 +274,20 @@ int stream_rtp_updatedest(STREAM_RTP_DEST_T *pDest, const STREAM_DEST_CFG_T *pDe
   }
 
   //
-  // Update output RTP destination and port
+  // Update output RTP destination and port if it has changed
   //
-  if(pDestCfg->dstPort > 0 && ((saddr.s_addr != INADDR_NONE && pDest->saDsts.sin_addr.s_addr != saddr.s_addr) ||
-                               pDest->saDsts.sin_port != htons(pDestCfg->dstPort))) {
+  if(!(INET_IS_SAMEADDR(pDest->saDsts, dstAddr) && INET_PORT(pDest->saDsts) == INET_PORT(dstAddr))) { 
 
     pthread_mutex_lock(&STREAM_RTP_PSTUNSOCK(*pDest)->mtxXmit);
 
-    snprintf(tmp, sizeof(tmp), "%s:%d", inet_ntoa(pDest->saDsts.sin_addr), htons(pDest->saDsts.sin_port));
-    snprintf(descrRtp, sizeof(descrRtp), "from %s to %s:%d", tmp, 
-       (saddr.s_addr != INADDR_NONE ? inet_ntoa(saddr) : inet_ntoa(pDest->saDsts.sin_addr)), pDestCfg->dstPort);
+    snprintf(tmp, sizeof(tmp), "%s:%d", FORMAT_NETADDR(pDest->saDsts, tmp, sizeof(tmp)),
+                                        htons(INET_PORT(pDest->saDsts)));
+    snprintf(descrRtp, sizeof(descrRtp), "from %s to %s:%d", tmp, FORMAT_NETADDR(dstAddr, tmp2, sizeof(tmp2)), 
+                                        pDestCfg->dstPort);
 
-    rtcpOffset = htons(pDest->saDstsRtcp.sin_port) - htons(pDest->saDsts.sin_port);
+    rtcpOffset = htons(INET_PORT(pDest->saDstsRtcp)) - htons(INET_PORT(pDest->saDsts));
 
-    pDest->saDsts.sin_family = AF_INET;
-    if(saddr.s_addr != INADDR_NONE) {
-      pDest->saDsts.sin_addr.s_addr = saddr.s_addr;
-    }
-    pDest->saDsts.sin_port = htons(pDestCfg->dstPort);
+    memcpy(&pDest->saDsts, &dstAddr, sizeof(pDest->saDsts));
 
     pthread_mutex_unlock(&STREAM_RTP_PSTUNSOCK(*pDest)->mtxXmit);
     updatedRtp = 1;
@@ -283,23 +296,23 @@ int stream_rtp_updatedest(STREAM_RTP_DEST_T *pDest, const STREAM_DEST_CFG_T *pDe
   //
   // Update output RTCP port
   //
-  if(pDest->saDstsRtcp.sin_port != 0 && (updatedRtp || pDestCfg->dstPortRtcp > 0)) {
+  if(INET_PORT(pDest->saDstsRtcp) != 0 && (updatedRtp || pDestCfg->dstPortRtcp > 0)) {
 
     if(pDestCfg->dstPortRtcp > 0) {
       rtcpPort = pDestCfg->dstPortRtcp;
     } else {
-      rtcpPort = htons(pDest->saDsts.sin_port) + rtcpOffset;
+      rtcpPort = htons(INET_PORT(pDest->saDsts)) + rtcpOffset;
     }
 
-    snprintf(tmp, sizeof(tmp), "%s:%d", inet_ntoa(pDest->saDstsRtcp.sin_addr), htons(pDest->saDstsRtcp.sin_port));
+    snprintf(tmp, sizeof(tmp), "%s:%d", FORMAT_NETADDR(pDest->saDstsRtcp, tmp, sizeof(tmp)), 
+                                        htons(INET_PORT(pDest->saDstsRtcp)));
     snprintf(descrRtcp, sizeof(descrRtcp), "RTCP from %s to %s:%d", tmp, 
-             inet_ntoa(pDest->saDsts.sin_addr), rtcpPort);
+                                     FORMAT_NETADDR(pDest->saDsts, tmp2, sizeof(tmp2)), rtcpPort);
 
     pthread_mutex_lock(&STREAM_RTCP_PSTUNSOCK(*pDest)->mtxXmit);
 
-    pDest->saDstsRtcp.sin_family = pDest->saDsts.sin_family;
-    pDest->saDstsRtcp.sin_addr.s_addr = pDest->saDsts.sin_addr.s_addr;
-    pDest->saDstsRtcp.sin_port = htons(rtcpPort);
+    memcpy(&pDest->saDstsRtcp, &pDest->saDsts, sizeof(pDest->saDstsRtcp));
+    INET_PORT(pDest->saDstsRtcp) = htons(rtcpPort);
 
     pthread_mutex_unlock(&STREAM_RTCP_PSTUNSOCK(*pDest)->mtxXmit);
   }
@@ -355,9 +368,10 @@ int stream_dtls_netsock_key_update(void *pCbData, NETIO_SOCK_T *pnetsock, const 
                                    int dtls_serverkey, int is_rtcp, const unsigned char *pKeys, unsigned int lenKeys) {
   int rc = 0;
   STREAM_RTP_DEST_T *pDest = (STREAM_RTP_DEST_T *) pCbData;
-  const struct sockaddr_in *psaDst;
+  const struct sockaddr_storage *psaDst;
   //NETIO_SOCK_T *pnetsockPeer = NULL;
   SRTP_CTXT_T *pSrtp = NULL;
+  char tmp[128];
   int do_rtcp = 0;
  
   if(!pDest || !pKeys || !srtpProfileName || !(pSrtp = &pDest->srtps[is_rtcp ? 1 : 0])) {
@@ -393,12 +407,13 @@ int stream_dtls_netsock_key_update(void *pCbData, NETIO_SOCK_T *pnetsock, const 
     pSrtp->do_rtcp_responder = do_rtcp;
     LOG(X_DEBUG("Initialized DTLS-SRTP %s %s %d byte output key from DTLS handshake to %s:%d"),
          is_rtcp ? "RTCP" : "RTP", srtpProfileName, pSrtp->kt.k.lenKey, 
-         inet_ntoa(psaDst->sin_addr), ntohs(psaDst->sin_port));
+         FORMAT_NETADDR(*psaDst, tmp, sizeof(tmp)), ntohs(PINET_PORT(psaDst)));
     //LOGHEX_DEBUG(pSrtp->k.key, pSrtp->k.lenKey);
 
   } else {
     LOG(X_ERROR("Failed to initialize DTLS-SRTP %s %s output key from DTLS handshake to %s:%d"),
-         is_rtcp ? "RTCP" : "RTP", srtpProfileName, inet_ntoa(psaDst->sin_addr), ntohs(psaDst->sin_port));
+         is_rtcp ? "RTCP" : "RTP", srtpProfileName, 
+         FORMAT_NETADDR(*psaDst, tmp, sizeof(tmp)), ntohs(PINET_PORT(psaDst)));
   }
 
   return rc;
@@ -409,8 +424,9 @@ static int stream_rtp_init_dtls_socket(STREAM_RTP_DEST_T *pDest, const STREAM_DE
   STREAM_DTLS_CTXT_T *pDtlsCtxt = NULL;
   STREAM_RTP_MULTI_T *pRtp = NULL;
   NETIO_SOCK_T *pnetsock = NULL;
-  struct sockaddr_in *psaDst = NULL;
+  struct sockaddr_storage *psaDst = NULL;
   DTLS_KEY_UPDATE_CTXT_T dtlsKeysUpdateCtxt;
+  char tmp[128];
   int do_rtcp = 0;
   int rc = 0; 
   int dtls_handshake_client = 1;
@@ -447,8 +463,9 @@ static int stream_rtp_init_dtls_socket(STREAM_RTP_DEST_T *pDest, const STREAM_DE
     psaDst =  &pDest->saDstsRtcp;
   }
 
-  if(IN_MULTICAST(htonl(psaDst->sin_addr.s_addr))) {
-    LOG(X_ERROR("Cannot output DTLS to multicast %s:%d"), inet_ntoa(psaDst->sin_addr), htons(psaDst->sin_port));
+  if(INET_IS_MULTICAST(*psaDst)) {
+    LOG(X_ERROR("Cannot output DTLS to multicast %s:%d"), 
+                FORMAT_NETADDR(*psaDst, tmp, sizeof(tmp)), ntohs(PINET_PORT(psaDst)));
     return -1;
   }
 
@@ -458,7 +475,7 @@ static int stream_rtp_init_dtls_socket(STREAM_RTP_DEST_T *pDest, const STREAM_DE
 
   if(pDtlsCtxt->dtls_srtp != pDestCfg->dtlsCfg.dtls_srtp) {
     LOG(X_ERROR("Cannot mix DTLS and DTLS-SRTP output %s socket to %s:%d for the same DTLS context"),
-                  is_rtcp ? "RTCP" : "RTP", inet_ntoa(psaDst->sin_addr), ntohs(psaDst->sin_port));
+                  is_rtcp ? "RTCP" : "RTP", FORMAT_NETADDR(*psaDst, tmp, sizeof(tmp)), ntohs(PINET_PORT(psaDst)));
     return -1;
   }
 
@@ -477,7 +494,7 @@ static int stream_rtp_init_dtls_socket(STREAM_RTP_DEST_T *pDest, const STREAM_DE
 
       LOG(X_ERROR("Failed to initialize DTLS%s output %s socket to %s:%d"),
                    pDtlsCtxt->dtls_srtp ? "-SRTP" : "", is_rtcp ? "RTCP" : "RTP",
-                   inet_ntoa(psaDst->sin_addr), ntohs(psaDst->sin_port));
+                    FORMAT_NETADDR(*psaDst, tmp, sizeof(tmp)), ntohs(PINET_PORT(psaDst)));
       rc = -1;
 
     } else {
@@ -487,7 +504,7 @@ static int stream_rtp_init_dtls_socket(STREAM_RTP_DEST_T *pDest, const STREAM_DE
 
       LOG(X_ERROR("Initialized DTLS%s output %s socket to %s:%d"),
                   pDtlsCtxt->dtls_srtp ? "-SRTP" : "", is_rtcp ? "RTCP" : "RTP",
-                  inet_ntoa(psaDst->sin_addr), ntohs(psaDst->sin_port));
+                  FORMAT_NETADDR(*psaDst, tmp, sizeof(tmp)), ntohs(PINET_PORT(psaDst)));
     }
 
   }
@@ -505,7 +522,7 @@ static int stream_rtp_init_dtls_socket(STREAM_RTP_DEST_T *pDest, const STREAM_DE
     pDest->srtps[is_rtcp ? 1 : 0].is_rtcp = is_rtcp;
 
     if(is_rtcp) {
-      if(pDest->saDstsRtcp.sin_port != pDest->saDsts.sin_port) {
+      if(INET_PORT(pDest->saDstsRtcp) != INET_PORT(pDest->saDsts)) {
 
         if(is_audvidmux) {
           pDest->srtps[1].pSrtpShared = &pDestCfg->pDestPeer->srtps[1]; 
@@ -559,9 +576,10 @@ static int stream_rtp_init_dtls_socket(STREAM_RTP_DEST_T *pDest, const STREAM_DE
 STREAM_RTP_DEST_T *stream_rtp_adddest(STREAM_RTP_MULTI_T *pRtp, const STREAM_DEST_CFG_T *pDestCfg) {
 
   STREAM_RTP_DEST_T *pDest = NULL;
-  in_addr_t dstIp = INADDR_NONE;
-  struct sockaddr_in sain;
-  struct sockaddr_in *psain;
+  struct sockaddr_storage dstAddr;
+  struct sockaddr_storage sa;
+  struct sockaddr *psa;
+  char tmp[128];
   unsigned int idxStream = 0;
   int is_audvidmux = 0;
   int do_rtcp = 0;
@@ -596,7 +614,8 @@ STREAM_RTP_DEST_T *stream_rtp_adddest(STREAM_RTP_MULTI_T *pRtp, const STREAM_DES
                              "pDest: 0x%x, port:%d, noxmit: %d"), rc, idxStream, pRtp->numDests, 
                              pRtp->maxDests, pRtp, pDest, pDestCfg->dstPort, pDestCfg->noxmit) );
 
-  if(rc == 0 && !pDestCfg->noxmit && (dstIp = get_dest_ip(pDestCfg)) == INADDR_NONE) {
+  memset(&dstAddr, 0, sizeof(dstAddr));
+  if(rc == 0 && !pDestCfg->noxmit && get_dest_addr(pDestCfg, &dstAddr) != 0) {
     rc = -1;
   } 
 
@@ -611,12 +630,15 @@ STREAM_RTP_DEST_T *stream_rtp_adddest(STREAM_RTP_MULTI_T *pRtp, const STREAM_DES
     } else if(rc == 0 && pRtp->numDests >= 1) {
       LOG(X_ERROR("Raw transmission not implemented for multiple destinations"));
       rc = -1;
+    } else if(dstAddr.ss_family == AF_INET6) {
+      LOG(X_ERROR("Raw transmission not implemented for IPv6"));
+      rc = -1;
     }
 
 #if defined(WIN32) && !defined(__MINGW32__)
 
     if(rc == 0) {
-      if(maclookup_GetMac(dstIp, pRtp->init.raw.mac, pRtp->init.raw.vlan) != 0) {
+      if(maclookup_GetMac(dstAddr.sin_addr.s_addr, pRtp->init.raw.mac, pRtp->init.raw.vlan) != 0) {
         rc = -1;
       } else if(!memcmp(pRtp->init.raw.mac, (unsigned char *) "\0\0\0\0\0\0", 6) ||
                 (pRtp->init.raw.mac[0] == 0xff && pRtp->init.raw.mac[1] == 0xff &&
@@ -641,7 +663,14 @@ STREAM_RTP_DEST_T *stream_rtp_adddest(STREAM_RTP_MULTI_T *pRtp, const STREAM_DES
       }
 
       memcpy(pRtp->packet.peth->ether_dhost, pRtp->init.raw.mac, ETH_ALEN);
-      pRtp->packet.pip->ip_dst.s_addr = dstIp;
+
+      if(dstAddr.ss_family == AF_INET6) {
+        memcpy(&pRtp->packet.u_ip.pip6->ip6_dst.s6_addr[0], 
+           &((struct sockaddr_in6 *) &dstAddr)->sin6_addr.s6_addr[0], ADDR_LEN_IPV6);
+      } else {
+        pRtp->packet.u_ip.pip4->ip_dst.s_addr = ((struct sockaddr_in *) &dstAddr)->sin_addr.s_addr;
+      }
+
       pRtp->packet.pudp->dest = htons(pDestCfg->dstPort);
       pRtp->packet.pudp->source = pRtp->packet.pudp->dest;
     }
@@ -651,28 +680,40 @@ STREAM_RTP_DEST_T *stream_rtp_adddest(STREAM_RTP_MULTI_T *pRtp, const STREAM_DES
     if(rc == 0) {
 
       memset(&pDest->saDsts, 0, sizeof(pDest->saDsts));
-      pDest->saDsts.sin_family = AF_INET;
-      pDest->saDsts.sin_addr.s_addr = dstIp;
-      pDest->saDsts.sin_port = htons(pDestCfg->dstPort);
+      pDest->saDsts.ss_family =  dstAddr.ss_family;
+      INET_PORT(pDest->saDsts) = htons(pDestCfg->dstPort);
+      if(dstAddr.ss_family == AF_INET6) {
+        memcpy(&((struct sockaddr_in6 *) &pDest->saDsts)->sin6_addr.s6_addr[0], 
+               &((struct sockaddr_in6 *) &dstAddr)->sin6_addr.s6_addr[0], ADDR_LEN_IPV6);
+      } else {
+        ((struct sockaddr_in *) &pDest->saDsts)->sin_addr.s_addr = ((struct sockaddr_in *) &dstAddr)->sin_addr.s_addr;
+      }
 
       //
       // Check if this destination is an audio-video mux peer of the previous destination
       // in which case we should reuse the output socket/srtp/dtls contexts
       //
-      if(pDestCfg->pDestPeer && pDestCfg->pDestPeer->saDsts.sin_port == htons(pDestCfg->dstPort) && 
-         pDestCfg->pDestPeer->saDsts.sin_addr.s_addr == dstIp) {
+      if(pDestCfg->pDestPeer && INET_PORT(pDestCfg->pDestPeer->saDsts) == htons(pDestCfg->dstPort) &&
+         INET_IS_SAMEADDR(pDestCfg->pDestPeer->saDsts, dstAddr)) {
+      //if(pDestCfg->pDestPeer && INET_PORT(pDestCfg->pDestPeer->saDsts) == htons(pDestCfg->dstPort) && 
+      //   pDestCfg->pDestPeer->saDsts.sin_addr.s_addr == dstIp) {
         is_audvidmux = 1;
-        LOG(X_DEBUG("RTP destination %s:%d is using audio video multiplexing"), inet_ntoa(pDest->saDsts.sin_addr), htons(pDest->saDsts.sin_port));
+        LOG(X_DEBUG("RTP destination %s:%d is using audio video multiplexing"), 
+                    FORMAT_NETADDR(pDest->saDsts, tmp, sizeof(tmp)), htons(INET_PORT(pDest->saDsts)));
       }
 
 
-      psain = NULL;
+      psa = NULL;
       if(!pDestCfg->useSockFromCapture && pDestCfg->localPort > 0) {
-        memset(&sain, 0, sizeof(sain));
-        sain.sin_family = AF_INET;
-        sain.sin_addr.s_addr = INADDR_ANY;
-        sain.sin_port = htons(pDestCfg->localPort);
-        psain = &sain;
+        memset(&sa, 0, sizeof(sa));
+        psa = (struct sockaddr *) &sa;
+        if((psa->sa_family = dstAddr.ss_family) == AF_INET6) {
+          memset(&((struct sockaddr_in6 *) psa)->sin6_addr.s6_addr[0], 0, ADDR_LEN_IPV6); // IN6ADDR_ANY
+        } else {
+          ((struct sockaddr_in *) psa)->sin_addr.s_addr = INADDR_ANY;
+        }
+        PINET_PORT(psa) = htons(pDestCfg->localPort);
+        
       }
 
       pDest->xmit.pnetsock = NULL;
@@ -681,7 +722,7 @@ STREAM_RTP_DEST_T *stream_rtp_adddest(STREAM_RTP_MULTI_T *pRtp, const STREAM_DES
         pDest->xmit.pnetsock = STREAM_RTP_PNETIOSOCK(*pDestCfg->pDestPeer);
       } else if(DESTCFG_USERTPBINDPORT(pDestCfg)) {
         pDest->xmit.pnetsock = pDestCfg->psharedCtxt->capSocket.pnetsock; 
-      } else if((netio_opensocket(&pDest->xmit.netsock, SOCK_DGRAM, 0, SOCK_SNDBUFSZ_UDP_DEFAULT, psain)) == INVALID_SOCKET) {
+      } else if((netio_opensocket(&pDest->xmit.netsock, SOCK_DGRAM, 0, SOCK_SNDBUFSZ_UDP_DEFAULT, psa)) == INVALID_SOCKET) {
         rc = -1;
       }
 
@@ -692,7 +733,7 @@ STREAM_RTP_DEST_T *stream_rtp_adddest(STREAM_RTP_MULTI_T *pRtp, const STREAM_DES
 
     //TODO: should still set outbound QOS on socket created in capture localsockets
     if(!is_audvidmux && !pDestCfg->useSockFromCapture && rc == 0 && pRtp->init.dscpRtp != 0) {
-      net_setqos(STREAM_RTP_FD(*pDest), &pDest->saDsts, pRtp->init.dscpRtp);
+      net_setqos(STREAM_RTP_FD(*pDest), (const struct sockaddr *) &pDest->saDsts, pRtp->init.dscpRtp);
       //net_setqos(NETIOSOCK_FD(pDest->xmit.netsock), &pDest->saDsts, pRtp->init.dscpRtp);
     }
     //fprintf(stderr, "RTP SOCK %d dest[%d] %s:%d, rc:%d\n", pDest->xmit.sock, idxStream, inet_ntoa(pDest->saDsts.sin_addr), htons(pDest->saDsts.sin_port), rc);
@@ -709,10 +750,8 @@ STREAM_RTP_DEST_T *stream_rtp_adddest(STREAM_RTP_MULTI_T *pRtp, const STREAM_DES
       if(pDestCfg->dstPortRtcp > 0 && (pDest->sendrtcpsr = pRtp->init.sendrtcpsr)) {
 
         do_rtcp = 1;
-        memset(&pDest->saDstsRtcp, 0, sizeof(pDest->saDstsRtcp));
-        pDest->saDstsRtcp.sin_family = AF_INET;
-        pDest->saDstsRtcp.sin_addr.s_addr = dstIp;
-        pDest->saDstsRtcp.sin_port = htons(pDestCfg->dstPortRtcp);
+        memcpy(&pDest->saDstsRtcp, &pDest->saDsts, sizeof(pDest->saDstsRtcp));
+        INET_PORT(pDest->saDstsRtcp) = htons(pDestCfg->dstPortRtcp);
 
         if(is_audvidmux) {
           //
@@ -721,18 +760,21 @@ STREAM_RTP_DEST_T *stream_rtp_adddest(STREAM_RTP_MULTI_T *pRtp, const STREAM_DES
           pDest->xmit.pnetsockRtcp = STREAM_RTCP_PNETIOSOCK(*pDestCfg->pDestPeer);
         } else if(DESTCFG_USERTPBINDPORT(pDestCfg)) {
           pDest->xmit.pnetsockRtcp = pDestCfg->psharedCtxt->capSocket.pnetsockRtcp; 
-        } else if(pDest->saDstsRtcp.sin_port != pDest->saDsts.sin_port) {
+        } else if(INET_PORT(pDest->saDstsRtcp) != INET_PORT(pDest->saDsts)) {
 
-          psain = NULL;
+          psa = NULL;
           if(pDestCfg->localPort > 0) {
-            memset(&sain, 0, sizeof(sain));
-            sain.sin_family = AF_INET;
-            sain.sin_addr.s_addr = INADDR_ANY;
-            sain.sin_port = htons(RTCP_PORT_FROM_RTP(pDestCfg->localPort));
-            psain = &sain;
+            memset(&sa, 0, sizeof(sa));
+            psa = (struct sockaddr *) &sa;
+            if((psa->sa_family = dstAddr.ss_family) == AF_INET6) {
+              memset(&((struct sockaddr_in6 *) psa)->sin6_addr.s6_addr[0], 0, ADDR_LEN_IPV6); // IN6ADDR_ANY
+            } else {
+              ((struct sockaddr_in *) psa)->sin_addr.s_addr = INADDR_ANY;
+            }
+            PINET_PORT(psa) = htons(RTCP_PORT_FROM_RTP(pDestCfg->localPort));
           }
 
-          if(netio_opensocket(&pDest->xmit.netsockRtcp, SOCK_DGRAM, 0, 0, psain) == INVALID_SOCKET) {
+          if(netio_opensocket(&pDest->xmit.netsockRtcp, SOCK_DGRAM, 0, 0, psa) == INVALID_SOCKET) {
             netio_closesocket(&pDest->xmit.netsock);
             rc = -1;
           }
@@ -745,7 +787,7 @@ STREAM_RTP_DEST_T *stream_rtp_adddest(STREAM_RTP_MULTI_T *pRtp, const STREAM_DES
 
           }
 
-        } // if(pDest->saDstsRtcp.sin_port != pDest->saDsts.sin_port ... 
+        } // if(INET_PORT(pDest->saDstsRtcp) != INET_PORT(pDest->saDsts) ... 
 
       } // sendrtcpsr
 
@@ -841,14 +883,17 @@ STREAM_RTP_DEST_T *stream_rtp_adddest(STREAM_RTP_MULTI_T *pRtp, const STREAM_DES
 
     } // rc == 0
 
-  } else if(rc == 0) { // pDestCfg->noxmit
+  } else if(rc == 0) { 
+    //
+    // pDestCfg->noxmit
+    //
 
     pDest->tmLastRtcpSr = 0;
     pDest->sendrtcpsr = pRtp->init.sendrtcpsr;
     NETIOSOCK_FD(pDest->xmit.netsock) = INVALID_SOCKET;
-    pDest->saDsts.sin_port = pDestCfg->dstPort;
+    INET_PORT(pDest->saDsts) = htons(pDestCfg->dstPort);
     NETIOSOCK_FD(pDest->xmit.netsockRtcp) = INVALID_SOCKET;
-    pDest->saDstsRtcp.sin_port = RTCP_PORT_FROM_RTP(pDestCfg->dstPort);
+    INET_PORT(pDest->saDstsRtcp) = RTCP_PORT_FROM_RTP(pDestCfg->dstPort);
     pDest->outCb.pliveQIdx = pDestCfg->outCb.pliveQIdx;
     
   }
@@ -863,7 +908,8 @@ STREAM_RTP_DEST_T *stream_rtp_adddest(STREAM_RTP_MULTI_T *pRtp, const STREAM_DES
       pthread_mutex_init(&pDest->streamStatsMtx, NULL);
 
       //TODO: only enable ABR for the 1st ongoing video stream instance  
-      if(!(pDest->pstreamStats = stream_monitor_createattach(pDest->pMonitor, &pDest->saDsts, 
+      if(!(pDest->pstreamStats = stream_monitor_createattach(pDest->pMonitor, 
+                                    (const struct sockaddr *) &pDest->saDsts, 
                                     pDest->pRtpMulti->pStreamerCfg->action.do_output_rtphdr ?  
                                     STREAM_METHOD_UDP_RTP : STREAM_METHOD_UDP, 
                                     (pDestCfg->doAbrAuto && pDestCfg->pMonitor->pAbr ? 
@@ -938,11 +984,11 @@ STREAM_RTP_DEST_T *stream_rtp_adddest(STREAM_RTP_MULTI_T *pRtp, const STREAM_DES
       rc = 0;
       memcpy(&pDest->turns[1], &pDest->turns[0], sizeof(pDest->turns[0]));
 
-      if(!IS_ADDR_VALID(pDest->turns[0].saPeerRelay.sin_addr)) {
-        memcpy(&pDest->turns[0].saPeerRelay, &pDest->saDsts, sizeof(struct sockaddr_in));
+      if(!INET_ADDR_VALID(pDest->turns[0].saPeerRelay)) {
+        memcpy(&pDest->turns[0].saPeerRelay, &pDest->saDsts, INET_SIZE(pDest->saDsts));
       }
-      if(!IS_ADDR_VALID(pDest->turns[1].saPeerRelay.sin_addr)) {
-        memcpy(&pDest->turns[1].saPeerRelay, &pDest->saDstsRtcp, sizeof(struct sockaddr_in));
+      if(!INET_ADDR_VALID(pDest->turns[1].saPeerRelay)) {
+        memcpy(&pDest->turns[1].saPeerRelay, &pDest->saDstsRtcp, INET_SIZE(pDest->saDstsRtcp));
       }
 
 //pDest->turns[0].saPeerRelay.sin_addr.s_addr = net_resolvehost("172.16.165.1"); memcpy(&pDest->turns[1].saPeerRelay, &pDest->turns[0].saPeerRelay, sizeof(pDest->turns[1].saPeerRelay));
@@ -952,7 +998,7 @@ STREAM_RTP_DEST_T *stream_rtp_adddest(STREAM_RTP_MULTI_T *pRtp, const STREAM_DES
       //
       // if we are not setting up a capture based TURN context, then initialize TURN here 
       //
-      if(!DESTCFG_USERTPBINDPORT(pDestCfg) && IS_ADDR_VALID(pDest->turns[0].saTurnSrv.sin_addr)) {
+      if(!DESTCFG_USERTPBINDPORT(pDestCfg) && INET_ADDR_VALID(pDest->turns[0].saTurnSrv)) {
 
         memset(&onResult, 0, sizeof(onResult));
         onResult.active = 1;
@@ -971,7 +1017,7 @@ STREAM_RTP_DEST_T *stream_rtp_adddest(STREAM_RTP_MULTI_T *pRtp, const STREAM_DES
         onResult.is_rtcp = 1;
         memcpy(&onResult.saListener, &pDest->saDstsRtcp, sizeof(onResult.saListener));
 
-        if(rc >= 0 && pDest->sendrtcpsr && pDest->saDstsRtcp.sin_port != pDest->saDsts.sin_port &&
+        if(rc >= 0 && pDest->sendrtcpsr && INET_PORT(pDest->saDstsRtcp) != INET_PORT(pDest->saDsts) &&
             (rc = turn_relay_setup(&pDest->pRtpMulti->pStreamerCfg->sharedCtxt.turnThreadCtxt, 
                                  &pDest->turns[1],  STREAM_RTCP_PNETIOSOCK(*pDest), &onResult)) >= 0) {
           pDest->turns[1].active = 1;
@@ -1003,6 +1049,7 @@ static int stream_rtp_removedestidx(STREAM_RTP_MULTI_T *pRtp,
   int rc;
   int len = 0;
   STREAM_RTP_DEST_T *pDest = NULL;
+  char tmp[128];
   unsigned char buf[256];
 
   if(pRtp == NULL || idxDest >= pRtp->maxDests) {
@@ -1027,11 +1074,12 @@ static int stream_rtp_removedestidx(STREAM_RTP_MULTI_T *pRtp,
 
   streamxmit_close(pDest, 0);
 
-  if(pDest->saDstsRtcp.sin_port != 0 && 
+  if(INET_PORT(pDest->saDstsRtcp) != 0 && 
      PNETIOSOCK_FD(STREAM_RTCP_PNETIOSOCK(pRtp->pdests[idxDest])) != INVALID_SOCKET) {
 
     VSX_DEBUG_RTCP( LOG(X_DEBUG("RTCP - CLOSE RTCP SOCK %d dest[%d] %s:%d"),
-      STREAM_RTCP_FD(*pDest), idxDest, inet_ntoa(pDest->saDstsRtcp.sin_addr), htons(pDest->saDstsRtcp.sin_port)));
+                   STREAM_RTCP_FD(*pDest), idxDest, 
+                   FORMAT_NETADDR(pDest->saDstsRtcp, tmp, sizeof(tmp)), htons(INET_PORT(pDest->saDstsRtcp))));
 
     //
     // Send RTCP BYE
@@ -1186,10 +1234,10 @@ int stream_rtp_preparepkt(STREAM_RTP_MULTI_T *pRtp) {
 
   pRtp->pRtp->sequence_num = htons(ntohs(pRtp->pRtp->sequence_num) + 1);
 
-
   if(pRtp->init.raw.haveRaw) {
-    pRtp->packet.pip->ip_id = htons(ntohs(pRtp->packet.pip->ip_id) + 1);
-    RTP_SET_IP_LEN(pRtp);
+    // Assume IPv4
+    pRtp->packet.u_ip.pip4->ip_id = htons(ntohs(pRtp->packet.u_ip.pip4->ip_id) + 1);
+    RTP_SET_IP4_LEN(pRtp);
     RTP_SET_UDP_LEN(pRtp);
   }
 
@@ -1241,7 +1289,7 @@ int stream_rtp_preparepkt(STREAM_RTP_MULTI_T *pRtp) {
 */
 
   if(pRtp->init.raw.haveRaw) {
-    if((rc = pktgen_ChecksumUdpPacket(&pRtp->packet)) == 0) {
+    if((rc = pktgen_ChecksumUdpPacketIpv4(&pRtp->packet)) == 0) {
     } else {
       LOG(X_ERROR("Error computing checksum on packet"));
     }
@@ -1477,21 +1525,21 @@ int stream_rtcp_createsr(STREAM_RTP_MULTI_T *pRtp, unsigned int idxDest,
   return lentot;
 }
 
-static void log_rtcp_err(const char *msg, const STREAM_RTP_DEST_T *pRtpDest, const struct sockaddr_in *psaSrc,
+static void log_rtcp_err(const char *msg, const STREAM_RTP_DEST_T *pRtpDest, const struct sockaddr *psaSrc,
                          uint32_t ssrc, int ssrc_match_err) {
   int len;
-  struct sockaddr_in saTmp;
-  char buf[64];
+  struct sockaddr_storage saTmp;
+  char tmp[128];
+  char buf[128];
 
   if(ssrc_match_err) {
     snprintf(buf, sizeof(buf), " does not match outbound RTP ssrc: 0x%x", pRtpDest->pRtpMulti->init.ssrc);
   }
   len = sizeof(saTmp);
-  //getsockname(pRtpDest->sockRtcp, (struct sockaddr *) &saTmp,  (socklen_t *) &len);
   getsockname(STREAM_RTCP_FD(*pRtpDest), (struct sockaddr *) &saTmp,  (socklen_t *) &len);
   LOG(X_WARNING("%s ssrc: 0x%x %s:%d -> :%d%s"),
-    msg, ssrc, psaSrc ? inet_ntoa(psaSrc->sin_addr) : "", 
-    psaSrc ? ntohs(psaSrc->sin_port) : 0,  ntohs(saTmp.sin_port), ssrc_match_err ? buf : "");
+    msg, ssrc, psaSrc ? FORMAT_NETADDR(*psaSrc, tmp, sizeof(tmp)) : "", 
+    psaSrc ? ntohs(PINET_PORT(psaSrc)) : 0,  ntohs(INET_PORT(saTmp)), ssrc_match_err ? buf : "");
 
 }
 
@@ -1534,8 +1582,8 @@ static void process_rtcp_RR(STREAM_RTP_DEST_T *pRtpDest, const RTCP_PKT_HDR_T *p
 static int process_rtcp_pkt(STREAM_RTP_DEST_T *pRtpDest, 
                             const RTCP_PKT_HDR_T *pHdr, 
                             unsigned int len, 
-                            const struct sockaddr_in *psaSrc, 
-                            const struct sockaddr_in *psaDst,
+                            const struct sockaddr *psaSrc, 
+                            const struct sockaddr *psaDst,
                             int fromCapture) {
   int rc = 0;
   RTCP_PKT_RR_T *pRR = NULL;
@@ -1556,7 +1604,7 @@ static int process_rtcp_pkt(STREAM_RTP_DEST_T *pRtpDest,
   pktlen = ntohs(pHdr->len) * 4 + 4;
 
   VSX_DEBUG_RTCP(LOG(X_DEBUG("RTCP stream process_rtcp pt:%d pktlen:%d len:%d, pDest:0x%x, outidx:%d, src_port:%d"),
-           pHdr->pt, pktlen, len, pRtpDest, pRtpDest->pRtpMulti->outidx, htons(psaSrc->sin_port))); 
+           pHdr->pt, pktlen, len, pRtpDest, pRtpDest->pRtpMulti->outidx, htons(PINET_PORT(psaSrc)))); 
 
   switch(pHdr->pt) {
 
@@ -1721,8 +1769,8 @@ static int process_rtcp_pkt(STREAM_RTP_DEST_T *pRtpDest,
 
 int stream_rtp_handlertcp(STREAM_RTP_DEST_T *pRtpDest, const RTCP_PKT_HDR_T *pData, 
                           unsigned int len, 
-                          const struct sockaddr_in *psaSrc,  // The originating sender's address
-                          const struct sockaddr_in *psaDst) { // The local listener address
+                          const struct sockaddr *psaSrc,  // The originating sender's address
+                          const struct sockaddr *psaDst) { // The local listener address
   //uint16_t seq;
   unsigned int idx = 0;
   //int lost, lostdelta, seqdelta;
@@ -1835,10 +1883,10 @@ static STREAM_RTP_DEST_T *find_rtcp_dest(STREAM_RTP_MULTI_T *pRtp, const RTCP_PK
         if(pRtpCur->pdests[idx].isactive) {
           if(match_ssrc) {
             if(ssrc == pRtpCur->init.ssrc &&
-              pRtpCur->pdests[idx].saDstsRtcp.sin_port == port) {
+              INET_PORT(pRtpCur->pdests[idx].saDstsRtcp) == port) {
               return &pRtpCur->pdests[idx];
             }
-          } else if(pRtpCur->pdests[idx].saDstsRtcp.sin_port == port) {
+          } else if(INET_PORT(pRtpCur->pdests[idx].saDstsRtcp) == port) {
             return &pRtpCur->pdests[idx];
           }
         }
@@ -1851,11 +1899,12 @@ static STREAM_RTP_DEST_T *find_rtcp_dest(STREAM_RTP_MULTI_T *pRtp, const RTCP_PK
 }
 
 int stream_process_rtcp(STREAM_RTP_MULTI_T *pRtpHeadall, 
-                        const struct sockaddr_in *psaSrc, 
-                        const struct sockaddr_in *psaDst, 
+                        const struct sockaddr *psaSrc, 
+                        const struct sockaddr *psaDst, 
                         const RTCP_PKT_HDR_T *pHdr, 
                         unsigned int len) {
   int rc = 0;
+  char tmp[128];
   STREAM_RTP_DEST_T *pRtpDest = NULL;
 
   //
@@ -1870,14 +1919,15 @@ int stream_process_rtcp(STREAM_RTP_MULTI_T *pRtpHeadall,
   }
 
   VSX_DEBUG_RTCP( LOG(X_DEBUG("RTCP - stream_process_rtcp RTCP  %s:%d -> :%d :%d, ssrc: 0x%x, pt:%d"), 
-                    inet_ntoa(psaSrc->sin_addr), ntohs(psaSrc->sin_port), ntohs(psaDst->sin_port), rc, 
+                    FORMAT_NETADDR(*psaSrc, tmp, sizeof(tmp)), ntohs(PINET_PORT(psaSrc)), ntohs(PINET_PORT(psaDst)), rc, 
                     htonl(*(uint32_t *) (&((uint8_t *)pHdr)[8])), ((uint8_t *)pHdr)[1]));
 
   pthread_mutex_lock(&pRtpHeadall->mtx);
 
-  if(!(pRtpDest = find_rtcp_dest(pRtpHeadall, pHdr, len, psaSrc->sin_port))) {
+  if(!(pRtpDest = find_rtcp_dest(pRtpHeadall, pHdr, len, PINET_PORT(psaSrc)))) {
     LOG(X_ERROR("recv[rtcp] RTCP ssrc: 0x%x unable to find RTP stream %s:%d -> :%d"), 
-      htonl(*((uint32_t *) &(((uint8_t *) pHdr)[8]))), inet_ntoa(psaSrc->sin_addr), ntohs(psaSrc->sin_port), ntohs(psaDst->sin_port));
+      htonl(*((uint32_t *) &(((uint8_t *) pHdr)[8]))), FORMAT_NETADDR(*psaSrc, tmp, sizeof(tmp)), 
+      ntohs(PINET_PORT(psaSrc)), ntohs(PINET_PORT(psaDst)));
     pthread_mutex_unlock(&pRtpHeadall->mtx);
     return -1;
   }
@@ -1914,7 +1964,7 @@ void stream_rtcp_responder_listener_proc(void *pArg) {
   int fdHighest = 0;
   unsigned int idx, idxTmp;
   struct timeval tv;
-  struct sockaddr_in saSrc, saDst, saDstRtp;
+  struct sockaddr_storage saSrc, saDst, saDstRtp;
   int len;
   int rc = 0;
   unsigned char *pData;
@@ -1922,6 +1972,7 @@ void stream_rtcp_responder_listener_proc(void *pArg) {
   int is_turn_channeldata;
   int is_turn;
   int is_turn_indication;
+  char tmp[128];
   unsigned char buf[4096];
 #if defined(WIN32) 
   DWORD tmp;
@@ -1949,7 +2000,7 @@ void stream_rtcp_responder_listener_proc(void *pArg) {
       getsockname(STREAM_RTCP_FD_NONP(pRtp->pdests[idx]), (struct sockaddr *) &saDst,  (socklen_t *) &len);
 #endif // 0
       if((rc = snprintf((char *) &buf[idxTmp], sizeof(buf) - idxTmp, "%s:%d%s", 
-                        inet_ntoa(saDst.sin_addr), ntohs(saDst.sin_port), idxTmp > 0 ? " , " : "")) > 0) {
+            FORMAT_NETADDR(saDst, tmp, sizeof(tmp)), ntohs(INET_PORT(saDst)), idxTmp > 0 ? " , " : "")) > 0) {
         idxTmp += rc;
       }
     }
@@ -1960,7 +2011,8 @@ void stream_rtcp_responder_listener_proc(void *pArg) {
     }
   }
 
-  LOG(X_DEBUG("RTCP listener thread started destinations:%d pt:%d, listening on %s"), pRtp->numDests, pRtp->init.pt, buf);
+  LOG(X_DEBUG("RTCP listener thread started destinations:%d pt:%d, listening on %s"), 
+      pRtp->numDests, pRtp->init.pt, buf);
   rc = 0;
 
   while(pRtp->doRrListener == 1 && !g_proc_exit) { 
@@ -2074,13 +2126,15 @@ void stream_rtcp_responder_listener_proc(void *pArg) {
                 (stun_ispacket(buf, pktlen) || (is_turn_channeldata = turn_ischanneldata(buf, pktlen)))) {
 
               if((rc = turn_onrcv_pkt(&pRtp->pdests[idx].turns[0], &pRtp->pdests[idx].stun, is_turn_channeldata, 
-                                      &is_turn, &is_turn_indication, &pData, &pktlen, &saSrc, &saDstRtp, 
+                                      &is_turn, &is_turn_indication, &pData, &pktlen, 
+                                      (const struct sockaddr *) &saSrc, (const struct sockaddr *) &saDstRtp, 
                                       &pRtp->pdests[idx].xmit.netsock)) < 0) {
               }
             }
 
             if((!is_turn || is_turn_indication || is_turn_channeldata) && DTLS_ISPACKET(buf, pktlen) && 
-              (pktlen = dtls_netsock_ondata(&pRtp->pdests[idx].xmit.netsock, buf, pktlen, &saSrc)) < 0) {
+              (pktlen = dtls_netsock_ondata(&pRtp->pdests[idx].xmit.netsock, buf, pktlen, 
+                                            (const struct sockaddr *) &saSrc)) < 0) {
 
             }
 
@@ -2093,8 +2147,8 @@ void stream_rtcp_responder_listener_proc(void *pArg) {
           len = sizeof(saDst);
           getsockname(STREAM_RTCP_FD(pRtp->pdests[idx]), (struct sockaddr *) &saDst,  (socklen_t *) &len);
           LOG(X_ERROR("recv[rtp rr:%u] %s:%d -> :%d failed with rc:%d "ERRNO_FMT_STR),
-                      idx, inet_ntoa(saSrc.sin_addr), ntohs(saSrc.sin_port),
-                      ntohs(saDstRtp.sin_port), pktlen, ERRNO_FMT_ARGS);
+                      idx, FORMAT_NETADDR(saSrc, tmp, sizeof(tmp)), ntohs(INET_PORT(saSrc)),
+                      ntohs(INET_PORT(saDstRtp)), pktlen, ERRNO_FMT_ARGS);
 
 #if defined(WIN32) 
           }
@@ -2135,17 +2189,19 @@ void stream_rtcp_responder_listener_proc(void *pArg) {
           if(pRtp->pdests[idx].xmit.netsock.turn.use_turn_indication_in &&
               (stun_ispacket(buf, pktlen) || (is_turn_channeldata = turn_ischanneldata(buf, pktlen)))) {
 
-            if((rc = turn_onrcv_pkt(pRtp->pdests[idx].saDstsRtcp.sin_port == pRtp->pdests[idx].saDsts.sin_port ?  
+            if((rc = turn_onrcv_pkt(INET_PORT(pRtp->pdests[idx].saDstsRtcp) == INET_PORT(pRtp->pdests[idx].saDsts) ?
                                     &pRtp->pdests[idx].turns[0] : &pRtp->pdests[idx].turns[1], 
                                     &pRtp->pdests[idx].stun, is_turn_channeldata,
-                                    &is_turn, &is_turn_indication, &pData, &pktlen, &saSrc, &saDst,
+                                    &is_turn, &is_turn_indication, &pData, &pktlen, 
+                                    (const struct sockaddr *) &saSrc, (const struct sockaddr *) &saDst, 
                                     STREAM_RTCP_PNETIOSOCK(pRtp->pdests[idx]))) < 0) {
             }
           }
 
           if((!is_turn || is_turn_indication || is_turn_channeldata) &&
             STREAM_RTCP_PNETIOSOCK(pRtp->pdests[idx])->ssl.pCtxt && DTLS_ISPACKET(buf, pktlen)) {
-            pktlen = dtls_netsock_ondata(STREAM_RTCP_PNETIOSOCK(pRtp->pdests[idx]), buf, pktlen, &saSrc);
+            pktlen = dtls_netsock_ondata(STREAM_RTCP_PNETIOSOCK(pRtp->pdests[idx]), buf, pktlen, 
+                                         (const struct sockaddr *) &saSrc);
             LOG(X_DEBUG("DTLS packet pktlen:%d"), pktlen); 
             if(pktlen <= 0) {
               continue;
@@ -2160,10 +2216,10 @@ void stream_rtcp_responder_listener_proc(void *pArg) {
           if(!pRtp->overlappingPorts) {
             pdest = &pRtp->pdests[idx];
           } else if(len >= RTCP_HDR_LEN + 4 && 
-            !(pdest = find_rtcp_dest(pRtp, (RTCP_PKT_HDR_T *) buf, len, saSrc.sin_port))) {
+            !(pdest = find_rtcp_dest(pRtp, (RTCP_PKT_HDR_T *) buf, len, INET_PORT(saSrc)))) {
             LOG(X_ERROR("recv[rtcp rr:%u] RTCP ssrc: 0x%x unable to find RTP stream %s:%d -> :%d"), idx,
-                htonl(*((uint32_t *) &(((uint8_t *) buf)[8]))), inet_ntoa(saSrc.sin_addr), ntohs(saSrc.sin_port),
-                ntohs(saDst.sin_port));
+                htonl(*((uint32_t *) &(((uint8_t *) buf)[8]))), FORMAT_NETADDR(saSrc, tmp, sizeof(tmp)), 
+                ntohs(INET_PORT(saSrc)), ntohs(INET_PORT(saDst)));
           }
 
           if(pdest) {
@@ -2171,7 +2227,8 @@ void stream_rtcp_responder_listener_proc(void *pArg) {
               pthread_mutex_lock(&((STREAM_RTP_MULTI_T *) pdest->pRtpMulti)->mtx);
             }
 
-            stream_rtp_handlertcp(pdest, (RTCP_PKT_HDR_T *) buf, pktlen, &saSrc, &saDst);
+            stream_rtp_handlertcp(pdest, (RTCP_PKT_HDR_T *) buf, pktlen, (const struct sockaddr *) &saSrc, 
+                                  (const struct sockaddr *) &saDst);
 
             if(pdest->pRtpMulti != pRtp) {
               pthread_mutex_unlock(&((STREAM_RTP_MULTI_T *) pdest->pRtpMulti)->mtx);
@@ -2187,8 +2244,8 @@ void stream_rtcp_responder_listener_proc(void *pArg) {
           len = sizeof(saDst); 
           getsockname(STREAM_RTCP_FD(pRtp->pdests[idx]), (struct sockaddr *) &saDst,  (socklen_t *) &len);
           LOG(X_ERROR("recv[rtcp rr:%u] %s:%d -> :%d failed with rc:%d "ERRNO_FMT_STR),
-                      idx, inet_ntoa(saSrc.sin_addr), ntohs(saSrc.sin_port), 
-                      ntohs(saDst.sin_port), pktlen, ERRNO_FMT_ARGS);
+                      idx, FORMAT_NETADDR(saSrc, tmp, sizeof(tmp)), ntohs(INET_PORT(saSrc)), 
+                      ntohs(INET_PORT(saDst)), pktlen, ERRNO_FMT_ARGS);
 
 #if defined(WIN32) 
           } 

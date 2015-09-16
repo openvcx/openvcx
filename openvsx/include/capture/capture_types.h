@@ -57,8 +57,8 @@ typedef struct PKT_PAYLOAD_DATA {
   // data goes here
 } PKT_PAYLOAD_DATA_T;
 
-#define ADDR_LEN_IPV4               4
-#define ADDR_LEN_IPV6               16
+//#define ADDR_LEN_IPV4               4
+//#define ADDR_LEN_IPV6               16
 
 
 

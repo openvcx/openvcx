@@ -623,7 +623,7 @@ static int rtmp_createStream(RTMP_CTXT_T *pRtmp) {
     return rc;
   }
 
-  if((rc = netio_send(&pRtmp->pSd->netsocket, &pRtmp->pSd->sain, pRtmp->out.buf, 
+  if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, pRtmp->out.buf, 
                       pRtmp->out.idx)) < 0) {
     return -1;
   }
@@ -654,7 +654,7 @@ static int rtmp_play(RTMP_CTXT_CLIENT_T *pRtmp) {
     return rc;
   }
 
-  if((rc = netio_send(&pRtmp->ctxt.pSd->netsocket, &pRtmp->ctxt.pSd->sain, 
+  if((rc = netio_send(&pRtmp->ctxt.pSd->netsocket, (const struct sockaddr *)  &pRtmp->ctxt.pSd->sa, 
                     pRtmp->ctxt.out.buf, pRtmp->ctxt.out.idx)) < 0) {
     return -1;
   }
@@ -704,7 +704,8 @@ static int rtmp_handle_ping(RTMP_CTXT_T *pRtmp) {
   int rc = 0;
   uint16_t type;
   uint32_t arg1;
-  char buf[SAFE_INET_NTOA_LEN_MAX];
+  char tmp[128];
+  //char buf[SAFE_INET_NTOA_LEN_MAX];
 
   type = htons( *((uint16_t *) &pRtmp->in.buf[0]) ); 
 
@@ -730,10 +731,10 @@ static int rtmp_handle_ping(RTMP_CTXT_T *pRtmp) {
 
         arg1 = htonl(*((uint32_t *) &pRtmp->in.buf[2])); 
         LOG(X_DEBUG("RTMP sending keep alive response 0x%x to %s:%d"), arg1,
-           net_inet_ntoa(pRtmp->pSd->sain.sin_addr, buf), ntohs(pRtmp->pSd->sain.sin_port));
+           FORMAT_NETADDR(pRtmp->pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pRtmp->pSd->sa)));
 
         if((rc = rtmp_create_ping_client(pRtmp, 0x07, arg1, 0, 0)) < 0 ||
-           (rc = netio_send(&pRtmp->pSd->netsocket, &pRtmp->pSd->sain, pRtmp->out.buf, 
+           (rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, pRtmp->out.buf, 
                     pRtmp->out.idx)) < 0) {
           LOG(X_ERROR("Failed to reply to server ping keep alive"));
           return -1;
@@ -902,11 +903,12 @@ static CONNECT_RETRY_RC_T getrtmpdata(CAP_ASYNC_DESCR_T *pCfg) {
   char tcUrl[RTMP_TCURL_SZMAX];
   FLV_AMF_T *pAmf = NULL;
   FLV_AMF_T amfEntries[20];
-  char buf[SAFE_INET_NTOA_LEN_MAX];
+  //char buf[SAFE_INET_NTOA_LEN_MAX];
+  char tmp[128];
 
   memset(&sockDescr, 0, sizeof(sockDescr));
   NETIO_SET(sockDescr.netsocket, pCfg->pSockList->netsockets[0]);
-  memcpy(&sockDescr.sain, &pCfg->pSockList->salist[0], sizeof(sockDescr.sain));
+  memcpy(&sockDescr.sa, &pCfg->pSockList->salist[0], sizeof(sockDescr.sa));
 
   if(rtmp_client_init(pCfg, &rtmp) < 0) {
     return CONNECT_RETRY_RC_NORETRY;
@@ -921,7 +923,7 @@ static CONNECT_RETRY_RC_T getrtmpdata(CAP_ASYNC_DESCR_T *pCfg) {
 
   if(rtmp_handshake_cli(&rtmp.ctxt, rtmp.fp9) < 0) {
     LOG(X_ERROR("RTMP handshake failed for %s:%d"),
-        inet_ntoa(rtmp.ctxt.pSd->sain.sin_addr), ntohs(rtmp.ctxt.pSd->sain.sin_port));
+        FORMAT_NETADDR(rtmp.ctxt.pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(rtmp.ctxt.pSd->sa)));
     rc = CONNECT_RETRY_RC_ERROR;
   } 
 
@@ -1070,13 +1072,13 @@ static CONNECT_RETRY_RC_T getrtmpdata(CAP_ASYNC_DESCR_T *pCfg) {
         // FMS will silently stop sending data if it does not receive this after > 60 sec
         //
         LOG(X_DEBUG("RTMP sending bytes read report %u to %s:%d"), rtmp.ctxt.bytesRead,
-          net_inet_ntoa(rtmp.ctxt.pSd->sain.sin_addr, buf), ntohs(rtmp.ctxt.pSd->sain.sin_port));
+          FORMAT_NETADDR(rtmp.ctxt.pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(rtmp.ctxt.pSd->sa)));
 
         rtmp_create_bytes_read(&rtmp.ctxt);
         //avc_dumpHex(stderr, rtmp.ctxt.out.buf, rtmp.ctxt.out.idx, 1);
 
-        if(netio_send(&rtmp.ctxt.pSd->netsocket, &rtmp.ctxt.pSd->sain, rtmp.ctxt.out.buf, 
-                            rtmp.ctxt.out.idx) < 0) {
+        if(netio_send(&rtmp.ctxt.pSd->netsocket, (const struct sockaddr *) &rtmp.ctxt.pSd->sa, 
+                      rtmp.ctxt.out.buf, rtmp.ctxt.out.idx) < 0) {
           rc = CONNECT_RETRY_RC_ERROR;
           break;
         }
@@ -1122,7 +1124,7 @@ int capture_rtmp_client(CAP_ASYNC_DESCR_T *pCfg) {
   retryCtxt.pConnectedActionArg = pCfg;
   retryCtxt.pAuthCliCtxt = NULL;
   retryCtxt.pnetsock = &pCfg->pSockList->netsockets[0];
-  retryCtxt.psa = &pCfg->pSockList->salist[0];
+  retryCtxt.psa = (const struct sockaddr *) &pCfg->pSockList->salist[0];
   retryCtxt.connectDescr = "RTMP";
   retryCtxt.pconnectretrycntminone = &pCfg->pcommon->connectretrycntminone;
 
@@ -1191,6 +1193,7 @@ static int cap_rtmp_handle_conn(RTMP_CTXT_CLIENT_T *pRtmp) {
   int rc = 0;
   unsigned int idx;
   int contentType;
+  char tmp[128];
   FLV_AMF_T amfEntries[20];
   int haveFcPublish = 0;
   int haveCreateStream = 0;
@@ -1203,7 +1206,7 @@ static int cap_rtmp_handle_conn(RTMP_CTXT_CLIENT_T *pRtmp) {
   //
   if((rc = rtmp_handshake_srv(&pRtmp->ctxt)) < 0) {
     LOG(X_ERROR("RTMP handshake failed for %s:%d"),
-      inet_ntoa(pRtmp->ctxt.pSd->sain.sin_addr), ntohs(pRtmp->ctxt.pSd->sain.sin_port));
+      FORMAT_NETADDR(pRtmp->ctxt.pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pRtmp->ctxt.pSd->sa)));
     return rc;
   }
 
@@ -1228,7 +1231,7 @@ static int cap_rtmp_handle_conn(RTMP_CTXT_CLIENT_T *pRtmp) {
   rtmp_create_ping(&pRtmp->ctxt, 0, 0);
   rtmp_create_chunksz(&pRtmp->ctxt, RTMP_CHUNK_SZ_OUT);
   rtmp_create_result_invoke(&pRtmp->ctxt);
-  if((rc = netio_send(&pRtmp->ctxt.pSd->netsocket, &pRtmp->ctxt.pSd->sain, 
+  if((rc = netio_send(&pRtmp->ctxt.pSd->netsocket, (const struct sockaddr *) &pRtmp->ctxt.pSd->sa, 
                       pRtmp->ctxt.out.buf, pRtmp->ctxt.out.idx)) < 0) {
     return -1;
   }
@@ -1257,7 +1260,7 @@ static int cap_rtmp_handle_conn(RTMP_CTXT_CLIENT_T *pRtmp) {
       //
       pRtmp->ctxt.out.idx = 0;
       rtmp_create_onfcpublish(&pRtmp->ctxt);
-      if((rc = netio_send(&pRtmp->ctxt.pSd->netsocket, &pRtmp->ctxt.pSd->sain, 
+      if((rc = netio_send(&pRtmp->ctxt.pSd->netsocket, (const struct sockaddr *) &pRtmp->ctxt.pSd->sa, 
                           pRtmp->ctxt.out.buf, pRtmp->ctxt.out.idx)) < 0) {
         break;
       }
@@ -1274,7 +1277,7 @@ static int cap_rtmp_handle_conn(RTMP_CTXT_CLIENT_T *pRtmp) {
       //
       pRtmp->ctxt.out.idx = 0;
       rtmp_create_result(&pRtmp->ctxt);
-      if((rc = netio_send(&pRtmp->ctxt.pSd->netsocket, &pRtmp->ctxt.pSd->sain, 
+      if((rc = netio_send(&pRtmp->ctxt.pSd->netsocket, (const struct sockaddr *) &pRtmp->ctxt.pSd->sa, 
                           pRtmp->ctxt.out.buf, pRtmp->ctxt.out.idx)) < 0) {
         return -1;
       }
@@ -1290,7 +1293,7 @@ static int cap_rtmp_handle_conn(RTMP_CTXT_CLIENT_T *pRtmp) {
       pRtmp->ctxt.out.idx = 0;
       rtmp_create_ping(&pRtmp->ctxt, 0, 0x01);
       rtmp_create_onstatus(&pRtmp->ctxt, RTMP_ONSTATUS_TYPE_PUBLISH);
-      if((rc = netio_send(&pRtmp->ctxt.pSd->netsocket, &pRtmp->ctxt.pSd->sain, 
+      if((rc = netio_send(&pRtmp->ctxt.pSd->netsocket, (const struct sockaddr *) &pRtmp->ctxt.pSd->sa, 
                         pRtmp->ctxt.out.buf, pRtmp->ctxt.out.idx)) < 0) {
         return -1;
       }
@@ -1331,13 +1334,14 @@ static void cap_rtmp_srv_proc(void *pfuncarg) {
   RTMP_CTXT_CLIENT_T rtmp;
   int rc;
   SOCKET_DESCR_T sockDescr;
+  char tmp[128];
 
   LOG(X_INFO("Starting RTMP capture connection from %s:%d"), 
-         inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port));
+         FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
 
   memset(&sockDescr, 0, sizeof(sockDescr));
   NETIO_SET(sockDescr.netsocket, pConn->sd.netsocket);
-  memcpy(&sockDescr.sain, &pCfg->pSockList->salist[0], sizeof(sockDescr.sain));
+  memcpy(&sockDescr.sa, &pCfg->pSockList->salist[0], sizeof(sockDescr.sa));
 
   if((rc = rtmp_client_init(pCfg, &rtmp)) < 0) {
     return;
@@ -1352,13 +1356,14 @@ static void cap_rtmp_srv_proc(void *pfuncarg) {
   rtmp_client_close(&rtmp);
   netio_closesocket(&pConn->sd.netsocket);
 
-  LOG(X_DEBUG("RTMP capture connection ended %s:%d"), inet_ntoa(pConn->sd.sain.sin_addr),
-                                        ntohs(pConn->sd.sain.sin_port));
+  LOG(X_DEBUG("RTMP capture connection ended %s:%d"), FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)),
+                                                      ntohs(INET_PORT(pConn->sd.sa)));
 }
 
 int capture_rtmp_server(CAP_ASYNC_DESCR_T *pCfg) {
   int rc = 0;
   POOL_T pool;
+  char tmp[128];
   SRV_LISTENER_CFG_T listenCfg;
   CLIENT_CONN_T *pClient;
   
@@ -1383,13 +1388,13 @@ int capture_rtmp_server(CAP_ASYNC_DESCR_T *pCfg) {
 
 
   if((NETIOSOCK_FD(pCfg->pSockList->netsockets[0]) = 
-      net_listen(&pCfg->pSockList->salist[0], 2)) == INVALID_SOCKET) {
+      net_listen((const struct sockaddr *) &pCfg->pSockList->salist[0], 2)) == INVALID_SOCKET) {
     pool_close(&pool, 0);
     return -1;
   }
 
   LOG(X_INFO("RTMP capture listener available on %s:%d"),
-      inet_ntoa(pCfg->pSockList->salist[0].sin_addr), ntohs(pCfg->pSockList->salist[0].sin_port));
+      FORMAT_NETADDR(pCfg->pSockList->salist[0], tmp, sizeof(tmp)), ntohs(INET_PORT(pCfg->pSockList->salist[0])));
 
   memset(&listenCfg, 0, sizeof(listenCfg));
   listenCfg.pnetsockSrv = &pCfg->pSockList->netsockets[0];

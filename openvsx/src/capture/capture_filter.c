@@ -496,7 +496,9 @@ int capture_filterFromSdp(const char *sdppath,
   SDP_DESCR_T sdp;
   const uint16_t *p_port1 = NULL;
   const uint16_t *p_port2 = NULL;
-  struct in_addr addr;
+  //struct in_addr addr;
+  struct sockaddr_storage addr;
+  char tmp[128];
   unsigned int numports = 0;
 
   if(!listenAddrOut || !pFilters || (!sdppath && !pSdp)) {
@@ -647,11 +649,28 @@ int capture_filterFromSdp(const char *sdppath,
     }
   }
 
-  if((addr.s_addr = inet_addr(pSdp->c.iphost)) == INADDR_NONE || 
-     (!IN_MULTICAST(htonl(addr.s_addr)) &&!IN_LOCALHOST(htonl(addr.s_addr)))) {
-    addr.s_addr = INADDR_ANY;
+  memset(&addr, 0, sizeof(addr));
+  addr.ss_family = pSdp->c.ip_family;
+
+  //
+  // If the 'connect' address is not multicast, and not localhost, set it to INADDR_ANY
+  // This prohibits binding to a specific interface based on address under the assumption that the 
+  // 'c' field comes from a remote SDP with an address that is not appropriate on the local system.
+  //
+  if((1 != INET_PTON(pSdp->c.iphost, addr) || 
+      (addr.ss_family != AF_INET6 && ((struct sockaddr_in *)&addr)->sin_addr.s_addr == INADDR_NONE)) ||
+      (!INET_IS_MULTICAST(addr) && !INET_ADDR_LOCALHOST(addr))) {
+
+    if(addr.ss_family == AF_INET6) {
+      memset(&((struct sockaddr_in6 *) &addr)->sin6_addr.s6_addr[0], 0, ADDR_LEN_IPV6);
+    } else {
+      ((struct sockaddr_in *) &addr)->sin_addr.s_addr = INADDR_ANY;
+    }
   }
-  sz = snprintf(listenAddrOut, listenAddrLen, "%s", inet_ntoa(addr));
+
+  sz = snprintf(listenAddrOut, listenAddrLen, "%s%s%s", 
+               addr.ss_family == AF_INET6 ? "[" : "", INET_NTOP(addr, tmp, sizeof(tmp)),
+               addr.ss_family == AF_INET6 ? "]" : "");
 
   if(p_port1) {
     if((rc = snprintf(&listenAddrOut[sz], listenAddrLen - sz, ":%d", *p_port1)) > 0) {

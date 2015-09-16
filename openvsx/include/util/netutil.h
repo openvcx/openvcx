@@ -55,27 +55,93 @@
 #define SOCK_RCVBUFSZ_UDP_DEFAULT      0x2ffff
 #define SOCK_SNDBUFSZ_UDP_DEFAULT      0 
 
+//
+// IPv6 compatibility macros
+//
+#define ADDR_LEN_IPV4               4
+#define ADDR_LEN_IPV6               16
+
+/*
+typedef struct IP_ADDR {
+  sa_family_t             family;
+  union {
+    struct in6_addr       addr6;
+    struct in_addr        addr4;
+  } ip_un;
+} IP_ADDR_T;
+*/
+
+#define INET_NTOP(storage, buf, bufsz)  ((const struct sockaddr_storage *) &(storage))->ss_family == AF_INET6 ? \
+                      inet_ntop(AF_INET6, &((const struct sockaddr_in6 *) &(storage))->sin6_addr, (buf), (bufsz)) : \
+                      inet_ntop(AF_INET, &((const struct sockaddr_in *) &(storage))->sin_addr, (buf), (bufsz))
+
+#define INET_PTON(ip, storage)  (((const const struct sockaddr_storage *) &(storage))->ss_family == AF_INET6 ? \
+                      inet_pton(AF_INET6, ip, &((struct sockaddr_in6 *) &(storage))->sin6_addr) : \
+                      inet_pton(AF_INET, ip, &((struct sockaddr_in *) &(storage))->sin_addr))
+#define INET_PORT(storage) (((struct sockaddr_in *) &(storage))->sin_port)
+#define PINET_PORT(pstorage) (((struct sockaddr_in *) (pstorage))->sin_port)
+
+#define INET_SIZE(storage) (((const struct sockaddr *) &(storage))->sa_family == AF_INET6 ? sizeof(struct sockaddr_in6) : \
+                            sizeof(struct sockaddr_in))
+
+#define INET_IS_MULTICAST(storage) (((const struct sockaddr_storage *) &(storage))->ss_family == AF_INET6 ? \
+                      IN6_IS_ADDR_MULTICAST( &((const struct sockaddr_in6 *)  &(storage))->sin6_addr) : \
+                      IN_MULTICAST( htonl(((const struct sockaddr_in *) &(storage))->sin_addr.s_addr)))
+
+#define INET_IS_SAMEADDR(s1, s2)  \
+     ((((const struct sockaddr *)&(s1))->sa_family == AF_INET6 && (!memcmp(&((const struct sockaddr_in6 *) &(s1))->sin6_addr.s6_addr[0],  \
+                                          &((const struct sockaddr_in6 *) &(s2))->sin6_addr.s6_addr[0], 16))) ||  \
+      (((const struct sockaddr *)&(s1))->sa_family != AF_INET6 && ((const struct sockaddr_in *) &(s1))->sin_addr.s_addr == \
+                                  ((const struct sockaddr_in *) &(s2))->sin_addr.s_addr))
+
+#define INET_ADDR_VALID(storage)   (((const struct sockaddr_storage *) &(storage))->ss_family == AF_INET6 ? \
+                                   !IN6_IS_ADDR_UNSPECIFIED( &((const struct sockaddr_in6 *) &(storage))->sin6_addr) : \
+                                   IS_ADDR4_VALID(   ((const struct sockaddr_in *) &(storage))->sin_addr ))
+
+#define INET_ADDR_LOCALHOST(storage)  (((const struct sockaddr_storage *) &(storage))->ss_family == AF_INET6 ? \
+                                   IN6_IS_ADDR_LOOPBACK( &((const struct sockaddr_in6 *) &(storage))->sin6_addr) : \
+                                   IN_LOCALHOST(htonl(((const struct sockaddr_in *) &(storage))->sin_addr.s_addr)))
+
+#define INET_NTOP_ADDR_FMT_STR "%s%s%s"
+#define INET_NTOP_ADDR_FMT_ARGS(storage, buf, bufsz) \
+                            ((const struct sockaddr_storage *) &(storage))->ss_family == AF_INET6 ? "[" : "", \
+                            INET_NTOP(storage, buf, bufsz), \
+                            ((const struct sockaddr_storage *) &(storage))->ss_family == AF_INET6 ? "]" : ""
+
+#define INET_NTOP_FMT_STR INET_NTOP_ADDR_FMT_STR":%d"
+#define INET_NTOP_FMT_ARGS(storage, buf, bufsz)  INET_NTOP_ADDR_FMT_ARGS(storage, buf, bufsz), \
+                                                 ntohs(INET_PORT(storage)) 
+//
+// Used to format an IPv4 or IPv6 address as a string
+//
+#define FORMAT_NETADDR(sa, buf, bufsz) strutil_format_netaddr((const struct sockaddr *) &(sa), (buf), (bufsz))
 
 
-SOCKET net_opensocket(int socktype, unsigned int rcvbufsz, int sndbufsz, struct sockaddr_in *psain);
+SOCKET net_opensocket(int socktype, unsigned int rcvbufsz, int sndbufsz, const struct sockaddr *psa);
 int net_issockremotelyclosed(SOCKET sock, int writer);
-SOCKET net_listen(struct sockaddr_in *psain, int backlog);
+SOCKET net_listen(const struct sockaddr *psa, int backlog);
 
 
 void net_closesocket(SOCKET *psock);
 int net_setsocknonblock(SOCKET sock, int on);
-int net_connect(SOCKET sock, struct sockaddr_in *psa);
-//int net_bindlistener(SOCKET sock, struct sockaddr_in *psain);
+int net_connect(SOCKET sock, const struct sockaddr *psa);
+//int net_bindlistener(SOCKET sock, struct sockaddr *psa);
 int net_getlocalmediaport(int numpairs);
-int net_setqos(SOCKET sock, const struct sockaddr_in *psain, uint8_t dscp);
-in_addr_t net_resolvehost(const char *host);
-in_addr_t net_getlocalip();
+//int net_setqos4(SOCKET sock, const struct sockaddr *psa, uint8_t dscp);
+int net_setqos(SOCKET sock, const struct sockaddr *psa , uint8_t dscp);
+//in_addr_t net_resolvehost4(const char *host);
+int net_resolvehost(const char *host, struct sockaddr_storage *pstorage);
+int net_getaddress(const char *address, struct sockaddr_storage *pstorage);
+in_addr_t net_getlocalip4();
 const char *net_getlocalhostname();
 int net_getlocalmac(const char *dev, unsigned char mac[]);
 int net_setlocaliphost(const char *ipstr);
 
 #define SAFE_INET_NTOA_LEN_MAX     32
-char *net_inet_ntoa(struct in_addr in, char *buf);
+#define SAFE_INET_NTOP_LEN_MAX    64 // > INET6_ADDRSTRLEN (46)
+//char *net_inet_ntoa(struct in_addr in, char *buf);
+//char *net_inet_ntop(const struct sockaddr *psa, char *buf);
+int net_isipv6(const char *str);
 
 
 

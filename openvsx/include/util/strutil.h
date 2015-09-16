@@ -37,6 +37,8 @@ typedef int (* PARSE_PAIR_CB) (void *, const char *);
 STREAM_PROTO_T strutil_convertProtoStr(const char *protoStr);
 int strutil_convertDstStr(const char *dstArg, char dstHost[], size_t szHost,
                          uint16_t dstPorts[], size_t numDstPorts, char dstUri[], size_t szUri);
+int strutil_parseAddress(const char *str, char host[], size_t szHost, char ports[], size_t szports,
+                         char uri[], size_t szuri);
 int path_getLenNonPrefixPart(const char *path);
 int path_getLenDirPart(const char *path);
 int get_port_range(const char *str, uint16_t *pstart, uint16_t *pend);
@@ -51,6 +53,6 @@ int64_t strutil_read_numeric(const char *s, int bAllowbps, int bytesInK, int dfl
 int strutil_isTextFile(const char *path);
 const char *strutil_getFileExtension(const char *filename);
 const char *strutil_getFileName(const char *path);
-
+const char *strutil_format_netaddr(const struct sockaddr *, char *buf, unsigned int bufsz);
 
 #endif // __STRUTIL_H__

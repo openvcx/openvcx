@@ -231,7 +231,7 @@ leaveChime=chime7b.mp4
 
 
 #
-# TURN server address:port
+# TURN server [address | host]:port
 #
 #TURNServer=
 

@@ -1350,6 +1350,9 @@ static int vsxlib_set_output_int(STREAMER_CFG_T *pStreamerCfg,
 
     pStreamerCfg->pdestsCfg[0].outTransType = outTransType = capture_parseTransportStr(&outputs[0]);
 
+    //
+    // Get any username or password from the output string
+    //
     if(capture_parseAuthUrl(&outputs[0], &pStreamerCfg->creds[STREAMER_AUTH_IDX_RTSPANNOUNCE].stores[0]) < 0) {
       return (int) VSX_RC_ERROR;
     }
@@ -1514,10 +1517,10 @@ static int vsxlib_set_output_int(STREAMER_CFG_T *pStreamerCfg,
 }
 
 static int output_load_turn_candidate(const SDP_STREAM_DESCR_T *pSdpDescr, uint16_t *psdpRtpPort, 
-                                      uint16_t *psdpRtcpPort, const struct in_addr **ppaddrTurnHost) {
+                                      uint16_t *psdpRtcpPort, const struct sockaddr **ppaddrTurnHost) {
   int rc = 0;
   unsigned int candidateIdx;
-  const struct sockaddr_in *psa = NULL;
+  const struct sockaddr *psa = NULL;
 
   if(!pSdpDescr->available) {
     return 0;
@@ -1527,14 +1530,14 @@ static int output_load_turn_candidate(const SDP_STREAM_DESCR_T *pSdpDescr, uint1
     if(pSdpDescr->iceCandidates[candidateIdx].type == SDP_ICE_TYPE_RELAY) {
 
       //psa = &pSdpDescr->iceCandidates[candidateIdx].address;
-      psa = &pSdpDescr->iceCandidates[candidateIdx].raddress;
+      psa = (const struct sockaddr *) &pSdpDescr->iceCandidates[candidateIdx].raddress;
 
       if(pSdpDescr->iceCandidates[candidateIdx].component == 1) { 
-        *psdpRtpPort = htons(psa->sin_port);
+        *psdpRtpPort = htons(PINET_PORT(psa));
       } else if(pSdpDescr->iceCandidates[candidateIdx].component == 2) { 
-        *psdpRtcpPort = htons(psa->sin_port);
+        *psdpRtcpPort = htons(PINET_PORT(psa));
       }
-      *ppaddrTurnHost = &psa->sin_addr;
+      *ppaddrTurnHost = psa;
       rc = 1;
     }
   }
@@ -1550,7 +1553,7 @@ static int output_create_from_sdp(const char *path, const TURN_CFG_T *pTurnCfg, 
   const SDP_STREAM_DESCR_T *pSdpDescr = NULL;
   const char *dstHost = NULL;
   int use_turn = 0;
-  const struct in_addr *paddrTurnHost = NULL;
+  const struct sockaddr *paddrTurnHost = NULL;
   uint16_t sdpRtpPorts[2];
   uint16_t sdpRtcpPorts[2];
 
@@ -1666,7 +1669,7 @@ static int output_create_from_sdp(const char *path, const TURN_CFG_T *pTurnCfg, 
     tmpbuf[0] = '\0';
 
     if(paddrTurnHost) {
-       safe_strncpy(tmpbuf, inet_ntoa(*paddrTurnHost), sizeof(tmpbuf));
+       safe_strncpy(tmpbuf, INET_NTOP(*paddrTurnHost, tmp, sizeof(tmp)), sizeof(tmpbuf));
     }
 
     if(strncasecmp(tmpbuf, pTurnCfg->turnServer, sizeof(tmpbuf))) {

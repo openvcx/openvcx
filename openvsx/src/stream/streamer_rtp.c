@@ -593,29 +593,30 @@ static char *output_descr_stream(char *buf, unsigned int sz, const STREAM_RTP_DE
   int rc = 0;
   unsigned int idx = 0;
   char descr[2][128];
+  char tmp[128];
   const NETIO_SOCK_T *pnetsock = STREAM_RTP_PNETIOSOCK(*pDest);
-  const struct sockaddr_in *psadst = &pDest->saDsts;
+  const struct sockaddr *psadst = (const struct sockaddr *) &pDest->saDsts;
 
   descr[0][0] = descr[1][0] = '\0';
 
   if(pnetsock->turn.use_turn_indication_out) {
-    psadst = &pnetsock->turn.saTurnSrv;
+    psadst = (const struct sockaddr *) &pnetsock->turn.saTurnSrv;
     snprintf(descr[0], sizeof(descr[0]), "TURN ");
     snprintf(descr[1], sizeof(descr[1]), " (turn-remote-peer-address: %s:%d)", 
-              inet_ntoa(pnetsock->turn.saPeerRelay.sin_addr), htons(pnetsock->turn.saPeerRelay.sin_port));
+              FORMAT_NETADDR(pnetsock->turn.saPeerRelay, tmp, sizeof(tmp)), htons(INET_PORT(pnetsock->turn.saPeerRelay)));
 
   }
 
   if((rc = snprintf(buf, sz, "Streaming to %s%s:%d%s %s %s",
-                descr[0], inet_ntoa(psadst->sin_addr), ntohs(psadst->sin_port), 
+                descr[0], FORMAT_NETADDR(*psadst, tmp, sizeof(tmp)), ntohs(PINET_PORT(psadst)), 
                 descr[1], RTP_TRANS_DESCR2(pStreamOut->pXmitAction, pDest), pStreamOut->descr)) > 0) {
     idx += rc;
   }
 
-  if(pStreamOut->pXmitAction->do_output_rtphdr && ntohs(pDest->saDstsRtcp.sin_port) > 0 &&
-     RTCP_PORT_FROM_RTP(ntohs(pDest->saDsts.sin_port)) != ntohs(pDest->saDstsRtcp.sin_port)) {
+  if(pStreamOut->pXmitAction->do_output_rtphdr && ntohs(INET_PORT(pDest->saDstsRtcp)) > 0 &&
+     RTCP_PORT_FROM_RTP(ntohs(INET_PORT(pDest->saDsts))) != ntohs(INET_PORT(pDest->saDstsRtcp))) {
 
-    snprintf(&buf[idx], sz - idx, ", rtcp-port:%d", ntohs(pDest->saDstsRtcp.sin_port));
+    snprintf(&buf[idx], sz - idx, ", rtcp-port:%d", ntohs(INET_PORT(pDest->saDstsRtcp)));
 
   }
 
@@ -1235,7 +1236,7 @@ static int check_duplicate_rtcp(STREAM_RTP_MULTI_T rtpMultisRtp[IXCODE_VIDEO_OUT
       for(idxDest = 0; idxDest < rtpMultisRtp[outidx][idx].maxDests; idxDest++) {
 
         if(!rtpMultisRtp[outidx][idx].pdests[idxDest].isactive ||
-          rtpMultisRtp[outidx][idx].pdests[idxDest].saDstsRtcp.sin_port == 0) {
+          INET_PORT(rtpMultisRtp[outidx][idx].pdests[idxDest].saDstsRtcp) == 0) {
           continue;
         }
 
@@ -1244,14 +1245,14 @@ static int check_duplicate_rtcp(STREAM_RTP_MULTI_T rtpMultisRtp[IXCODE_VIDEO_OUT
             for(idxDest2 = 0; idxDest2 < rtpMultisRtp[outidx2][idx2].maxDests; idxDest2++) {
 
               if(!rtpMultisRtp[outidx][idx].pdests[idxDest].isactive ||
-                rtpMultisRtp[outidx][idx].pdests[idxDest].saDsts.sin_port == 0 ||
-                rtpMultisRtp[outidx][idx].pdests[idxDest].saDstsRtcp.sin_port == 0 ||
+                INET_PORT(rtpMultisRtp[outidx][idx].pdests[idxDest].saDsts) == 0 ||
+                INET_PORT(rtpMultisRtp[outidx][idx].pdests[idxDest].saDstsRtcp) == 0 ||
                 (outidx == outidx2 && idx == idx2 && idxDest == idxDest2)) {
                 continue;
-              } else if(rtpMultisRtp[outidx][idx].pdests[idxDest].saDstsRtcp.sin_port == 
-                        rtpMultisRtp[outidx2][idx2].pdests[idxDest2].saDstsRtcp.sin_port ||
-                        rtpMultisRtp[outidx][idx].pdests[idxDest].saDsts.sin_port == 
-                        rtpMultisRtp[outidx2][idx2].pdests[idxDest2].saDsts.sin_port) {
+              } else if(INET_PORT(rtpMultisRtp[outidx][idx].pdests[idxDest].saDstsRtcp) == 
+                        INET_PORT(rtpMultisRtp[outidx2][idx2].pdests[idxDest2].saDstsRtcp) ||
+                        INET_PORT(rtpMultisRtp[outidx][idx].pdests[idxDest].saDsts) == 
+                        INET_PORT(rtpMultisRtp[outidx2][idx2].pdests[idxDest2].saDsts)) {
                 //fprintf(stderr, "DUP!\n");
                 return 1;
               }
@@ -1260,7 +1261,7 @@ static int check_duplicate_rtcp(STREAM_RTP_MULTI_T rtpMultisRtp[IXCODE_VIDEO_OUT
           }
         }
 
-        //fprintf(stderr, "OUTIDX[%d][%d].idxDest[%d/%d]:active:%d, port:%d, cnt:%d\n", outidx, idx, idxDest,rtpMultisRtp[outidx][idx].maxDests, rtpMultisRtp[outidx][idx].pdests[idxDest].isactive, htons(rtpMultisRtp[outidx][idx].pdests[idxDest].saDstsRtcp.sin_port), cnt);
+        //fprintf(stderr, "OUTIDX[%d][%d].idxDest[%d/%d]:active:%d, port:%d, cnt:%d\n", outidx, idx, idxDest,rtpMultisRtp[outidx][idx].maxDests, rtpMultisRtp[outidx][idx].pdests[idxDest].isactive, htons(INET_PORT(rtpMultisRtp[outidx][idx].pdests[idxDest].saDstsRtcp)), cnt);
       }
     }
   }
@@ -4271,6 +4272,7 @@ int stream_mp2ts_raw(const STREAM_DATASRC_T *pDataSrc,
   STREAM_RTP_MP2TS_REPLAY_T streamMp2ts;
   //unsigned int outidx;
   unsigned int idxDest;
+  char tmp[128];
 
   if(!pCfg || pCfg->numDests >= *pCfg->pmaxRtp ||
      (pCfg->action.do_output && pCfg->numDests < 1) ||
@@ -4375,8 +4377,8 @@ int stream_mp2ts_raw(const STREAM_DATASRC_T *pDataSrc,
 
   for(idxDest = 0; idxDest < pCfg->numDests; idxDest++) {
      LOG(X_INFO("Streaming to: %s:%d %s"),
-        inet_ntoa(stream.pRtpMulti->pdests[idxDest].saDsts.sin_addr),
-        ntohs(stream.pRtpMulti->pdests[idxDest].saDsts.sin_port), stream.descr);
+        FORMAT_NETADDR(stream.pRtpMulti->pdests[idxDest].saDsts, tmp, sizeof(tmp)),
+        ntohs(INET_PORT(stream.pRtpMulti->pdests[idxDest].saDsts)), stream.descr);
   }
 
   if(pCfg->action.do_tslive || pCfg->action.do_httplive) {

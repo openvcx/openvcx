@@ -75,7 +75,7 @@ typedef struct STUN_BINDING_STATE {
 } STUN_BINDING_STATE_T;
 
 int stun_onrcv(STUN_CTXT_T *pCtxt, struct TURN_CTXT *pTurn, const unsigned char *pData, unsigned int len, 
-               const struct sockaddr_in *psaSrc, const struct sockaddr_in *psaLocal, NETIO_SOCK_T *pnetsock,
+               const struct sockaddr *psaSrc, const struct sockaddr *psaLocal, NETIO_SOCK_T *pnetsock,
                int is_turn);
 
 struct STREAM_RTP_DEST;

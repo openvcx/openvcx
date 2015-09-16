@@ -42,15 +42,15 @@ typedef struct HTTPCLI_AUTH_CTXT {
 } HTTPCLI_AUTH_CTXT_T;
 
 int httpcli_gethdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttPesp,
-                     struct sockaddr_in *psain, const char *uri,
+                     const struct sockaddr *psa, const char *uri,
                      const char *connType, unsigned int range0,
                      unsigned int range1, const char *host,
                      HTTPCLI_AUTH_CTXT_T *pAuthCliCtxt);
 
-int httpcli_connect(NETIO_SOCK_T *pnetsock, struct sockaddr_in *psain, const char *descr);
+int httpcli_connect(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa, const char *descr);
 
 int httpcli_req_queryhdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttpResp,
-                          struct sockaddr_in *psain, HTTPCLI_AUTH_CTXT_T *pAuthCliCtxt, 
+                          const struct sockaddr *psa, HTTPCLI_AUTH_CTXT_T *pAuthCliCtxt, 
                           const char *descr);
 
 /**

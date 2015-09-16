@@ -196,8 +196,8 @@ int http_readhdr(HTTP_PARSE_CTXT_T *pCtxt) {
   unsigned int sz;
   unsigned int idx;
   unsigned int startidxbuf;
-  char tmp[64];
-  struct sockaddr_in sain;
+  char tmp[128];
+  struct sockaddr_storage sa;
   struct timeval tv0, tv1;
 
   if(!pCtxt || !pCtxt->pbuf || !pCtxt->pnetsock || PNETIOSOCK_FD(pCtxt->pnetsock) == INVALID_SOCKET || 
@@ -242,11 +242,11 @@ int http_readhdr(HTTP_PARSE_CTXT_T *pCtxt) {
 
       } else if(rcvd == 0) {
         pCtxt->rcvclosed = 1;
-        rc = sizeof(sain);
-        getpeername(PNETIOSOCK_FD(pCtxt->pnetsock), (struct sockaddr *) &sain, (socklen_t *) &rc);
+        rc = sizeof(sa);
+        getpeername(PNETIOSOCK_FD(pCtxt->pnetsock), (struct sockaddr *) &sa, (socklen_t *) &rc);
         LOG(X_DEBUG("Timeout reached while waiting for HTTP Headers %d / %d, %dms from %s:%d"),
             pCtxt->idxbuf, pCtxt->hdrslen, pCtxt->tmtms, 
-            net_inet_ntoa(sain.sin_addr, tmp), htons(sain.sin_port)); 
+            FORMAT_NETADDR(sa, tmp, sizeof(tmp)), htons(INET_PORT(sa))); 
       }
       //fprintf(stderr, "called net_recvnb tmt: %d rcvd:%d\n", pCtxt->tmtms, rcvd);
 
@@ -293,11 +293,11 @@ int http_readhdr(HTTP_PARSE_CTXT_T *pCtxt) {
     if(pCtxt->tmtms > 0 && pCtxt->hdrslen == 0) {
       gettimeofday(&tv1, NULL);
       if(TIME_TV_DIFF_MS(tv1, tv0) > pCtxt->tmtms) {
-        rc = sizeof(sain);
-        getpeername(PNETIOSOCK_FD(pCtxt->pnetsock), (struct sockaddr *) &sain, (socklen_t *) &rc);
+        rc = sizeof(sa);
+        getpeername(PNETIOSOCK_FD(pCtxt->pnetsock), (struct sockaddr *) &sa, (socklen_t *) &rc);
         LOG(X_ERROR("Timeout reached (2) while waiting for HTTP Headers %d / %d, %dms from %s:%d"),
             pCtxt->idxbuf, pCtxt->hdrslen, pCtxt->tmtms, 
-            net_inet_ntoa(sain.sin_addr, tmp), htons(sain.sin_port)); 
+            FORMAT_NETADDR(sa, tmp, sizeof(tmp)), htons(INET_PORT(sa))); 
         rc = -1;
         break;
       }

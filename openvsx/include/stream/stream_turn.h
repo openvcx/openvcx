@@ -43,7 +43,7 @@
 
 typedef struct TURN_RELAY_SETUP_RESULT {
   //pthread_mutex_t                    mtx;
-  struct sockaddr_in                 saListener;
+  struct sockaddr_storage            saListener;
   int                                active;
   int                                state;
   int                                is_rtcp;
@@ -68,8 +68,8 @@ typedef struct TURN_CTXT {
   int                                retryCnt;
   int                                reqArgLifetime;  // lifetime argument for refresh
   int                                reqArgChannelId; // channel argumetn for channel binding
-  struct sockaddr_in                 saPeerRelay;     // peer TURN allocation for local createpermission request
-  struct sockaddr_in                 saTurnSrv;
+  struct sockaddr_storage            saPeerRelay;     // peer TURN allocation for local createpermission request
+  struct sockaddr_storage            saTurnSrv;
   STUN_MESSAGE_INTEGRITY_STORE_T     store;
   STUN_MESSAGE_INTEGRITY_PARAM_T     integrity;
   STUN_ATTRIB_T                      lastError;       // From last server response
@@ -120,15 +120,15 @@ int turn_create_datamsg(const unsigned char *pData, unsigned int szdata,
 int turn_onrcv_pkt(TURN_CTXT_T *pTurn, STUN_CTXT_T *pStun,
                    int is_turn_channeldata, int *pis_turn, int *pis_turn_indication,
                    unsigned char **ppData, int *plen,
-                   const struct sockaddr_in *psaSrc, const struct sockaddr_in *psaDst, NETIO_SOCK_T *pnetsock);
+                   const struct sockaddr *psaSrc, const struct sockaddr *psaDst, NETIO_SOCK_T *pnetsock);
 
 int turn_onrcv_response(TURN_CTXT_T *pTurn,
                         const STUN_MESSAGE_INTEGRITY_PARAM_T *pIntegrity, const STUN_MSG_T *pMsg,
-                        const struct sockaddr_in *psaSrc, const struct sockaddr_in *psaLocal);
+                        const struct sockaddr *psaSrc, const struct sockaddr *psaLocal);
 
 int turn_onrcv_indication_data(TURN_CTXT_T *pTurn,
                                const STUN_MESSAGE_INTEGRITY_PARAM_T *pIntegrity, const STUN_MSG_T *pMsg,
-                               const struct sockaddr_in *psaSrc, const struct sockaddr_in *psaLocal);
+                               const struct sockaddr *psaSrc, const struct sockaddr *psaLocal);
 const char *turn_policy2str(TURN_POLICY_T policy);
 
 

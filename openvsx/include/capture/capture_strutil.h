@@ -32,17 +32,17 @@ int capture_parsePortStr(const char *str, uint16_t localPorts[], size_t maxLocal
                          int noDup);
 int capture_parsePayloadTypes(const char *str,  int *vidPt, int *audPt);
 int capture_parseLocalAddr(const char *localAddr, SOCKET_LIST_T *pSockList);
-int capture_parseAddr(const char *localAddr, struct sockaddr_in *psain, int defaultPort);
+//int capture_parseAddr(const char *localAddr, struct sockaddr *psa, int defaultPort);
 CAPTURE_FILTER_TRANSPORT_T capture_parseTransportStr(const char **ppstr);
 int capture_parseAuthUrl(const char **ppstr, AUTH_CREDENTIALS_STORE_T *pauth);
 char *capture_safe_copyToBuf(char *buf, size_t szbuf, const char *pstart, const char *pend);
 
-char *capture_log_format_pkt(char *buf, unsigned int sz, const struct sockaddr_in *pSaSrc, 
-                             const struct sockaddr_in *pSaDst);
-char *stream_log_format_pkt(char *buf, unsigned int sz, const struct sockaddr_in *pSaSrc, 
-                            const struct sockaddr_in *pSaDst);
+char *capture_log_format_pkt(char *buf, unsigned int sz, const struct sockaddr *pSaSrc, 
+                             const struct sockaddr *pSaDst);
+char *stream_log_format_pkt(char *buf, unsigned int sz, const struct sockaddr *pSaSrc, 
+                            const struct sockaddr *pSaDst);
 char *stream_log_format_pkt_sock(char *buf, unsigned int sz, const NETIO_SOCK_T *pnetsock,
-                                 const struct sockaddr_in *pSaDst);
+                                 const struct sockaddr *pSaDst);
 
 
 #endif // __CAPTURE_STRUTIL_H__

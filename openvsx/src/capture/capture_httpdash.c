@@ -33,7 +33,7 @@ typedef struct HTTPDASH_CLIENT {
   //CAP_HTTP_MP4_STREAM_T  *pCapHttpMp4Stream;
   int                     insession;
   NETIO_SOCK_T            netsock;
-  struct sockaddr_in      sa;
+  struct sockaddr_storage sa;
   char                    hostbuf[CAPTURE_HTTP_HOSTBUF_MAXLEN];
   char                    uriprefix[256];
   int                     running;
@@ -84,7 +84,7 @@ static int get_moof(HTTPDASH_CLIENT_T *pClient, const char *puri, const char *pa
   hdrCtxt.szbuf = sizeof(buf);
   hdrCtxt.tmtms = 0;
 
-  if((httpcli_gethdrs(&hdrCtxt, &httpResp, &pClient->sa, puri,
+  if((httpcli_gethdrs(&hdrCtxt, &httpResp, (const struct sockaddr *) &pClient->sa, puri,
           http_getConnTypeStr(HTTP_CONN_TYPE_KEEPALIVE), 0, 0, pClient->hostbuf, NULL)) < 0) {
     return -1;
   }
@@ -108,7 +108,7 @@ static int get_moof(HTTPDASH_CLIENT_T *pClient, const char *puri, const char *pa
   if(rc >= 0 && pClient->pCfg->running == 0) {
     rc = http_mp4_recv(pClient->pCfg, 
                        &pClient->netsock, 
-                       &pClient->sa, 
+                       (const struct sockaddr *) &pClient->sa, 
                        contentLen, 
                        &hdrCtxt, 
                        pathOut);
@@ -297,7 +297,8 @@ static void httpdash_mediaproc(void *pArg) {
 
         fprintf(stderr, "----DASH MEDIA GET for '%s' '%s'\n", urlpath, puri);
 
-        if((rc = httpcli_connect(&pClient->netsock, &pClient->sa, "DASH media thread")) < 0) {
+        if((rc = httpcli_connect(&pClient->netsock, (const struct sockaddr *) &pClient->sa, 
+                                  "DASH media thread")) < 0) {
           break;
         }
 /*
@@ -405,8 +406,8 @@ int http_gethttpdash(CAP_ASYNC_DESCR_T *pCfg,
 
 //fprintf(stderr, "GOING TO CONNECT FOR DASH PLAYLIST...\n");
 
-      if((rc = httpcli_connect(&pCfg->pSockList->netsockets[0], &pCfg->pSockList->salist[0], 
-                               "DASH playlist thread")) < 0) {
+      if((rc = httpcli_connect(&pCfg->pSockList->netsockets[0], (const struct sockaddr *) 
+                               &pCfg->pSockList->salist[0], "DASH playlist thread")) < 0) {
         break;
       }
 

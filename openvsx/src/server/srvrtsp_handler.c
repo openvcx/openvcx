@@ -143,7 +143,7 @@ static int rtsp_resp_sendhdr(SOCKET_DESCR_T *pSd,
     LOGHEXT_DEBUG(buf, sz);
   );
 
-  if((rc = netio_send(&pSd->netsocket,  &pSd->sain, (unsigned char *) buf, sz)) < 0) {
+  if((rc = netio_send(&pSd->netsocket, (const struct sockaddr *) &pSd->sa, (unsigned char *) buf, sz)) < 0) {
     LOG(X_ERROR("Failed to send RTSP response headers %d bytes"), sz);
   }
 
@@ -311,7 +311,8 @@ int rtsp_prepare_sdp(const STREAMER_CFG_T *pStreamerCfg, unsigned int outidx,
                      SRTP_CTXT_KEY_TYPE_T srtpKts[STREAMER_PAIR_SZ], SDP_DESCR_T *pSdp) {
   int rc = 0;
   SRTP_CTXT_T srtpsTmp[STREAMER_PAIR_SZ]; 
-  struct in_addr sdp_connect;
+  char tmp[128];
+  struct sockaddr_storage sdp_connect;
   unsigned int srtpidx = 0;
   unsigned int numchannels = 0;
   unsigned int contentLen = 0;
@@ -391,8 +392,10 @@ int rtsp_prepare_sdp(const STREAMER_CFG_T *pStreamerCfg, unsigned int outidx,
   if(rc >= 0) {
     //sdp_connect.s_addr = inet_addr(pSdp->.c.iphost);
     memset(&sdp_connect, 0, sizeof(sdp_connect));
-    sdp_connect.s_addr = INADDR_ANY;
-    snprintf(pSdp->c.iphost, sizeof(pSdp->c.iphost), "%s", inet_ntoa(sdp_connect));
+    if((sdp_connect.ss_family = pSdp->c.ip_family) != AF_INET6) {
+      ((struct sockaddr_in *) &sdp_connect)->sin_addr.s_addr = INADDR_ANY;
+    }
+    snprintf(pSdp->c.iphost, sizeof(pSdp->c.iphost), "%s", INET_NTOP(sdp_connect, tmp, sizeof(tmp)));
 
 #if defined(TESTQT)
     pSdp->vid.common.attribCustom[0] = "3GPP-Adaptation-Support:1";
@@ -531,7 +534,7 @@ int rtsp_handle_describe(RTSP_REQ_CTXT_T *pRtsp, const RTSP_REQ_T *pReq) {
       LOGHEXT_DEBUG(bufsdp, sdplen);
     )
 
-    if((rc = netio_send(&pRtsp->pSd->netsocket,  &pRtsp->pSd->sain, 
+    if((rc = netio_send(&pRtsp->pSd->netsocket, (const struct sockaddr *) &pRtsp->pSd->sa, 
                     (unsigned char *) bufsdp, sdplen)) < 0) {
       LOG(X_ERROR("Failed to send RTSP DESCRIBE response SDP %d bytes"), sdplen);
     }
@@ -801,7 +804,7 @@ int rtsp_handle_setup_announced(RTSP_REQ_CTXT_T *pRtsp, const RTSP_REQ_T *pReq) 
     // Store the SETUP URL since there is no DESCRIBE Content-Base for each track 
     strncpy(pProg->url, pReq->hr.url, sizeof(pProg->url) - 1); 
 
-    pProg->dstIp.s_addr = pRtsp->pSd->sain.sin_addr.s_addr;
+    memcpy(&pProg->dstAddr, &pRtsp->pSd->sa, sizeof(pProg->dstAddr));
 
     //
     // Update the session idle timer
@@ -890,12 +893,13 @@ int rtsp_handle_setup_announced(RTSP_REQ_CTXT_T *pRtsp, const RTSP_REQ_T *pReq) 
 int rtsp_handle_setup(RTSP_REQ_CTXT_T *pRtsp, const RTSP_REQ_T *pReq) {
   int rc = 0;
   char bufhdrs[1024];
+  char tmp[128];
   unsigned int szhdrs = 0;
   unsigned int idx;
   char *p;
   const char *pargTrans;
   const char *pUserAgent = NULL;
-  struct in_addr addr;
+  struct sockaddr_storage addr;
   int trackId = 0;
   int outidx = 0;
   char uri[HTTP_URL_LEN];
@@ -987,7 +991,7 @@ int rtsp_handle_setup(RTSP_REQ_CTXT_T *pRtsp, const RTSP_REQ_T *pReq) {
     if(outidx > 0) {
       LOG(X_DEBUG("Set RTSP output format index to[%d] uri:'%s', for %s:%d"), outidx,
                pReq->hr.puri, 
-               inet_ntoa(pRtsp->pSd->sain.sin_addr), ntohs(pRtsp->pSd->sain.sin_port));
+               FORMAT_NETADDR(pRtsp->pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pRtsp->pSd->sa)));
     }
   }
 
@@ -1046,7 +1050,7 @@ int rtsp_handle_setup(RTSP_REQ_CTXT_T *pRtsp, const RTSP_REQ_T *pReq) {
   }
 
   if(rc == 0) {
-    pProg->dstIp.s_addr = pRtsp->pSd->sain.sin_addr.s_addr;
+    memcpy(&pProg->dstAddr, &pRtsp->pSd->sa, sizeof(pProg->dstAddr));
     strncpy(pProg->url, pReq->hr.url, sizeof(pProg->url) - 1);
   }
 
@@ -1093,11 +1097,13 @@ int rtsp_handle_setup(RTSP_REQ_CTXT_T *pRtsp, const RTSP_REQ_T *pReq) {
     }
 
     if(rc >= 0) {
-      addr.s_addr = net_getlocalip();
+      memset(&addr, 0, sizeof(addr));
+      addr.ss_family = AF_INET;
+      ((struct sockaddr_in *) &addr)->sin_addr.s_addr = net_getlocalip4();
 
       if((rc = rtsp_setup_transport_str(pRtsp->pSession->sessionType, RTSP_CTXT_MODE_SERVER_STREAM,
-                               pRtsp->pStreamerCfg->pRtspSessions->rtspsecuritytype, 
-                               pProg, &addr, &bufhdrs[szhdrs], sizeof(bufhdrs) - szhdrs)) > 0) {
+                               pRtsp->pStreamerCfg->pRtspSessions->rtspsecuritytype, pProg, 
+                               (const struct sockaddr *) &addr, &bufhdrs[szhdrs], sizeof(bufhdrs) - szhdrs)) > 0) {
         szhdrs += rc;
         pProg->issetup = 1;
       }
@@ -1112,7 +1118,7 @@ int rtsp_handle_setup(RTSP_REQ_CTXT_T *pRtsp, const RTSP_REQ_T *pReq) {
         ((pRtsp->pSession->sessionType & RTSP_SESSION_TYPE_HTTP) ? "(http) " : ""),
         ((pRtsp->pSession->sessionType & RTSP_SESSION_TYPE_INTERLEAVED) ? "(interleaved) " : ""),
         pRtsp->pSession->sessionid, pProg->localports[0], pProg->localports[1], 
-        inet_ntoa(pProg->dstIp), pProg->ports[0], pProg->ports[1]);
+        FORMAT_NETADDR(pProg->dstAddr, tmp, sizeof(tmp)), pProg->ports[0], pProg->ports[1]);
 
   } else if(statusCode != RTSP_STATUS_UNSUPPORTEDTRANS) {
 
@@ -1144,6 +1150,7 @@ int rtsp_handle_setup(RTSP_REQ_CTXT_T *pRtsp, const RTSP_REQ_T *pReq) {
 
 static int play_resp_headers(RTSP_REQ_CTXT_T *pRtsp, const RTSP_REQ_T *pReq, 
                              char *bufhdrs, unsigned int szhdrs, int paused) {
+  char tmp[128];
   unsigned int idx = 0;
   int rc = 0;
 
@@ -1170,7 +1177,7 @@ static int play_resp_headers(RTSP_REQ_CTXT_T *pRtsp, const RTSP_REQ_T *pReq,
             (paused ? "Resuming" : "Playing"),  
             ((pRtsp->pSession->sessionType & RTSP_SESSION_TYPE_HTTP) ? "(http) " : ""),
             ((pRtsp->pSession->sessionType & RTSP_SESSION_TYPE_INTERLEAVED) ? "(interleaved) " : ""),
-              pRtsp->pSession->sessionid, inet_ntoa(pRtsp->pSession->vid.dstIp), 
+              pRtsp->pSession->sessionid, FORMAT_NETADDR(pRtsp->pSession->vid.dstAddr, tmp, sizeof(tmp)), 
               pRtsp->pSession->vid.ports[0]);
 
   }
@@ -1184,7 +1191,7 @@ static int play_resp_headers(RTSP_REQ_CTXT_T *pRtsp, const RTSP_REQ_T *pReq,
             (paused ? "Resuming" : "Playing"),  
             ((pRtsp->pSession->sessionType & RTSP_SESSION_TYPE_HTTP) ? "(http) " : ""),
             ((pRtsp->pSession->sessionType & RTSP_SESSION_TYPE_INTERLEAVED) ? "(interleaved) " : ""),
-              pRtsp->pSession->sessionid, inet_ntoa(pRtsp->pSession->aud.dstIp), 
+              pRtsp->pSession->sessionid, FORMAT_NETADDR(pRtsp->pSession->aud.dstAddr, tmp, sizeof(tmp)), 
               pRtsp->pSession->aud.ports[0]);
   }
 
@@ -1312,7 +1319,7 @@ int rtsp_do_play(RTSP_REQ_CTXT_T *pRtsp, char *bufhdrs, unsigned int szbufhdrs) 
 
     } else {
       destCfg.haveDstAddr = 1;
-      destCfg.u.dstAddr.s_addr = pRtsp->pSession->vid.dstIp.s_addr;
+      memcpy(&destCfg.u.dstAddr, &pRtsp->pSession->vid.dstAddr, sizeof(destCfg.u.dstAddr));
       destCfg.dstPort = pRtsp->pSession->vid.ports[0];
       //destCfg.dstPortRtcp = RTCP_PORT_FROM_RTP(destCfg.dstPort);
       destCfg.dstPortRtcp  = pRtsp->pSession->vid.ports[1];
@@ -1351,7 +1358,7 @@ int rtsp_do_play(RTSP_REQ_CTXT_T *pRtsp, char *bufhdrs, unsigned int szbufhdrs) 
           pRtsp->pSession->vid.pDest->pstreamStats->method = STREAM_METHOD_RTSP_INTERLEAVED;
         }
         memcpy(&pRtsp->pSession->vid.pDest->pstreamStats->saRemote,
-               &pRtsp->pSd->sain, sizeof(struct sockaddr_in));
+               &pRtsp->pSd->sa, INET_SIZE(pRtsp->pSd->sa)); 
 
         if(pRtsp->pSession->pLiveQ2->pQs[pRtsp->pSession->liveQIdx]  &&
            !pRtsp->pSession->pLiveQ2->pQs[pRtsp->pSession->liveQIdx]->pstats) {
@@ -1397,7 +1404,7 @@ int rtsp_do_play(RTSP_REQ_CTXT_T *pRtsp, char *bufhdrs, unsigned int szbufhdrs) 
       destCfg.dstPortRtcp = RTCP_PORT_FROM_RTP(destCfg.dstPort);
     } else {
       destCfg.haveDstAddr = 1;
-      destCfg.u.dstAddr.s_addr = pRtsp->pSession->aud.dstIp.s_addr;
+      memcpy(&destCfg.u.dstAddr, &pRtsp->pSession->aud.dstAddr, sizeof(destCfg.u.dstAddr));
       destCfg.dstPort = pRtsp->pSession->aud.ports[0];
       //destCfg.dstPortRtcp = RTCP_PORT_FROM_RTP(destCfg.dstPort);
       destCfg.dstPortRtcp = pRtsp->pSession->aud.ports[0];
@@ -1439,7 +1446,7 @@ int rtsp_do_play(RTSP_REQ_CTXT_T *pRtsp, char *bufhdrs, unsigned int szbufhdrs) 
           pRtsp->pSession->aud.pDest->pstreamStats->method = STREAM_METHOD_RTSP_INTERLEAVED;
         }
         memcpy(&pRtsp->pSession->aud.pDest->pstreamStats->saRemote,
-               &pRtsp->pSd->sain, sizeof(struct sockaddr_in));
+               &pRtsp->pSd->sa, INET_SIZE(pRtsp->pSd->sa));
 
         if(pRtsp->pSession->pLiveQ2->pQs[pRtsp->pSession->liveQIdx]) {
           if(pRtsp->pSession->pLiveQ2->pQs[pRtsp->pSession->liveQIdx]->pstats) {
@@ -1688,6 +1695,7 @@ int rtsp_interleaved_start(RTSP_REQ_CTXT_T *pRtsp) {
   unsigned int numQFull = 0;
   unsigned int maxQ = 0;
   unsigned int outidx = 0;
+  char tmp[128];
   int rc = 0;
 
   if(!pRtsp || !pRtsp->pSession || !pRtsp->pStreamerCfg) {
@@ -1743,7 +1751,7 @@ int rtsp_interleaved_start(RTSP_REQ_CTXT_T *pRtsp) {
 
   if(liveQIdx < 0) {
     LOG(X_ERROR("No RTSP interleaved live queue (max:%d) for %s:%d"), pLiveQ2->max,
-        inet_ntoa(pRtsp->pSd->sain.sin_addr), ntohs(pRtsp->pSd->sain.sin_port));
+        FORMAT_NETADDR(pRtsp->pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pRtsp->pSd->sa)));
     rc = -1;
   } else {
     memset(&pRtsp->pSession->liveQCtxt, 0, sizeof(pRtsp->pSession->liveQCtxt));
@@ -1763,7 +1771,7 @@ int rtsp_interleaved_start(RTSP_REQ_CTXT_T *pRtsp) {
     LOG(X_DEBUG("Starting RTSP %s(interleaved) stream[%d] %d/%d to %s:%d"),
      ((pRtsp->pSession->sessionType & RTSP_SESSION_TYPE_HTTP) ? "(http) " : ""),
       liveQIdx, numQFull + 1, pLiveQ2->max,
-           inet_ntoa(pRtsp->pSd->sain.sin_addr), ntohs(pRtsp->pSd->sain.sin_port));
+           FORMAT_NETADDR(pRtsp->pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pRtsp->pSd->sa)));
   } else {
 
     if(pQ) {
@@ -1780,6 +1788,7 @@ void rtsp_interleaved_stop(RTSP_REQ_CTXT_T *pRtsp) {
   STREAMER_LIVEQ_T *pLiveQ2 = NULL;
   PKTQUEUE_T *pQ = NULL;
   unsigned int outidx;
+  char tmp[128];
 
   if(!pRtsp || !pRtsp->pSession || !pRtsp->pSession->pLiveQ2) {
     return;
@@ -1792,7 +1801,7 @@ void rtsp_interleaved_stop(RTSP_REQ_CTXT_T *pRtsp) {
   LOG(X_DEBUG("Ending RTSP %s(interleaved) session %s stream[%d] to %s:%d"),
          ((pRtsp->pSession->sessionType & RTSP_SESSION_TYPE_HTTP) ? "(http) " : ""),
            pRtsp->pSession->sessionid, pRtsp->pSession->liveQIdx,
-           inet_ntoa(pRtsp->pSd->sain.sin_addr), ntohs(pRtsp->pSd->sain.sin_port));
+           FORMAT_NETADDR(pRtsp->pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pRtsp->pSd->sa)));
 
   pthread_mutex_lock(&pLiveQ2->mtx);
 

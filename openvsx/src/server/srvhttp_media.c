@@ -44,6 +44,7 @@ static int resp_sendmediafile(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq,
   FILE_OFFSET_T prebufIdx = 0;
   enum HTTP_STATUS statusCode = HTTP_STATUS_OK;
   char etagbuf[64];
+  char tmp[128];
   const char *etag = NULL;
   const char *pHdr;
   unsigned char buf[4096];
@@ -213,7 +214,7 @@ static int resp_sendmediafile(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq,
     if(net_issockremotelyclosed(NETIOSOCK_FD(pSd->netsocket), 1)) {
       rc = -1;
       LOG(X_DEBUG("HTTP media connection from %s:%d has been remotely closed"),
-           inet_ntoa(pSd->sain.sin_addr), ntohs(pSd->sain.sin_port) );
+           FORMAT_NETADDR(pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pSd->sa)) );
       break;
     }
 
@@ -252,7 +253,7 @@ static int resp_sendmediafile(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq,
     }
 #endif // BITRATE_RESTRICT
 
-    if((rc = netio_send(&pSd->netsocket,  &pSd->sain, buf, lenread)) < 0) {
+    if((rc = netio_send(&pSd->netsocket, (const struct sockaddr *) &pSd->sa, buf, lenread)) < 0) {
       LOG(X_ERROR("Failed to send media '%s' payload %u bytes (%llu/%llu)"), 
             pMedia->pFileStream->filename, lenread, idxContent, contentLen);
 
@@ -266,7 +267,7 @@ static int resp_sendmediafile(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq,
   if(rc >= 0) {
     LOG(X_DEBUG("Finished sending media '%s' %"LL64"u/%"LL64"u bytes to %s:%d"), 
         pMedia->pFileStream->filename, idxContent, contentLen,
-        inet_ntoa(pSd->sain.sin_addr), ntohs(pSd->sain.sin_port));
+        FORMAT_NETADDR(pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pSd->sa)));
   }
 
   return rc;
@@ -326,6 +327,7 @@ int http_resp_sendtslive(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq,
   int sz;
   FILE_OFFSET_T totXmit = 0;
   FILE_OFFSET_T lenLive = 0;
+  char tmp[128];
   unsigned char buf[PACKETGEN_PKT_UDP_DATA_SZ];
   unsigned int numOverwritten = 0;
   struct timeval tv0, tv1;
@@ -355,7 +357,7 @@ int http_resp_sendtslive(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq,
   // Set outbound QOS
   // 
   // TODO: make QOS configurable
-  net_setqos(NETIOSOCK_FD(pSd->netsocket), &pSd->sain, DSCP_AF36);
+  net_setqos(NETIOSOCK_FD(pSd->netsocket), (const struct sockaddr *) &pSd->sa, DSCP_AF36);
 
   //lenLive = 0x7fffffff;
   // TODO: smplayer senems to have crash w/ mpeg2-ts w/ content-length: 0
@@ -397,14 +399,14 @@ int http_resp_sendtslive(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq,
       if(net_issockremotelyclosed(NETIOSOCK_FD(pSd->netsocket), 1)) { 
         rc = -1;
         LOG(X_DEBUG("HTTP live connection from %s:%d has been remotely closed"),
-             inet_ntoa(pSd->sain.sin_addr), ntohs(pSd->sain.sin_port));
+             FORMAT_NETADDR(pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pSd->sa)));
         break;
       }
 
       if(numOverwritten > 0) {
         LOG(X_WARNING("Resetting live packet queue(id:%d) size:%u for %s:%d"), 
                           pQ->cfg.id, pQ->cfg.maxPkts,
-                          inet_ntoa(pSd->sain.sin_addr), ntohs(pSd->sain.sin_port));
+                          FORMAT_NETADDR(pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pSd->sa)));
         pktqueue_reset(pQ, 1);
       } else {
 
@@ -439,7 +441,7 @@ int http_resp_sendtslive(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq,
 
 #endif // BITRATE_MEASURE
 
-        if((rc = netio_send(&pSd->netsocket, &pSd->sain, buf, sz)) < 0) {
+        if((rc = netio_send(&pSd->netsocket, (const struct sockaddr *) &pSd->sa, buf, sz)) < 0) {
           LOG(X_ERROR("Failed to send HTTP live payload %u bytes (%llu/%llu)"), 
                sz, totXmit, lenLive);
          break; 
@@ -455,7 +457,7 @@ int http_resp_sendtslive(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq,
 
   // Report bitrate / 1024 (not 1000)
   LOG(X_INFO("Finished sending tslive %llu bytes to %s:%d (%.1fKb/s)"), totXmit,
-             inet_ntoa(pSd->sain.sin_addr), ntohs(pSd->sain.sin_port),
+             FORMAT_NETADDR(pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pSd->sa)),
              (double) totXmit / (((tv1.tv_sec - tv0.tv_sec) * 1000) + 
                        ((tv1.tv_usec - tv0.tv_usec) / 1000)) * 7.8125);
   return rc;

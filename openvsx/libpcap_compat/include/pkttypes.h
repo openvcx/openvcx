@@ -177,14 +177,19 @@ struct in6_addr
 };
 #endif // __MINGW32__
 
-
+#if defined(__APPLE__)
+//missing in <netinet6/in.h>
+//#define s6_addr                 __u6_addr.__u6_addr8
+#define s6_addr16               __u6_addr.__u6_addr16
+#define s6_addr32               __u6_addr.__u6_addr32
+#endif // (__APPLE__)
 
 struct ip6_hdr {
   union  {
     struct ip6_hdrctl {
       uint32_t ip6_un1_flow;   /* 4 bits version, 8 bits TC, 20 bits flow-ID */
       uint16_t ip6_un1_plen;   /* payload length */
-      uint8_t  ip6_un1_nxt;    /* next header */
+      uint8_t  ip6_un1_nxt;    /* next header type */
       uint8_t  ip6_un1_hlim;   /* hop limit */
     } ip6_un1;
     uint8_t ip6_un2_vfc;       /* 4 bits version, top 4 bits tclass */

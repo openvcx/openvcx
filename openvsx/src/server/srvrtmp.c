@@ -379,7 +379,7 @@ int rtmp_addFrame(void *pArg, const OUTFMT_FRAME_DATA_T *pFrame) {
       }
     }
 
-    if(rc >= 0 && (rc = netio_send(&pRtmp->pSd->netsocket, &pRtmp->pSd->sain, 
+    if(rc >= 0 && (rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, 
                                    pRtmp->out.buf, pRtmp->out.idx)) < 0) {
       return -1;
     }
@@ -447,7 +447,8 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
   int rc = 0;
   long idlems = 0;
   struct timeval tv;
-  char buf[SAFE_INET_NTOA_LEN_MAX];
+  //char buf[SAFE_INET_NTOA_LEN_MAX];
+  char tmp[128];
 
   pRtmp->state = RTMP_STATE_CLI_START;
 
@@ -456,7 +457,7 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
   //
   if((rc = rtmp_handshake_srv(pRtmp)) < 0) {
     LOG(X_ERROR("RTMP handshake failed for %s:%d"),
-        inet_ntoa(pRtmp->pSd->sain.sin_addr), ntohs(pRtmp->pSd->sain.sin_port));
+        FORMAT_NETADDR(pRtmp->pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pRtmp->pSd->sa)));
     return rc;
   }
 
@@ -484,7 +485,7 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
   pRtmp->chunkSz = RTMP_CHUNK_SZ_OUT;
   rtmp_create_chunksz(pRtmp, pRtmp->chunkSz);
   rtmp_create_result_invoke(pRtmp);
-  if((rc = netio_send(&pRtmp->pSd->netsocket, &pRtmp->pSd->sain, 
+  if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, 
                       pRtmp->out.buf, pRtmp->out.idx)) < 0) {
     return -1;
   }
@@ -534,7 +535,7 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
   // 
   pRtmp->out.idx = 0;
   rtmp_create_result(pRtmp);
-  if((rc = netio_send(&pRtmp->pSd->netsocket, &pRtmp->pSd->sain, 
+  if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, 
                       pRtmp->out.buf, pRtmp->out.idx)) < 0) {
     return -1;
   }
@@ -553,7 +554,7 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
   } else if(pRtmp->requestOutIdx > 0) {
     LOG(X_DEBUG("Set RTMP output format index to[%d] app:'%s', play:'%s', for %s:%d"), pRtmp->requestOutIdx,  
                 pRtmp->connect.app, pRtmp->connect.play,  
-               inet_ntoa(pRtmp->pSd->sain.sin_addr), ntohs(pRtmp->pSd->sain.sin_port));
+                FORMAT_NETADDR(pRtmp->pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pRtmp->pSd->sa)));
   }
 
   //fprintf(stderr, "PLAY RESP TO: '%s', APP:'%s' outfmt idx;%d\n", pRtmp->connect.play, pRtmp->connect.app, pRtmp->requestOutIdx);
@@ -601,8 +602,8 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
       idlems = TIME_TV_DIFF_MS(tv, pRtmp->tvLastRd);
       if(idlems > RTMP_RCV_IDLE_TMT_MS) {
         LOG(X_ERROR("Closing RTMP client connection from %s:%d after %d/%d ms idle timeout"), 
-             net_inet_ntoa(pRtmp->pSd->sain.sin_addr, buf),
-             ntohs(pRtmp->pSd->sain.sin_port), idlems, RTMP_RCV_IDLE_TMT_MS);
+             FORMAT_NETADDR(pRtmp->pSd->sa, tmp, sizeof(tmp)), 
+             ntohs(INET_PORT(pRtmp->pSd->sa)), idlems, RTMP_RCV_IDLE_TMT_MS);
         break;
       }
     }
@@ -656,7 +657,4 @@ void rtmp_close(RTMP_CTXT_T *pRtmp) {
   }
 
 }
-
-
-
 

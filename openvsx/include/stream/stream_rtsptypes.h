@@ -61,7 +61,7 @@ typedef struct  RTSP_SESSION_PROG {
   int16_t                       numports; 
   uint16_t                      ports[2];   // remote rtp, rtcp ports
   uint16_t                      localports[2]; // local bind rtp, rtcp ports
-  struct in_addr                dstIp;
+  struct sockaddr_storage       dstAddr;
   STREAM_RTP_DEST_T            *pDest;
   int                           haveKeyFrame;
   unsigned int                  nonKeyFrames;

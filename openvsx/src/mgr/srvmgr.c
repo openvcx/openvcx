@@ -718,11 +718,11 @@ static int process_liveoverhttp(SRV_MGR_CONN_T *pMgrConn,
       // Check if the rtmpliveport is set - which should refer to the proxy
       //
       if(pMgrConn->cfg.pListenerHttpProxy[0].listenCfg.active && 
-         pMgrConn->cfg.pListenerHttpProxy[0].listenCfg.sain.sin_port != 0) { 
+         INET_PORT(pMgrConn->cfg.pListenerHttpProxy[0].listenCfg.sa) != 0) { 
         memcpy(&listenRtmp, &pMgrConn->cfg.pListenerHttpProxy[0].listenCfg, sizeof(listenRtmp));
       } else {
         memcpy(&listenRtmp, pMgrConn->conn.pListenCfg, sizeof(listenRtmp));
-        listenRtmp.sain.sin_port = htons(MGR_GET_PORT_HTTP(pProc->startPort));
+        INET_PORT(listenRtmp.sa) = htons(MGR_GET_PORT_HTTP(pProc->startPort));
       }
       cfg.pListenRtmp = &listenRtmp; 
 
@@ -732,11 +732,11 @@ static int process_liveoverhttp(SRV_MGR_CONN_T *pMgrConn,
       // Check if the rtmpliveport is set - which should refer to the proxy
       //
       if(pMgrConn->cfg.pListenerRtmpProxy[0].listenCfg.active &&
-         pMgrConn->cfg.pListenerRtmpProxy[0].listenCfg.sain.sin_port != 0) {
+         INET_PORT(pMgrConn->cfg.pListenerRtmpProxy[0].listenCfg.sa) != 0) {
         memcpy(&listenRtmp, &pMgrConn->cfg.pListenerRtmpProxy[0].listenCfg, sizeof(listenRtmp));
       } else {
         memcpy(&listenRtmp, pMgrConn->conn.pListenCfg, sizeof(listenRtmp));
-        listenRtmp.sain.sin_port = htons(MGR_GET_PORT_RTMP(pProc->startPort));
+        INET_PORT(listenRtmp.sa) = htons(MGR_GET_PORT_RTMP(pProc->startPort));
       }
       cfg.pListenRtmp = &listenRtmp; 
 
@@ -836,15 +836,15 @@ static int process_rtsplive(SRV_MGR_CONN_T *pMgrConn, const SRVMEDIA_RSRC_T *pMe
     // Check if the rtspliveport is set - which should refer to the proxy
     //
     if(pMgrConn->cfg.pListenerRtspProxy[0].listenCfg.active &&
-       pMgrConn->cfg.pListenerRtspProxy[0].listenCfg.sain.sin_port != 0) {
+       INET_PORT(pMgrConn->cfg.pListenerRtspProxy[0].listenCfg.sa) != 0) {
       memcpy(&listenRtsp, &pMgrConn->cfg.pListenerRtspProxy[0].listenCfg, sizeof(listenRtsp));
     } else {
-      listenRtsp.sain.sin_port = htons(MGR_GET_PORT_RTSP(pProc->startPort));
+      INET_PORT(listenRtsp.sa) = htons(MGR_GET_PORT_RTSP(pProc->startPort));
     }
     cfg.pListenRtsp = &listenRtsp; 
 
     snprintf(rsrcurl, sizeof(rsrcurl), "rtsp://%s:%d/%s", net_getlocalhostname(),
-           htons(listenRtsp.sain.sin_port), pvirtRsrc ? pvirtRsrc: "live");
+           htons(INET_PORT(listenRtsp.sa)), pvirtRsrc ? pvirtRsrc: "live");
 
     pvirtRsrc = NULL; 
   }
@@ -878,17 +878,17 @@ static int process_tslive(SRV_MGR_CONN_T *pMgrConn, const SRVMEDIA_RSRC_T *pMedi
   memset(&listenHttp, 0, sizeof(listenHttp));
 
   if(pMgrConn->cfg.pListenerHttpProxy[0].listenCfg.active &&
-     pMgrConn->cfg.pListenerHttpProxy[0].listenCfg.sain.sin_port != 0) {
+     INET_PORT(pMgrConn->cfg.pListenerHttpProxy[0].listenCfg.sa) != 0) {
     memcpy(&listenHttp, &pMgrConn->cfg.pListenerHttpProxy[0].listenCfg, sizeof(listenHttp));
   } else {
-    listenHttp.sain.sin_port = htons(MGR_GET_PORT_HTTP(pProc->startPort));
+    INET_PORT(listenHttp.sa) = htons(MGR_GET_PORT_HTTP(pProc->startPort));
   }
 
   //
   // Send HTTP 30x redirect
   // 
   snprintf(rsrcurl, sizeof(rsrcurl), "http://%s:%d%s/%s", net_getlocalhostname(),
-           htons(listenHttp.sain.sin_port),
+           htons(INET_PORT(listenHttp.sa)),
            VSX_TSLIVE_URL,
            pvirtRsrc ? pvirtRsrc: "live");
 
@@ -1503,8 +1503,8 @@ void srvmgr_client_proc(void *pfuncarg) {
 
   LOG(X_DEBUG("Handling %sconnection on port %d from %s:%d"),
               ((pConn->conn.sd.netsocket.flags & NETIO_FLAG_SSL_TLS) ? "SSL " : ""),
-              ntohs(pConn->conn.sd.sain.sin_port),
-              inet_ntoa(pConn->conn.sd.sain.sin_addr), ntohs(pConn->conn.sd.sain.sin_port));
+              ntohs(INET_PORT(pConn->conn.sd.sa)),
+              FORMAT_NETADDR(pConn->conn.sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->conn.sd.sa)));
 
   do {
 
@@ -1914,9 +1914,9 @@ fprintf(stderr, "TMPFILE:'%s'\n", tmpfile);
     if(httpStatus != HTTP_STATUS_OK) {
 
       LOG(X_INFO("HTTP %s :%d%s %s from %s:%d"), pConn->conn.httpReq.method,
-           ntohs(pConn->conn.pListenCfg->sain.sin_port), pConn->conn.httpReq.puri,
+           ntohs(INET_PORT(pConn->conn.pListenCfg->sa)), pConn->conn.httpReq.puri,
            http_lookup_statuscode(httpStatus),
-           net_inet_ntoa(pConn->conn.sd.sain.sin_addr, tmpfile), ntohs(pConn->conn.sd.sain.sin_port));
+           FORMAT_NETADDR(pConn->conn.sd.sa, tmpfile, sizeof(tmpfile)), ntohs(INET_PORT(pConn->conn.sd.sa)));
 
       rc = http_resp_error(&pConn->conn.sd, &pConn->conn.httpReq, httpStatus, 1, NULL, pauthbuf); 
       break;
@@ -1935,7 +1935,7 @@ fprintf(stderr, "TMPFILE:'%s'\n", tmpfile);
   netio_closesocket(&pConn->conn.sd.netsocket);
 
   LOG(X_DEBUG("Mgr Connection ended %s:%d '%s'"), 
-      net_inet_ntoa(pConn->conn.sd.sain.sin_addr, tmpfile), ntohs(pConn->conn.sd.sain.sin_port), 
+      FORMAT_NETADDR(pConn->conn.sd.sa, tmpfile, sizeof(tmpfile)), ntohs(INET_PORT(pConn->conn.sd.sa)), 
       pConn->conn.httpReq.url);
 
 }
@@ -1943,7 +1943,7 @@ fprintf(stderr, "TMPFILE:'%s'\n", tmpfile);
 static void srvmgr_main_proc(void *pArg) {
   NETIO_SOCK_T netsocksrv;  
   int rc;
-  struct sockaddr_in sa;
+  struct sockaddr_storage sa;
   int haveAuth = 0;
   char buf[SAFE_INET_NTOA_LEN_MAX];
   SRV_MGR_LISTENER_CFG_T *pSrvListen = (SRV_MGR_LISTENER_CFG_T *) pArg;
@@ -1955,14 +1955,11 @@ static void srvmgr_main_proc(void *pArg) {
     pSrvListen->listenCfg.urlCapabilities |= (URL_CAP_TMN | URL_CAP_LIST | URL_CAP_DIRLIST);
   }
 
-  memset(&sa, 0, sizeof(sa));
   memset(&netsocksrv, 0, sizeof(netsocksrv));
-  sa.sin_family = PF_INET;
-  sa.sin_addr = pSrvListen->listenCfg.sain.sin_addr;
-  sa.sin_port = pSrvListen->listenCfg.sain.sin_port;
+  memcpy(&sa, &pSrvListen->listenCfg.sa, sizeof(sa));
   netsocksrv.flags = pSrvListen->listenCfg.netflags;
 
-  if((NETIOSOCK_FD(netsocksrv) = net_listen(&sa, 15)) == INVALID_SOCKET) {
+  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, 15)) == INVALID_SOCKET) {
     return;
   }
 
@@ -1973,7 +1970,7 @@ static void srvmgr_main_proc(void *pArg) {
   }
 
   LOG(X_INFO("Listening for requests on "URL_HTTP_FMT_STR" %s%s%s"),
-              URL_HTTP_FMT_ARGS2(&pSrvListen->listenCfg, net_inet_ntoa(sa.sin_addr, buf)),
+              URL_HTTP_FMT_ARGS2(&pSrvListen->listenCfg, FORMAT_NETADDR(sa, buf, sizeof(buf))),
             (haveAuth ? " (Using auth)" : ""),
              pSrvListen->pStart->pCfg->cfgShared.uipwd ? " (Using password)" : "",
             (pSrvListen->pStart->disableDirListing ? " (Directory listing disabled)" : ""));
@@ -1985,7 +1982,7 @@ static void srvmgr_main_proc(void *pArg) {
 
   LOG(X_WARNING("HTTP%s %s:%d listener thread exiting with code: %d"), 
                ((pSrvListen->listenCfg.netflags & NETIO_FLAG_SSL_TLS) ? "S" : ""),
-               net_inet_ntoa(sa.sin_addr, buf), ntohs(sa.sin_port), rc);
+               FORMAT_NETADDR(sa, buf, sizeof(buf)), ntohs(INET_PORT(sa)), rc);
 
   pSrvListen->listenCfg.pnetsockSrv = NULL;
   netio_closesocket(&netsocksrv);
@@ -2108,17 +2105,17 @@ static int check_other_listeners(const SRV_LISTENER_CFG_T *pListenerThis,
     }
 
     if(pListener1 && (rc = vsxlib_check_prior_listeners(pListener1, max1,  
-                                                         &pListenerThis[idx].sain)) > 0) {
+                             (const struct sockaddr *) &pListenerThis[idx].sa)) > 0) {
       return idx + 1;
     }
 
     if(pListener2 && (rc = vsxlib_check_prior_listeners(pListener2, max1,  
-                                                         &pListenerThis[idx].sain)) > 0) {
+                             (const struct sockaddr *) &pListenerThis[idx].sa)) > 0) {
       return idx + 1;
     }
 
     if(pListener3 && (rc = vsxlib_check_prior_listeners(pListener3, max1,  
-                                                         &pListenerThis[idx].sain)) > 0) {
+                             (const struct sockaddr *) &pListenerThis[idx].sa)) > 0) {
       return idx + 1;
     }
 
@@ -2135,6 +2132,7 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
   SRV_START_CFG_T cfg;
   VSXLIB_STREAM_PARAMS_T params;
   unsigned int idx;
+  char tmp[128];
   char tmp2[32];
   char buf[VSX_MAX_PATH_LEN];
   char launchpath[VSX_MAX_PATH_LEN];
@@ -2227,7 +2225,7 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
 
   vsxlib_initlog(cfg.verbosity, cfg.plogfile, cfg.phomedir, params.logmaxsz, params.logrollmax, log_tag);
 
-  //LOG(X_DEBUG("LISSSSTTT :%d :%d"), htons(cfg.listenHttp[0].sain.sin_port), htons(cfg.listenHttp[1].sain.sin_port)); 
+  //LOG(X_DEBUG("LISSSSTTT :%d :%d"), htons(INET_PORT(cfg.listenHttp[0].sa)), htons(INET_PORT(cfg.listenHttp[1].sa))); 
 
   LOG(X_INFO("Read configuration from %s"), cfg.pconfpath);
 
@@ -2426,7 +2424,7 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
     }
   }
 
-  //fprintf(stderr, "TRY RTMP %d '%s' 1:%s:%d\n", params.rtmplivemax ,params.rtmpliveaddr[0], inet_ntoa(cfg.listenRtmp[0].sain.sin_addr), ntohs(cfg.listenRtmp[0].sain.sin_port));
+  //fprintf(stderr, "TRY RTMP %d '%s' 1:%s:%d\n", params.rtmplivemax ,params.rtmpliveaddr[0], inet_ntoa(cfg.listenRtmp[0].sa.sin_addr), ntohs(INET_PORT(cfg.listenRtmp[0].sa)));
   memset(cfg.listenRtmp, 0, sizeof(cfg.listenRtmp));
   if(params.rtmplivemax > 0 && params.rtmpliveaddr[0] &&
      (rc = vsxlib_parse_listener((const char **) params.rtmpliveaddr, SRV_LISTENER_MAX_RTMP,
@@ -2438,7 +2436,7 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
     if((rc = check_other_listeners(cfg.listenRtmp, SRV_LISTENER_MAX_RTMP,
                                    listenerTmp, NULL, NULL)) > 0) {
       LOG(X_WARNING("RTMP server listener %s:%d cannot be shared with another protocol"),
-          inet_ntoa(cfg.listenRtmp[rc - 1].sain.sin_addr), htons(cfg.listenRtmp[rc - 1].sain.sin_port));
+          FORMAT_NETADDR(cfg.listenRtmp[rc - 1].sa, tmp, sizeof(tmp)), htons(INET_PORT(cfg.listenRtmp[rc - 1].sa)));
     } else {
 
       //
@@ -2476,7 +2474,7 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
     if((rc = check_other_listeners(cfg.listenRtsp, SRV_LISTENER_MAX_RTSP,
                                    listenerTmp, cfg.listenRtmp,  NULL)) > 0) {
       LOG(X_WARNING("RTSP server listener %s:%d cannot be shared with another protocol"),
-          inet_ntoa(cfg.listenRtsp[rc - 1].sain.sin_addr), htons(cfg.listenRtsp[rc - 1].sain.sin_port));
+          FORMAT_NETADDR(cfg.listenRtsp[rc - 1].sa, tmp, sizeof(tmp)), htons(INET_PORT(cfg.listenRtsp[rc - 1].sa)));
     } else {
 
       //
@@ -2514,7 +2512,7 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
     if((rc = check_other_listeners(cfg.listenHttp, SRV_LISTENER_MAX_HTTP,
                                    listenerTmp, cfg.listenRtmp, cfg.listenRtsp)) > 0) {
       LOG(X_WARNING("HTTP (proxy) server listener %s:%d cannot be shared with another protocol"),
-          inet_ntoa(cfg.listenHttp[rc - 1].sain.sin_addr), htons(cfg.listenHttp[rc - 1].sain.sin_port));
+          FORMAT_NETADDR(cfg.listenHttp[rc - 1].sa, tmp, sizeof(tmp)), htons(INET_PORT(cfg.listenHttp[rc - 1].sa)));
     } else {
 
       //

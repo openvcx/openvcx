@@ -25,48 +25,124 @@
 #include "vsx_common.h"
 
 
-static int getHostAndPorts(const char *str, char host[], size_t szHost,
-                           uint16_t ports[], size_t numPorts, int nodupPorts, 
-                           char uri[], size_t szuri) {
+int strutil_parseAddress(const char *str, char host[], size_t szHost, char ports[], size_t szports,
+                         char uri[], size_t szuri) {
+  int rc = 0;
   const char *p, *p2;
-  size_t sz;
+  size_t sz, idx;
+  int num_colon = 0;
+  int have_host_part = 0;
 
-  if((p = strstr(str, ":"))) {
-    sz = p - str;
+  if(!str) {
+    return -1;
+  }
+
+  //
+  // IPv4 x.x.x.x   or x.x.x.x:port
+  // IPv6 x:x:x:x:x:x:x:x or x:x:x:x:x:x:x:x:port or [x: ... :x]:port
+  // 1234   INADDR_ANY:(port 1234)
+  //
+
+  if(*str == '[') {
+    str++;
+  }
+
+  p = str;
+  while((p = strchr(p, ':'))) {
     p++;
+    num_colon++;
+  }
+
+  if((p = strchr(str, ']')) || ((num_colon < 2 || num_colon == 8) && (p = strrchr(str, ':')))) {
+    sz = p - str;
+    while(*p == ']' || *p == ':') {
+      p++;
+    }
   } else {
-    sz = strlen(str);
+    if((p = strchr(str, '/'))) {
+      sz = p - str;
+    } else {
+      sz = strlen(str);
+    }
+
     p = NULL;
   }
 
   if(host && szHost > 0) {
-    if(sz >= szHost) {
-      sz = szHost -1;
+
+    for(idx = 0; idx < sz; idx++) {
+      if(!((str[idx] >= '0' && str[idx] <= '9') || str[idx] == ',' || str[idx] == '-' 
+         || str[idx] == ' ' || str[idx] == '\t')) {
+        have_host_part = 1; 
+        break;
+      }
     }
-    memcpy(host, str, sz);
-    host[sz] = '\0';
+
+    if(have_host_part) {
+      if(sz >= szHost) {
+        sz = szHost -1;
+      }
+      memcpy(host, str, sz);
+      host[sz] = '\0';
+    } else {
+      //
+      // If no host part is specified (only port number given) then default to IPv4 INADDR_ANY
+      //
+      snprintf(host, szHost, "0.0.0.0");
+      p = str;
+    }
   }
+
   if(uri && szuri > 0) {
-    p2 = p; 
+    p2 = (p ? p : str);
     MOVE_UNTIL_CHAR(p2, '/');
     if((sz  = strlen(p2)) >= szuri) {
       sz = szuri - 1;
     }
-    memcpy(uri, p2, sz);    
+    memcpy(uri, p2, sz);
     uri[sz] = '\0';
   }
 
-  if(p) {
-    return capture_parsePortStr(p, ports, numPorts, nodupPorts);
+  if(ports && szports > 0) {
+    ports[0] = '\0';
+    if(p) {
+      if((p2 = strchr(p, '/'))) {
+        sz = p2 - p; 
+      } else {
+        sz = strlen(p);
+      }
+      memcpy(ports, p, sz);
+      ports[sz] = '\0';
+    }
   }
 
-  if(sz == 0 || inet_addr(host) != INADDR_NONE ||
-    !strncmp(host, "255.255.255.255", sz)) {
-    LOG(X_ERROR("No port number specified"));
+  return rc;
+}
+
+
+static int getHostAndPorts(const char *str, char host[], size_t szHost,
+                           uint16_t ports[], size_t numPorts, int nodupPorts, 
+                           char uri[], size_t szuri) {
+
+  int rc = 0;
+  char portstr[64];
+
+  portstr[0] = '\0';
+
+  if((rc = strutil_parseAddress(str, host, szHost, portstr, sizeof(portstr), uri, szuri)) < 0) {
+    return rc;
+  }
+
+  if(portstr[0] != '\0') {
+    return capture_parsePortStr(portstr, ports, numPorts, nodupPorts);
+  }
+
+  if(host[0] == '\0' || inet_addr(host) != INADDR_NONE || !strcmp(host, "255.255.255.255")) {
+    LOG(X_ERROR("No port number specified in '%s'"), str);
     return -1;
   }
 
-  return 0;
+  return rc;
 }
 
 STREAM_PROTO_T strutil_convertProtoStr(const char *protoStr) {
@@ -467,4 +543,15 @@ const char *strutil_getFileName(const char *path) {
   }
 
   return &path[sz];
+}
+
+const char *strutil_format_netaddr(const struct sockaddr *psa, char *buf, unsigned int bufsz) {
+  int rc;
+  char tmp[128];
+
+  if((rc = snprintf(buf, bufsz, INET_NTOP_ADDR_FMT_STR, INET_NTOP_ADDR_FMT_ARGS(*psa, tmp, sizeof(tmp)))) > 0) {
+    return buf;
+  }
+  
+  return "";
 }

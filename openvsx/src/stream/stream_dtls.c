@@ -165,8 +165,6 @@ int dtls_get_cert_fingerprint(const char *certPath, DTLS_FINGERPRINT_T *pFingerp
     rc = pFingerprint->len;
   }
 
-  //avc_dumpHex(stderr, buf, sizeof(buf), 1);
-
   if(pX509) {
     X509_free(pX509);
   }
@@ -201,13 +199,16 @@ int dtls_verify_cb(int preverify_ok, X509_STORE_CTX *x509_ctx) {
     }
   }
 
-  //LOG(X_DEBUG("DTLS_VERIFY_CB preverify_ok:%d, pFingerprintVerify: 0x%x, name:'%s'"), preverify_ok, pFingerprintVerify, X509_NAME_oneline(X509_get_subject_name(x509_ctx->cert), buf, sizeof(buf)));
+  VSX_DEBUG_DTLS( LOG(X_DEBUG("DTLS - dtls_verify_cb preverify_ok:%d, pFingerprintVerify: 0x%x, name:'%s'"), 
+    preverify_ok, pFingerprintVerify, X509_NAME_oneline(X509_get_subject_name(x509_ctx->cert), buf, sizeof(buf))));
 
   if(!pFingerprintVerify || pFingerprintVerify->verified) {
     return 1; 
   }
 
-  //LOG(X_DEBUG("Verify fingerprint type:%d"), pFingerprintVerify->fingerprint.type); LOGHEX_DEBUG(pFingerprintVerify->fingerprint.buf, pFingerprintVerify->fingerprint.len);
+  VSX_DEBUG_DTLS( LOG(X_DEBUG("DTLS - dtls_verify_cb Verify fingerprint type:%d"), 
+                              pFingerprintVerify->fingerprint.type); 
+                  LOGHEX_DEBUG(pFingerprintVerify->fingerprint.buf, pFingerprintVerify->fingerprint.len) );
 
   if(!(pX509 = x509_ctx->cert)) {
     return 0;
@@ -245,7 +246,9 @@ int dtls_verify_cb(int preverify_ok, X509_STORE_CTX *x509_ctx) {
   LOG(X_DEBUG("DTLS verified %s fingerprint length %d for remote cerficate: %s"),
       sdp_dtls_get_fingerprint_typestr(fingerprint.type), fingerprint.len,
       X509_NAME_oneline(X509_get_subject_name(x509_ctx->cert), buf, sizeof(buf)));
-  //LOG(X_DEBUG("DTLS_VERIFY_CB fingerprint type:%d, len: %d"), fingerprint.type, fingerprint.len); LOGHEX_DEBUG(fingerprint.buf, fingerprint.len);
+  VSX_DEBUG_DTLS( LOG(X_DEBUG("DTLS - dtls_verify_cb fingerprint type:%d, len: %d"), 
+                              fingerprint.type, fingerprint.len); 
+                  LOGHEX_DEBUG(fingerprint.buf, fingerprint.len) );
 
   return 1;
 }
@@ -539,15 +542,16 @@ static int dlts_netsock_onhandshake_completed(NETIO_SOCK_T *pnetsock) {
   return rc;
 }
 
-static int dtls_netsock_handshake_int(NETIO_SOCK_T *pnetsock, const struct sockaddr_in *dest_addr) {
+static int dtls_netsock_handshake_int(NETIO_SOCK_T *pnetsock, const struct sockaddr *pdest_addr) {
   int rc = 0;
   int code;
   int len;
   char *pData = NULL;
-  struct sockaddr_in saTmp;
+  struct sockaddr_storage saTmp;
+  char tmp[128];
   socklen_t socklen;
 
-  if(!pnetsock || !dest_addr || !pnetsock->ssl.pCtxt) {
+  if(!pnetsock || !pdest_addr || !pnetsock->ssl.pCtxt) {
     return -1;
   } else if(pnetsock->ssl.state >= SSL_SOCK_STATE_HANDSHAKE_COMPLETED) {
     return 1;
@@ -559,11 +563,12 @@ static int dtls_netsock_handshake_int(NETIO_SOCK_T *pnetsock, const struct socka
     pnetsock->ssl.state = SSL_SOCK_STATE_HANDSHAKE_INPROGRESS;
   }
 
-  //LOG(X_DEBUG("Calling SSL_do_handshake"));
+  VSX_DEBUG_DTLS( LOG(X_DEBUG("DTLS - Calling SSL_do_handshake")) );
+
   if((rc = SSL_do_handshake(pnetsock->ssl.pCtxt)) != 1){
 
     code = SSL_get_error(pnetsock->ssl.pCtxt, rc);
-    //LOG(X_DEBUG("SSL_do_handshake rc:%d, code:%d"), rc, code);
+    VSX_DEBUG_DTLS( LOG(X_DEBUG("DTLS - SSL_do_handshake rc:%d, code:%d"), rc, code) );
     switch(code) {
       case SSL_ERROR_WANT_READ:  // 2
       case SSL_ERROR_WANT_WRITE: // 3
@@ -582,18 +587,17 @@ static int dtls_netsock_handshake_int(NETIO_SOCK_T *pnetsock, const struct socka
   rc = 0;
 
   if((len = BIO_get_mem_data(pnetsock->ssl.pBioWr, &pData)) > 0 && pData){
-    //LOG(X_DEBUG("SSL handshake - BIO_get_mem_data len:%d"), len);
+    VSX_DEBUG_DTLS( LOG(X_DEBUG("DTLS - SSL handshake - BIO_get_mem_data len:%d"), len) );
 
-    if((rc = SENDTO_DTLS(pnetsock, pData, len, 0, dest_addr)) < len) {
-    //if((rc = sendto(PNETIOSOCK_FD(pnetsock), pData, len, 0, (const struct sockaddr *) dest_addr, 
-    //                sizeof(struct sockaddr_in))) < len) {
+    if((rc = SENDTO_DTLS(pnetsock, pData, len, 0, pdest_addr)) < len) {
 
       socklen = sizeof(saTmp);
       getsockname(PNETIOSOCK_FD(pnetsock), (struct sockaddr *) &saTmp, &socklen);
       LOG(X_ERROR("DTLS%s %shandshake sendto %d -> %s:%d for %d bytes failed with "ERRNO_FMT_STR),
                  (pnetsock->flags & NETIO_FLAG_SRTP) ? "-SRTP" : "",
                  (pnetsock->flags & NETIO_FLAG_SSL_DTLS_SERVER) ? "passive " : "active ",
-                 ntohs(saTmp.sin_port), inet_ntoa(dest_addr->sin_addr), ntohs(dest_addr->sin_port), len, ERRNO_FMT_ARGS);
+                 ntohs(INET_PORT(saTmp)), FORMAT_NETADDR(*pdest_addr, tmp, sizeof(tmp)), 
+                 ntohs(PINET_PORT(pdest_addr)), len, ERRNO_FMT_ARGS);
       pnetsock->ssl.state = SSL_SOCK_STATE_ERROR;
       rc = -1;
 
@@ -604,12 +608,12 @@ static int dtls_netsock_handshake_int(NETIO_SOCK_T *pnetsock, const struct socka
       LOG(X_DEBUG("DTLS%s %shandshake sent %d bytes from :%d to %s:%d"), 
            (pnetsock->flags & NETIO_FLAG_SRTP) ? "-SRTP" : "",
            (pnetsock->flags & NETIO_FLAG_SSL_DTLS_SERVER) ? "passive " : "active ",
-           len, ntohs(saTmp.sin_port), inet_ntoa(dest_addr->sin_addr), ntohs(dest_addr->sin_port));
+           len, ntohs(INET_PORT(saTmp)), FORMAT_NETADDR(*pdest_addr, tmp, sizeof(tmp)), ntohs(PINET_PORT(pdest_addr)));
       rc = 0;
     }
   }
 
-  //LOG(X_DEBUG("SSL handshake - Calling BIO_reset, BIO_get_mem_data had len:%d"), len);
+  VSX_DEBUG_DTLS( LOG(X_DEBUG("DTLS - SSL handshake - Calling BIO_reset, BIO_get_mem_data had len:%d"), len) );
   (void) BIO_reset(pnetsock->ssl.pBioRd);
   (void) BIO_reset(pnetsock->ssl.pBioWr);
 
@@ -622,7 +626,7 @@ static int dtls_netsock_handshake_int(NETIO_SOCK_T *pnetsock, const struct socka
       LOG(X_DEBUG("DTLS%s %shandshake to %s:%d completed"), 
           (pnetsock->flags & NETIO_FLAG_SRTP) ? "-SRTP" : "",
            (pnetsock->flags & NETIO_FLAG_SSL_DTLS_SERVER) ? "passive " : "active ",
-          inet_ntoa(dest_addr->sin_addr), ntohs(dest_addr->sin_port));
+          FORMAT_NETADDR(*pdest_addr, tmp, sizeof(tmp)), ntohs(PINET_PORT(pdest_addr)));
 
       pnetsock->ssl.state = SSL_SOCK_STATE_HANDSHAKE_COMPLETED;
       rc = 1;
@@ -632,10 +636,10 @@ static int dtls_netsock_handshake_int(NETIO_SOCK_T *pnetsock, const struct socka
   return rc;
 }
 
-int dtls_netsock_handshake(NETIO_SOCK_T *pnetsock, const struct sockaddr_in *dest_addr) {
+int dtls_netsock_handshake(NETIO_SOCK_T *pnetsock, const struct sockaddr *pdest_addr) {
   int rc = 0;
 
-  if(!pnetsock || !dest_addr) {
+  if(!pnetsock || !pdest_addr) {
     return -1;
   }
 
@@ -645,7 +649,7 @@ int dtls_netsock_handshake(NETIO_SOCK_T *pnetsock, const struct sockaddr_in *des
 
   pthread_mutex_lock(&((STREAM_DTLS_CTXT_T *) pnetsock->ssl.pDtlsCtxt)->mtx);
 
-  rc = dtls_netsock_handshake_int(pnetsock, dest_addr);
+  rc = dtls_netsock_handshake_int(pnetsock, pdest_addr);
 
   pthread_mutex_unlock(&((STREAM_DTLS_CTXT_T *) pnetsock->ssl.pDtlsCtxt)->mtx);
 
@@ -653,7 +657,7 @@ int dtls_netsock_handshake(NETIO_SOCK_T *pnetsock, const struct sockaddr_in *des
 }
 
 int dtls_netsock_ondata(NETIO_SOCK_T *pnetsock, const unsigned char *pData, unsigned int len,
-                        const struct sockaddr_in *psaSrc) {
+                        const struct sockaddr *psaSrc) {
   int rc = 0;
   int code = 0;
 
@@ -665,7 +669,7 @@ int dtls_netsock_ondata(NETIO_SOCK_T *pnetsock, const unsigned char *pData, unsi
      return -1;
   }
 
-  //LOG(X_DEBUG("dtls_netsock_ondata len:%d, state:%d"), len, pnetsock->ssl.state);
+  VSX_DEBUG_DTLS( LOG(X_DEBUG("DTLS - dtls_netsock_ondata len:%d, state:%d"), len, pnetsock->ssl.state) );
 
   pthread_mutex_lock(&((STREAM_DTLS_CTXT_T *) pnetsock->ssl.pDtlsCtxt)->mtx);
 
@@ -686,7 +690,7 @@ int dtls_netsock_ondata(NETIO_SOCK_T *pnetsock, const unsigned char *pData, unsi
 
   if((rc = SSL_read(pnetsock->ssl.pCtxt, (void *) pData, len)) < 0) {
     code = SSL_get_error(pnetsock->ssl.pCtxt, rc);
-    //LOG(X_DEBUG("SSL_read for len:%d, rc:%d, code:%d"), len, rc, code);
+    VSX_DEBUG_DTLS( LOG(X_DEBUG("DTLS - SSL_read for len:%d, rc:%d, code:%d"), len, rc, code) );
     switch(code) {
       case SSL_ERROR_WANT_READ:  // 2
       case SSL_ERROR_WANT_WRITE: // 3
@@ -697,11 +701,11 @@ int dtls_netsock_ondata(NETIO_SOCK_T *pnetsock, const unsigned char *pData, unsi
         LOG(X_ERROR("DTLS data handler length:%d  SSL_read failed with rc: %d, code: %d %s"),
             len, rc, code, ERR_reason_error_string(ERR_get_error()));
         pnetsock->ssl.state = SSL_SOCK_STATE_ERROR;
-      pthread_mutex_unlock(&((STREAM_DTLS_CTXT_T *) pnetsock->ssl.pDtlsCtxt)->mtx);
+        pthread_mutex_unlock(&((STREAM_DTLS_CTXT_T *) pnetsock->ssl.pDtlsCtxt)->mtx);
       return -1;
     }
   }
-  //LOG(X_DEBUG("DTLS SSL_read for len:%d, rc:%d, code:%d"), len, rc, code);
+  VSX_DEBUG_DTLS( LOG(X_DEBUG("DTLS - SSL_read for len:%d, rc:%d, code:%d"), len, rc, code) );
 
   if(pnetsock->ssl.state != SSL_SOCK_STATE_ERROR && pnetsock->ssl.state != SSL_SOCK_STATE_HANDSHAKE_COMPLETED) {
     dtls_netsock_handshake_int(pnetsock, psaSrc);
@@ -741,7 +745,7 @@ int dtls_netsock_write(NETIO_SOCK_T *pnetsock, const unsigned char *pDataIn, uns
                 rc, lenIn, lenOut, ERR_reason_error_string(ERR_get_error()));
     rc = -1;
   } else {
-    //LOG(X_DEBUG("DTLS BIO_read for lenIn:%d -> lenOut:%d/%d (buf:%d)"), lenIn, rc, sz0, lenOut);
+    VSX_DEBUG_DTLS( LOG(X_DEBUG("DTLS - BIO_read for lenIn:%d -> lenOut:%d/%d (buf:%d)"), lenIn, rc, sz0, lenOut) );
   }
 
   if(rc >= 0) {
@@ -768,7 +772,7 @@ int dtls_netsock_write(NETIO_SOCK_T *pnetsock, const unsigned char *pDataIn, uns
 }
 
 int dtls_netsock_ondata(NETIO_SOCK_T *pnetsock, const unsigned char *pData, unsigned int len,
-                        const struct sockaddr_in *psaSrc) {
+                        const struct sockaddr *psaSrc) {
   return -1;
 }
 

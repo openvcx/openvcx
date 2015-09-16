@@ -101,6 +101,7 @@ static int sdp_parse_connect(SDP_PARSE_CTXT_T *pParseCtxt, const char *val) {
   int rc = 0;
   char buf[64];
   const char *p;
+  const char *val0 = val;
 
   memset(&pParseCtxt->pSdp->c, 0, sizeof(pParseCtxt->pSdp->c));
   pParseCtxt->pSdp->c.iphost[0] = '\0';
@@ -111,7 +112,7 @@ static int sdp_parse_connect(SDP_PARSE_CTXT_T *pParseCtxt, const char *val) {
   //
   p = nextval(&val, 0);
   if(strncmp(p, "IN", 2)) {
-    LOG(X_ERROR("Unsupported SDP connect net type in %s"), val);
+    LOG(X_ERROR("Unsupported SDP connect net type in '%s'"), val0);
     return -1;
   }
 
@@ -119,8 +120,12 @@ static int sdp_parse_connect(SDP_PARSE_CTXT_T *pParseCtxt, const char *val) {
   // consume IP address type
   //
   p = nextval(&val, 0);
-  if(strncmp(p, "IP4", 2)) {
-    LOG(X_ERROR("Unsupported SDP connect address type in %s"), val);
+  if(!strncmp(p, "IP6", 3)) {
+    pParseCtxt->pSdp->c.ip_family = AF_INET6; 
+  } else if(!strncmp(p, "IP4", 3)) {
+    pParseCtxt->pSdp->c.ip_family = AF_INET; 
+  } else {
+    LOG(X_ERROR("Unsupported SDP connect address type in '%s'"), val0);
     return -1;
   }
 
@@ -1244,7 +1249,7 @@ static int sdp_parse_attrib_candidate(SDP_PARSE_CTXT_T *pParseCtxt, const char *
     return -1;
   }
   safe_copyto(p, val, buf, sizeof(buf));
-  pCandidate->address.sin_addr.s_addr = inet_addr(buf);
+  net_getaddress(buf, &pCandidate->address);
 
   //
   // Move to port
@@ -1255,7 +1260,7 @@ static int sdp_parse_attrib_candidate(SDP_PARSE_CTXT_T *pParseCtxt, const char *
     return -1;
   }
   safe_copyto(p, val, buf, sizeof(buf));
-  pCandidate->address.sin_port = htons(atoi(buf));
+  INET_PORT(pCandidate->address) = htons(atoi(buf));
 
   //
   // consume 'typ'
@@ -1306,7 +1311,7 @@ static int sdp_parse_attrib_candidate(SDP_PARSE_CTXT_T *pParseCtxt, const char *
         return -1;
       }
       safe_copyto(p, val, buf, sizeof(buf));
-      pCandidate->raddress.sin_addr.s_addr = inet_addr(buf);
+      net_getaddress(buf, &pCandidate->raddress);
 
       //
       // Move to rport 
@@ -1326,7 +1331,7 @@ static int sdp_parse_attrib_candidate(SDP_PARSE_CTXT_T *pParseCtxt, const char *
             return -1;
           }
           safe_copyto(p, val, buf, sizeof(buf));
-          pCandidate->raddress.sin_port = htons(atoi(buf));
+          INET_PORT(pCandidate->raddress) = htons(atoi(buf));
         }
 
       }
@@ -1927,11 +1932,12 @@ static int sdp_dump_attrib_control(const SDP_STREAM_DESCR_T *pDescr, char *pBuf,
 
 static int sdp_dump_attrib_candidate(const SDP_CANDIDATE_T *pCandidate, char *pBuf, unsigned int len) {
   int rc;
+  char tmp[128];
   char raddr[64];
   
-  if(IS_ADDR_VALID(pCandidate->raddress.sin_addr) && pCandidate->raddress.sin_port != 0) {
+  if(INET_ADDR_VALID(pCandidate->raddress) && INET_PORT(pCandidate->raddress) != 0) {
     snprintf(raddr, sizeof(raddr), " raddr %s rport %d", 
-             inet_ntoa(pCandidate->raddress.sin_addr), htons(pCandidate->raddress.sin_port));
+             INET_NTOP(pCandidate->raddress, tmp, sizeof(tmp)), htons(INET_PORT(pCandidate->raddress)));
   } else {
     raddr[0] = '\0';
   }
@@ -1941,8 +1947,8 @@ static int sdp_dump_attrib_candidate(const SDP_CANDIDATE_T *pCandidate, char *pB
              pCandidate->component, 
              ice_candidate_transport2str(pCandidate->transport),
              pCandidate->priority,
-             inet_ntoa(pCandidate->address.sin_addr),
-             htons(pCandidate->address.sin_port),
+             INET_NTOP(pCandidate->address, tmp, sizeof(tmp)), 
+             htons(INET_PORT(pCandidate->address)),
              ice_candidate_type2str(pCandidate->type), 
              raddr)) < 0) {
     return -1;
@@ -1981,11 +1987,11 @@ static unsigned int create_sesver() {
   return sesver;
 }
 
-const char *create_sesip() {
+static const char *create_sesip() {
   char *sesip;
   struct in_addr addr;
 
-  addr.s_addr = net_getlocalip();
+  addr.s_addr = net_getlocalip4();
 
   sesip = inet_ntoa(addr);
   
@@ -2034,7 +2040,8 @@ int sdp_dump(const SDP_DESCR_T *pSdp, char *buf, unsigned int len) {
   //
   // print c= connection data
   //
-  if((rc = snprintf(&buf[idx], len - idx, "c=IN IP4 %s", pSdp->c.iphost)) < 0) {
+  if((rc = snprintf(&buf[idx], len - idx, "c=IN %s %s", 
+                    pSdp->c.ip_family == AF_INET6 ? "IP6" : "IP4", pSdp->c.iphost)) < 0) {
     return rc;
   }
   idx += rc;

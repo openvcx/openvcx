@@ -45,23 +45,25 @@ static SSL_CTX *g_ssl_ctx_cli;
 
 static int netio_ssl_recvnb(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned int len, 
                             unsigned int mstmt);
-static int netio_ssl_recv(NETIO_SOCK_T *pnetsock, const struct sockaddr_in *psa, 
+static int netio_ssl_recv(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa, 
                             unsigned char *buf, unsigned int len);
 static int netio_ssl_recvnb_exact(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned int len,
                             unsigned int mstmt);
-static int netio_ssl_recv_exact(NETIO_SOCK_T *pnesock, const struct sockaddr_in *psa,
+static int netio_ssl_recv_exact(NETIO_SOCK_T *pnesock, const struct sockaddr *psa,
                             unsigned char *buf, unsigned int len);
 
 #endif // VSX_HAVE_SSL
 
 extern int net_recvnb(SOCKET sock, unsigned char *buf, unsigned int len, unsigned int mstmt);
 extern int net_recvnb_exact(SOCKET sock, unsigned char *buf, unsigned int len, unsigned int mstmt);
-extern int net_recv_exact(SOCKET sock, const struct sockaddr_in *psa,
+extern int net_recv_exact(SOCKET sock, const struct sockaddr *psa,
                    unsigned char *buf, unsigned int len);
-extern int net_recv(SOCKET sock, const struct sockaddr_in *psa,
-             unsigned char *buf, unsigned int len);
-extern int net_send(SOCKET sock, const struct sockaddr_in *psa, const unsigned char *pbuf,
-             unsigned int len);
+extern int net_recv(SOCKET sock, const struct sockaddr *psa,
+                    unsigned char *buf, unsigned int len);
+extern int net_send(SOCKET sock, const struct sockaddr *psa, const unsigned char *pbuf,
+                    unsigned int len);
+extern int net_sendto(SOCKET sock, const struct sockaddr *psa, const unsigned char *pbuf,
+                    unsigned int len, const char *descr);
 
 
 int netio_peek(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned len) {
@@ -132,7 +134,7 @@ int netio_recvnb_exact(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned int 
 
 }
 
-int netio_recv_exact(NETIO_SOCK_T *pnetsock, const struct sockaddr_in *psa, 
+int netio_recv_exact(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa, 
                    unsigned char *buf, unsigned int len) {
 
   if(!pnetsock) {
@@ -153,7 +155,7 @@ int netio_recv_exact(NETIO_SOCK_T *pnetsock, const struct sockaddr_in *psa,
   }
 }
 
-int netio_recv(NETIO_SOCK_T *pnetsock, const struct sockaddr_in *psa, 
+int netio_recv(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa, 
              unsigned char *buf, unsigned int len) {
 
   if(!pnetsock) {
@@ -174,7 +176,7 @@ int netio_recv(NETIO_SOCK_T *pnetsock, const struct sockaddr_in *psa,
   }
 }
 
-int netio_send(NETIO_SOCK_T *pnetsock, const struct sockaddr_in *psa, 
+int netio_send(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa, 
                const unsigned char *buf, unsigned int len) {
   if(!pnetsock) {
     return -1;
@@ -202,6 +204,16 @@ int netio_send(NETIO_SOCK_T *pnetsock, const struct sockaddr_in *psa,
   } else {
     return net_send(PNETIOSOCK_FD(pnetsock), psa, buf, len);
   }
+}
+
+int netio_sendto(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa, 
+               const unsigned char *buf, unsigned int len, const char *descr) {
+
+  if(!pnetsock) {
+    return -1;
+  }
+
+  return net_sendto(PNETIOSOCK_FD(pnetsock), psa, buf, len, descr);
 }
 
 void netio_closesocket(NETIO_SOCK_T *pnetsock) {
@@ -250,7 +262,7 @@ void netio_closesocket(NETIO_SOCK_T *pnetsock) {
 }
 
 SOCKET netio_opensocket(NETIO_SOCK_T *pnetsock, int socktype, unsigned int rcvbufsz, int sndbufsz,
-                      struct sockaddr_in *psain) {
+                      const struct sockaddr *psa) {
 
   SOCKET sock = INVALID_SOCKET;
 
@@ -258,14 +270,14 @@ SOCKET netio_opensocket(NETIO_SOCK_T *pnetsock, int socktype, unsigned int rcvbu
     return sock;
   }
 
-  sock = net_opensocket(socktype, rcvbufsz, sndbufsz, psain);
+  sock = net_opensocket(socktype, rcvbufsz, sndbufsz, psa);
 
   PNETIOSOCK_FD(pnetsock) = sock;
   PSTUNSOCK(pnetsock)->stunFlags = 0;
   PSTUNSOCK(pnetsock)->tmLastXmit = 0;
   PSTUNSOCK(pnetsock)->tmLastRcv = 0;
-  memset(&PSTUNSOCK(pnetsock)->sainLastXmit, 0, sizeof(struct sockaddr_in));
-  memset(&PSTUNSOCK(pnetsock)->sainLastRcv, 0, sizeof(struct sockaddr_in));
+  memset(&PSTUNSOCK(pnetsock)->sainLastXmit, 0, sizeof(PSTUNSOCK(pnetsock)->sainLastXmit));
+  memset(&PSTUNSOCK(pnetsock)->sainLastRcv, 0, sizeof(PSTUNSOCK(pnetsock)->sainLastRcv));
   PSTUNSOCK(pnetsock)->pXmitStats = NULL;
   
   pthread_mutex_init(&PSTUNSOCK(pnetsock)->mtxXmit, NULL);
@@ -281,7 +293,8 @@ SOCKET netio_acceptssl(NETIO_SOCK_T *pnetsock) {
 
   int rc;
   size_t sz;
-  struct sockaddr_in sain;
+  struct sockaddr_storage sa;
+  char tmp[128];
   SSL *ssl_ctxt = NULL;
 
 #endif // VSX_HAVE_SSL
@@ -325,11 +338,11 @@ SOCKET netio_acceptssl(NETIO_SOCK_T *pnetsock) {
 #endif // (__APPLE__) || defined(__linux__)
 
   if((rc = SSL_accept(ssl_ctxt)) <= 0) {
-    sz = sizeof(sain);
-    getpeername(PNETIOSOCK_FD(pnetsock), (struct sockaddr *) &sain, (socklen_t *) &sz);
+    sz = sizeof(sa);
+    getpeername(PNETIOSOCK_FD(pnetsock), (struct sockaddr *) &sa, (socklen_t *) &sz);
     rc = SSL_get_error(ssl_ctxt, rc);
-    LOG(X_ERROR("SSL_accept failed from %s:%d, socket:%d. SSL Error: %d '%s'"), inet_ntoa(sain.sin_addr), 
-                 htons(sain.sin_port), PNETIOSOCK_FD(pnetsock), rc, ERR_reason_error_string(ERR_get_error()));
+    LOG(X_ERROR("SSL_accept failed from %s:%d, socket:%d. SSL Error: %d '%s'"), FORMAT_NETADDR(sa, tmp, sizeof(tmp)), 
+                 htons(INET_PORT(sa)), PNETIOSOCK_FD(pnetsock), rc, ERR_reason_error_string(ERR_get_error()));
 
     SSL_free(ssl_ctxt);
     net_closesocket(&PNETIOSOCK_FD(pnetsock));
@@ -358,7 +371,8 @@ int netio_connectssl(NETIO_SOCK_T *pnetsock) {
 
   int rc;
   size_t sz;
-  struct sockaddr_in sain;
+  struct sockaddr_storage sa;
+  char tmp[128];
   SSL *ssl_ctxt = NULL;
 
 #endif // VSX_HAVE_SSL
@@ -401,11 +415,11 @@ int netio_connectssl(NETIO_SOCK_T *pnetsock) {
 #endif // (__APPLE__) || defined(__linux__)
 
   if((rc = SSL_connect(ssl_ctxt)) <= 0) {
-    sz = sizeof(sain);
-    getpeername(PNETIOSOCK_FD(pnetsock), (struct sockaddr *) &sain, (socklen_t *) &sz);
+    sz = sizeof(sa);
+    getpeername(PNETIOSOCK_FD(pnetsock), (struct sockaddr *) &sa, (socklen_t *) &sz);
     rc = SSL_get_error(ssl_ctxt, rc);
-    LOG(X_ERROR("SSL_connect failed to %s:%d, socket:%d. SSL Error: %d '%s'"), inet_ntoa(sain.sin_addr), 
-                 htons(sain.sin_port), PNETIOSOCK_FD(pnetsock), rc, ERR_reason_error_string(ERR_get_error()));
+    LOG(X_ERROR("SSL_connect failed to %s:%d, socket:%d. SSL Error: %d '%s'"), FORMAT_NETADDR(sa, tmp, sizeof(tmp)), 
+                 htons(INET_PORT(sa)), PNETIOSOCK_FD(pnetsock), rc, ERR_reason_error_string(ERR_get_error()));
 
     SSL_free(ssl_ctxt);
     net_closesocket(&PNETIOSOCK_FD(pnetsock));
@@ -520,8 +534,9 @@ static int netio_ssl_recvnb(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned
   return rc;
 }
 
-static int netio_ssl_recv(NETIO_SOCK_T *pnetsock, const struct sockaddr_in *psa, 
+static int netio_ssl_recv(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa, 
                           unsigned char *buf, unsigned int len) {
+  char tmp[128];
   int rc = 0;
 
   if(PNETIOSOCK_FD(pnetsock) == INVALID_SOCKET || !pnetsock->ssl.pCtxt) {
@@ -542,7 +557,7 @@ static int netio_ssl_recv(NETIO_SOCK_T *pnetsock, const struct sockaddr_in *psa,
     //} else {
 
       LOG(X_ERROR("SSL_read failed (%d) for %u bytes from %s:%d "ERRNO_FMT_STR), rc, len,
-           psa ? inet_ntoa(psa->sin_addr) : 0, psa ? ntohs(psa->sin_port) : 0, ERRNO_FMT_ARGS);
+           psa ? FORMAT_NETADDR(*psa, tmp, sizeof(tmp)) : 0, psa ? ntohs(PINET_PORT(psa)) : 0, ERRNO_FMT_ARGS);
       return -1;
     //}
   } while(rc < 0);
@@ -593,7 +608,7 @@ static int netio_ssl_recvnb_exact(NETIO_SOCK_T *pnetsock, unsigned char *buf, un
   return (int) idx;
 }
 
-static int netio_ssl_recv_exact(NETIO_SOCK_T *pnetsock, const struct sockaddr_in *psa,
+static int netio_ssl_recv_exact(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa,
                             unsigned char *buf, unsigned int len) {
   int rc = 0;
   unsigned int idx = 0;

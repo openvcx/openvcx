@@ -42,7 +42,7 @@ static unsigned char *read_net_flv(CAP_HTTP_FLV_T *pFlv, unsigned int szToRead) 
 
   p = http_read_net(&pFlv->common, 
                   &pFlv->common.pCfg->pSockList->netsockets[0],
-                  &pFlv->common.pCfg->pSockList->salist[0],
+                  (const struct sockaddr *) &pFlv->common.pCfg->pSockList->salist[0],
                   szToRead, 
                   pFlv->client.ctxt.in.buf, 
                   pFlv->client.ctxt.in.sz, 

@@ -345,20 +345,21 @@ int pktgen_Send(const unsigned char *packet, unsigned int len) {
   return 0;
 }
 
-int pktgen_InitUdpPacket(PACKETGEN_PKT_UDP_T *pkt,
-                          const unsigned char srcMac[],
-                          const unsigned char dstMac[],
-                          unsigned short haveVlan,
-                          unsigned short vlan,
-                          unsigned char tos,
-                          unsigned int srcIp,
-                          unsigned int dstIp,
-                          unsigned short srcPort,
-                          unsigned short dstPort,
-                          unsigned short lenPayload) {
+int pktgen_InitUdpPacketIpv4(PACKETGEN_PKT_UDP_T *pkt,
+                             const unsigned char srcMac[],
+                             const unsigned char dstMac[],
+                             unsigned short haveVlan,
+                             unsigned short vlan,
+                             unsigned char tos,
+                             unsigned int srcIp,
+                             unsigned int dstIp,
+                             unsigned short srcPort,
+                             unsigned short dstPort,
+                             unsigned short lenPayload) {
 
 
   unsigned short *pus = NULL;                            
+  struct ip *pip4 = NULL;
   unsigned short totLen = 14 + 20 + 8 + lenPayload;
   
   if(!pkt) {
@@ -383,28 +384,28 @@ int pktgen_InitUdpPacket(PACKETGEN_PKT_UDP_T *pkt,
     pus = (unsigned short *) ((unsigned char *)pkt->peth + 16);
     *pus = htons(ETHERTYPE_IP);
 
-    pkt->pip = (struct ip *) ((unsigned char *)pkt->peth + 18);
+    pip4 = pkt->u_ip.pip4 = (struct ip *) ((unsigned char *)pkt->peth + 18);
     totLen += 4;
   } else {
     pkt->peth->ether_type = htons(ETHERTYPE_IP);
-    pkt->pip = (struct ip *) ((unsigned char *)pkt->peth + 14);
+    pip4 = pkt->u_ip.pip4 = (struct ip *) ((unsigned char *)pkt->peth + 14);
   }
 
   // build the ip header
-  pkt->pip->ip_v = 4;
-  pkt->pip->ip_hl = 5;
-  pkt->pip->ip_tos = tos;
-  pkt->pip->ip_len = htons(totLen - (unsigned short) ((unsigned char *) pkt->pip - (unsigned char *) pkt->peth));
-  pkt->pip->ip_id = htons((unsigned short) random() % 0xffff);
-  pkt->pip->ip_off = 0;
-  pkt->pip->ip_ttl = PKTGEN_DEFAULT_TTL;
-  pkt->pip->ip_p = IPPROTO_UDP;
-  pkt->pip->ip_sum = 0;
-  pkt->pip->ip_src.s_addr = srcIp;
-  pkt->pip->ip_dst.s_addr = dstIp;
+  pip4->ip_v = 4;
+  pip4->ip_hl = 5;
+  pip4->ip_tos = tos;
+  pip4->ip_len = htons(totLen - (unsigned short) ((unsigned char *) pip4 - (unsigned char *) pkt->peth));
+  pip4->ip_id = htons((unsigned short) random() % 0xffff);
+  pip4->ip_off = 0;
+  pip4->ip_ttl = PKTGEN_DEFAULT_TTL;
+  pip4->ip_p = IPPROTO_UDP;
+  pip4->ip_sum = 0;
+  pip4->ip_src.s_addr = srcIp;
+  pip4->ip_dst.s_addr = dstIp;
 
   // build the udp header
-  pkt->pudp = (struct udphdr *) ((unsigned char *) pkt->pip + ( pkt->pip->ip_hl * 4));
+  pkt->pudp = (struct udphdr *) ((unsigned char *) pip4 + ( pip4->ip_hl * 4));
   pkt->pudp->source = htons(srcPort);
   pkt->pudp->dest = htons(dstPort);
   pkt->pudp->len =  htons(totLen - (unsigned short) ((unsigned char *) pkt->pudp - (unsigned char *) pkt->peth));
@@ -413,13 +414,14 @@ int pktgen_InitUdpPacket(PACKETGEN_PKT_UDP_T *pkt,
   return 0;
 }
 
-int pktgen_ChecksumUdpPacket(PACKETGEN_PKT_UDP_T *pkt) {
+int pktgen_ChecksumUdpPacketIpv4(PACKETGEN_PKT_UDP_T *pkt) {
 
-  if(cksum((unsigned char *) pkt->pip, IPPROTO_IP, (pkt->pip->ip_hl * 4)) != 0) {
+  if(cksum((unsigned char *) pkt->u_ip.pip4, IPPROTO_IP, (pkt->u_ip.pip4->ip_hl * 4)) != 0) {
     return -1;
   }
 
-  if(cksum((unsigned char *) pkt->pip, IPPROTO_UDP, ntohs(pkt->pip->ip_len) - (pkt->pip->ip_hl * 4)) != 0) {
+  if(cksum((unsigned char *) pkt->u_ip.pip4, 
+       IPPROTO_UDP, ntohs(pkt->u_ip.pip4->ip_len) - (pkt->u_ip.pip4->ip_hl * 4)) != 0) {
     return -1;
   }
   

@@ -595,7 +595,7 @@ int rtmp_handshake_srv(RTMP_CTXT_T *pRtmp) {
   //avc_dumpHex(stderr, pRtmp->in.buf, 17, 1);
   //avc_dumpHex(stderr, &pRtmp->in.buf[1537], 16, 1);
 
-  if((rc = netio_send(&pRtmp->pSd->netsocket, &pRtmp->pSd->sain, pRtmp->in.buf,
+  if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, pRtmp->in.buf,
                       RTMP_HANDSHAKE_SZ * 2 + 1)) < 0) {
     return -1;
   }
@@ -674,7 +674,7 @@ int rtmp_handshake_cli(RTMP_CTXT_T *pRtmp, int fp9) {
 
 #endif // VSX_HAVE_RTMP_HMAC
 
-  if((rc = netio_send(&pRtmp->pSd->netsocket, &pRtmp->pSd->sain, pRtmp->out.buf,
+  if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, pRtmp->out.buf,
                       RTMP_HANDSHAKE_SZ + 1)) < 0) {
     return rc;
   }
@@ -734,7 +734,7 @@ int rtmp_handshake_cli(RTMP_CTXT_T *pRtmp, int fp9) {
   }
 #endif // VSX_HAVE_RTMP_HMAC
 
-  if((rc = netio_send(&pRtmp->pSd->netsocket, &pRtmp->pSd->sain,
+  if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa,
                       bufout, RTMP_HANDSHAKE_SZ)) < 0) {
     return rc;
   }

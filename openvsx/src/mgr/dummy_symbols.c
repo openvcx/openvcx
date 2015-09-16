@@ -47,7 +47,7 @@ int stream_monitor_stop(STREAM_STATS_MONITOR_T *pMonitor) {
   return 0;
 }
 STREAM_STATS_T *stream_monitor_createattach(STREAM_STATS_MONITOR_T *pMonitor,
-                                            const struct sockaddr_in *psaRemote,
+                                            const struct sockaddr *psaRemote,
                                             STREAM_METHOD_T method,
                                             STREAM_MONITOR_ABR_TYPE_T abrEnabled) {
   return 0;
@@ -79,7 +79,7 @@ int srtp_sendto(const NETIO_SOCK_T *pnetsock,
                 void *buffer,
                 size_t length,
                 int flags,
-                const struct sockaddr_in *dest_addr,
+                const struct sockaddr *pdest_addr,
                 const SRTP_CTXT_T *pSrtp,
                 enum SENDTO_PKT_TYPE pktType,
                 int no_protect) {

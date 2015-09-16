@@ -113,9 +113,9 @@ typedef struct SDP_CANDIDATE {
   int                      component;
   SDP_ICE_TRANS_TYPE_T     transport;
   long                     priority;
-  struct sockaddr_in       address;
+  struct sockaddr_storage  address;
   SDP_ICE_TYPE_T           type;
-  struct sockaddr_in       raddress;
+  struct sockaddr_storage  raddress;
 } SDP_CANDIDATE_T;
 
 typedef struct SDP_STREAM_SRTP {
@@ -248,6 +248,7 @@ typedef struct SDP_DESCR_AUD {
 } SDP_DESCR_AUD_T;
 
 typedef struct SDP_DESCR_CONNECT {
+  sa_family_t              ip_family;
   char                     iphost[128];
   uint8_t                  ttl;
   uint16_t                 numaddr;

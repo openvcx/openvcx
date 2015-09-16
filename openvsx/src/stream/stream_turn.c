@@ -176,7 +176,7 @@ static int turn_create_channeldata(const unsigned char *pData, unsigned int szda
 }
 
 static int turn_create_send_indication(const unsigned char *pData, unsigned int szdata,
-                                const struct sockaddr_in *psadst,
+                                const struct sockaddr *psadst,
                                 unsigned char *pout, unsigned int lenout) {
   int rc = 0;
   STUN_MSG_T pktXmit;
@@ -184,7 +184,7 @@ static int turn_create_send_indication(const unsigned char *pData, unsigned int 
 
   if(!pout || !psadst) {
     return -1;
-  } else if(!IS_ADDR_VALID(psadst->sin_addr)) {
+  } else if(!INET_ADDR_VALID(*psadst)) {
     // We probably did not succesfully finish a createpermission to send to the peer address
     LOG(X_ERROR("TURN outgoing send indication does not have a valid relayed address attribute set"));
     return -1;
@@ -200,10 +200,17 @@ static int turn_create_send_indication(const unsigned char *pData, unsigned int 
   //
   pAttr = &pktXmit.attribs[pktXmit.numAttribs];
   pAttr->type = TURN_ATTRIB_XOR_PEER_ADDRESS;
-  pAttr->length = 8;
-  TURN_ATTRIB_VALUE_RELAYED_ADDRESS(*pAttr).family = STUN_MAPPED_ADDRESS_FAMILY_IPV4;
-  TURN_ATTRIB_VALUE_RELAYED_ADDRESS(*pAttr).u_addr.ipv4 = psadst->sin_addr;
-  TURN_ATTRIB_VALUE_RELAYED_ADDRESS(*pAttr).port = htons(psadst->sin_port);
+  TURN_ATTRIB_VALUE_RELAYED_ADDRESS(*pAttr).port = htons(PINET_PORT(psadst));
+  if(psadst->sa_family == AF_INET6) {
+    pAttr->length = 20;
+    TURN_ATTRIB_VALUE_RELAYED_ADDRESS(*pAttr).family = STUN_MAPPED_ADDRESS_FAMILY_IPV6;
+    memcpy(& TURN_ATTRIB_VALUE_RELAYED_ADDRESS(*pAttr).u_addr.ipv6[0],
+           &((const struct sockaddr_in6 *) psadst)->sin6_addr.s6_addr[0], ADDR_LEN_IPV6);
+  } else {
+    pAttr->length = 8;
+    TURN_ATTRIB_VALUE_RELAYED_ADDRESS(*pAttr).family = STUN_MAPPED_ADDRESS_FAMILY_IPV4;
+    TURN_ATTRIB_VALUE_RELAYED_ADDRESS(*pAttr).u_addr.ipv4 = ((const struct sockaddr_in *) psadst)->sin_addr;
+  }
   pktXmit.numAttribs++;
 
   //
@@ -237,8 +244,8 @@ int turn_create_datamsg(const unsigned char *pData, unsigned int szdata,
   //
   if(pTurnSock->turn_channel > 0) {
     rc = turn_create_channeldata(pData, szdata, pTurnSock->turn_channel, pout, lenout);
-  } else if(pTurnSock->have_permission && IS_ADDR_VALID(pTurnSock->saPeerRelay.sin_addr)) {
-    rc = turn_create_send_indication(pData, szdata, &pTurnSock->saPeerRelay, pout, lenout);
+  } else if(pTurnSock->have_permission && INET_ADDR_VALID(pTurnSock->saPeerRelay)) {
+    rc = turn_create_send_indication(pData, szdata, (const struct sockaddr *) &pTurnSock->saPeerRelay, pout, lenout);
   } else {
     LOG(X_ERROR("Unable to send %d data bytes on TURN socket %s"), szdata,
                !pTurnSock->have_permission ? "without permission" : "");
@@ -415,7 +422,7 @@ static int create_channel_request(const STUN_MESSAGE_INTEGRITY_PARAM_T *pIntegri
   return rc;
 }
 
-static void log_turn_msg(unsigned char *buf, NETIO_SOCK_T *pnetsock, const struct sockaddr_in *psadst, 
+static void log_turn_msg(unsigned char *buf, NETIO_SOCK_T *pnetsock, const struct sockaddr *psadst, 
                          const STUN_MESSAGE_INTEGRITY_PARAM_T *pIntegrity, int len, 
                          const char *descr, const char *extra) {
 
@@ -443,6 +450,7 @@ static void log_turn_msg(unsigned char *buf, NETIO_SOCK_T *pnetsock, const struc
 
 static int turn_send_request(TURN_CTXT_T *pTurn, NETIO_SOCK_T *pnetsock, int sz, int newreq) {
   int rc = 0;
+  char tmp[128];
 
   //
   // Send a TURN protocol message to the TURN server.  The message body is stored for re-sending
@@ -453,7 +461,7 @@ static int turn_send_request(TURN_CTXT_T *pTurn, NETIO_SOCK_T *pnetsock, int sz,
     pTurn->szLastReq = 0;
     LOG(X_ERROR("Failed to send TURN %s message to %s:%d"), 
                  stun_type2str( htons(*((uint16_t *) pTurn->bufLastReq))), 
-                inet_ntoa(pTurn->saTurnSrv.sin_addr), htons(pTurn->saTurnSrv.sin_port)); 
+                FORMAT_NETADDR(pTurn->saTurnSrv, tmp, sizeof(tmp)), htons(INET_PORT(pTurn->saTurnSrv))); 
     return rc;
   }
 
@@ -495,28 +503,38 @@ static int turn_send_allocate_request(TURN_CTXT_T *pTurn,
     return rc;
   }
 
-  log_turn_msg(pTurn->bufLastReq, pnetsock, &pTurn->saTurnSrv, pIntegrity, pTurn->szLastReq, 
-               "Sent TURN Allocate Request", NULL);
+  log_turn_msg(pTurn->bufLastReq, pnetsock, (const struct sockaddr *) &pTurn->saTurnSrv, pIntegrity, 
+               pTurn->szLastReq, "Sent TURN Allocate Request", NULL);
 
   return rc;
 }
 
 static int turn_send_createpermission_request(TURN_CTXT_T *pTurn, 
                                               NETIO_SOCK_T *pnetsock, 
-                                              const struct sockaddr_in *psapermission,
+                                              const struct sockaddr *psapermission,
                                               const STUN_MESSAGE_INTEGRITY_PARAM_T *pIntegrity) {
   int rc;
   STUN_ATTRIB_T mappedAddress;
+  char tmp[128];
   char logbuf[128];
 
   memcpy(&mappedAddress, &pTurn->mappedAddress, sizeof(mappedAddress));
-  TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).family = STUN_MAPPED_ADDRESS_FAMILY_IPV4;
-  TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).u_addr.ipv4 = psapermission->sin_addr;
+  if(psapermission->sa_family == AF_INET6) {
+    TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).family = STUN_MAPPED_ADDRESS_FAMILY_IPV6;
+    memcpy(& TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).u_addr.ipv6[0], 
+           &((const struct sockaddr_in6 *) psapermission)->sin6_addr.s6_addr[0], ADDR_LEN_IPV6);
+           //&((const struct sockaddr_in6 *) pTurn->saTurnSrv)->sin6_addr.s6_addr[0], ADDR_LEN_IPV6);
+  } else {
+    TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).family = STUN_MAPPED_ADDRESS_FAMILY_IPV4;
+    TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).u_addr.ipv4 = 
+                                                   ((const struct sockaddr_in *) psapermission)->sin_addr;
+  //TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).u_addr.ipv4 = pTurn->saTurnSrv.sin_addr;
+  }
 
-//TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).u_addr.ipv4 = pTurn->saTurnSrv.sin_addr;
-
+  //
   // Use port 0
-  //TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).port = htons(psapermission->sin_port);
+  //
+  //TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).port = htons(PINET_PORT(psapermission);
   TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).port = 0;
 
   if((rc = create_createpermission_request(pIntegrity, pTurn->bufLastReq, sizeof(pTurn->bufLastReq), 
@@ -529,11 +547,14 @@ static int turn_send_createpermission_request(TURN_CTXT_T *pTurn,
   }
 
   snprintf(logbuf, sizeof(logbuf), "permission: %s:%d", 
-           inet_ntoa(TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).u_addr.ipv4), 
+           //inet_ntoa(TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).u_addr.ipv4), 
+           inet_ntop(TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).family == 
+                     STUN_MAPPED_ADDRESS_FAMILY_IPV6 ? AF_INET6 : AF_INET,
+                     &TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).u_addr, tmp, sizeof(tmp)),
            TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).port);
 
-  log_turn_msg(pTurn->bufLastReq, pnetsock, &pTurn->saTurnSrv, pIntegrity, pTurn->szLastReq, 
-               "Sent TURN CreatePermission Request", logbuf);
+  log_turn_msg(pTurn->bufLastReq, pnetsock, (const struct sockaddr *) &pTurn->saTurnSrv, pIntegrity, 
+               pTurn->szLastReq, "Sent TURN CreatePermission Request", logbuf);
 
   return rc;
 }
@@ -558,25 +579,33 @@ static int turn_send_refresh_request(TURN_CTXT_T *pTurn,
 
   snprintf(logbuf, sizeof(logbuf), "lifetime: %d", lifetime);
 
-  log_turn_msg(pTurn->bufLastReq, pnetsock, &pTurn->saTurnSrv, pIntegrity, pTurn->szLastReq, 
-               "Sent TURN Refresh Request", logbuf);
+  log_turn_msg(pTurn->bufLastReq, pnetsock, (const struct sockaddr *) &pTurn->saTurnSrv, 
+               pIntegrity, pTurn->szLastReq, "Sent TURN Refresh Request", logbuf);
 
   return rc;
 }
 
 static int turn_send_channel_request(TURN_CTXT_T *pTurn,
                                      NETIO_SOCK_T *pnetsock,
-                                     const struct sockaddr_in *psapermission,
+                                     const struct sockaddr *psapermission,
                                      uint16_t channelId,
                                      const STUN_MESSAGE_INTEGRITY_PARAM_T *pIntegrity) {
   int rc;
   STUN_ATTRIB_T mappedAddress;
+  char tmp[128];
   char logbuf[128];
 
   memcpy(&mappedAddress, &pTurn->mappedAddress, sizeof(mappedAddress));
-  TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).family = STUN_MAPPED_ADDRESS_FAMILY_IPV4;
-  TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).u_addr.ipv4 = psapermission->sin_addr;
-  TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).port = htons(psapermission->sin_port);
+  TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).port = htons(PINET_PORT(psapermission));
+  if(psapermission->sa_family == AF_INET6) {
+    TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).family = STUN_MAPPED_ADDRESS_FAMILY_IPV6;
+    memcpy(& TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).u_addr.ipv6[0], 
+           &((const struct sockaddr_in6 *) psapermission)->sin6_addr.s6_addr[0], ADDR_LEN_IPV6);
+  } else {
+    TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).family = STUN_MAPPED_ADDRESS_FAMILY_IPV4;
+    TURN_ATTRIB_VALUE_RELAYED_ADDRESS(mappedAddress).u_addr.ipv4 = 
+                                            ((const struct sockaddr_in *) psapermission)->sin_addr;
+  }
 
   if((rc = create_channel_request(pIntegrity, pTurn->bufLastReq, sizeof(pTurn->bufLastReq), 
                                   &pTurn->lastNonce, &mappedAddress, channelId)) < 0) {
@@ -590,10 +619,10 @@ static int turn_send_channel_request(TURN_CTXT_T *pTurn,
   pTurn->refreshState = 2;
 
   snprintf(logbuf, sizeof(logbuf), "channel: 0x%x, permission: %s:%d", 
-           channelId, inet_ntoa(psapermission->sin_addr), htons(psapermission->sin_port));
+           channelId, FORMAT_NETADDR(*psapermission, tmp, sizeof(tmp)), htons(PINET_PORT(psapermission)));
 
-  log_turn_msg(pTurn->bufLastReq, pnetsock, &pTurn->saTurnSrv, pIntegrity, pTurn->szLastReq, 
-               "Sent TURN Channel Request", logbuf);
+  log_turn_msg(pTurn->bufLastReq, pnetsock, (const struct sockaddr *) &pTurn->saTurnSrv, pIntegrity, 
+               pTurn->szLastReq, "Sent TURN Channel Request", logbuf);
 
   return rc;
 }
@@ -602,8 +631,8 @@ static int turn_send_channel_request(TURN_CTXT_T *pTurn,
 static int turn_onrcv_allocate_response(TURN_CTXT_T *pTurn, 
                                  const STUN_MESSAGE_INTEGRITY_PARAM_T *pIntegrity, 
                                  const STUN_MSG_T *pMsg,
-                                 const struct sockaddr_in *psaSrc, 
-                                 const struct sockaddr_in *psaLocal) {
+                                 const struct sockaddr *psaSrc, 
+                                 const struct sockaddr *psaLocal) {
   int rc = 0;
   const STUN_ATTRIB_T *pAttr = NULL;
 
@@ -656,7 +685,7 @@ static int turn_onrcv_allocate_response(TURN_CTXT_T *pTurn,
 
 static int turn_onrcv_createpermission_response(TURN_CTXT_T *pTurn, 
                                  const STUN_MESSAGE_INTEGRITY_PARAM_T *pIntegrity, const STUN_MSG_T *pMsg,
-                                 const struct sockaddr_in *psaSrc, const struct sockaddr_in *psaLocal) {
+                                 const struct sockaddr *psaSrc, const struct sockaddr *psaLocal) {
   int rc = 0;
   const STUN_ATTRIB_T *pAttr = NULL;
 
@@ -685,7 +714,7 @@ static int turn_onrcv_createpermission_response(TURN_CTXT_T *pTurn,
 
 static int turn_onrcv_refresh_response(TURN_CTXT_T *pTurn, 
                                 const STUN_MESSAGE_INTEGRITY_PARAM_T *pIntegrity, const STUN_MSG_T *pMsg,
-                                const struct sockaddr_in *psaSrc, const struct sockaddr_in *psaLocal) {
+                                const struct sockaddr *psaSrc, const struct sockaddr *psaLocal) {
   int rc = 0;
   const STUN_ATTRIB_T *pAttr = NULL;
 
@@ -718,7 +747,7 @@ static int turn_onrcv_refresh_response(TURN_CTXT_T *pTurn,
 
 static int turn_onrcv_channelbind_response(TURN_CTXT_T *pTurn,
                                     const STUN_MESSAGE_INTEGRITY_PARAM_T *pIntegrity, const STUN_MSG_T *pMsg,
-                                    const struct sockaddr_in *psaSrc, const struct sockaddr_in *psaLocal) {
+                                    const struct sockaddr *psaSrc, const struct sockaddr *psaLocal) {
   int rc = 0;
   const STUN_ATTRIB_T *pAttr = NULL;
 
@@ -751,7 +780,7 @@ static int turn_onrcv_channelbind_response(TURN_CTXT_T *pTurn,
 
 int turn_onrcv_response(TURN_CTXT_T *pTurn, 
                         const STUN_MESSAGE_INTEGRITY_PARAM_T *pIntegrity, const STUN_MSG_T *pMsg,
-                        const struct sockaddr_in *psaSrc, const struct sockaddr_in *psaLocal) {
+                        const struct sockaddr *psaSrc, const struct sockaddr *psaLocal) {
   int rc = 0;
   int handled = 0;
   char logbuf[2][128];
@@ -819,7 +848,7 @@ int turn_onrcv_response(TURN_CTXT_T *pTurn,
 
 int turn_onrcv_indication_data(TURN_CTXT_T *pTurn,
                                const STUN_MESSAGE_INTEGRITY_PARAM_T *pIntegrity, const STUN_MSG_T *pMsg,
-                               const struct sockaddr_in *psaSrc, const struct sockaddr_in *psaLocal) {
+                               const struct sockaddr *psaSrc, const struct sockaddr *psaLocal) {
   int rc = 0;
   char logbuf[2][128];
   const STUN_ATTRIB_T *pAttr = NULL;
@@ -898,13 +927,14 @@ static int turn_create_allocation_1(TURN_CTXT_T *pTurn, NETIO_SOCK_T *pnetsock) 
 
 static void turn_on_relay_complete(TURN_CTXT_T *pTurn, int have_permission) {
 
+  char tmp[128];
   char logbuf[2][128];
 
   if(pTurn->relay_active == 0) {
     pTurn->relay_active = 1;
   }
 
-  if(IS_ADDR_VALID(pTurn->saPeerRelay.sin_addr)) {
+  if(INET_ADDR_VALID(pTurn->saPeerRelay)) {
 
     pTurn->relay_active = 2;
     pTurn->have_permission = 1;
@@ -914,19 +944,27 @@ static void turn_on_relay_complete(TURN_CTXT_T *pTurn, int have_permission) {
       memcpy(&pTurn->pnetsock->turn.saPeerRelay, &pTurn->saPeerRelay, sizeof(pTurn->pnetsock->turn.saPeerRelay));
     }
 
-    snprintf(logbuf[1], sizeof(logbuf[1]), "%s:%d", inet_ntoa(pTurn->saPeerRelay.sin_addr), htons(pTurn->saPeerRelay.sin_port));
+    snprintf(logbuf[1], sizeof(logbuf[1]), "%s:%d", FORMAT_NETADDR(pTurn->saPeerRelay, tmp, sizeof(tmp)), 
+             htons(INET_PORT(pTurn->saPeerRelay)));
     LOG(X_DEBUG("Setup TURN relay allocation for %s, allocated-relay-address: %s:%d, turn-remote-peer-address:%s"),
-             stream_log_format_pkt_sock(logbuf[0], sizeof(logbuf[0]), pTurn->pnetsock, &pTurn->saTurnSrv),
-             inet_ntoa(TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).u_addr.ipv4),
-             TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).port, logbuf[1]);
+        stream_log_format_pkt_sock(logbuf[0], sizeof(logbuf[0]), pTurn->pnetsock, 
+                                   (const struct sockaddr *) &pTurn->saTurnSrv),
+             //inet_ntoa(TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).u_addr.ipv4),
+               inet_ntop(TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).family == 
+                         STUN_MAPPED_ADDRESS_FAMILY_IPV6 ?  AF_INET6 : AF_INET,
+                         &TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).u_addr, tmp, sizeof(tmp)),
+               TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).port, logbuf[1]);
 
   } else {
 
     LOG(X_DEBUG("Setup TURN relay allocation (without permission and without turn-remote-peer-address)"
                 " for %s, allocated-relay-address: %s:%d"),
-             stream_log_format_pkt_sock(logbuf[0], sizeof(logbuf[0]), pTurn->pnetsock, &pTurn->saTurnSrv),
-             inet_ntoa(TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).u_addr.ipv4),
-             TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).port);
+             stream_log_format_pkt_sock(logbuf[0], sizeof(logbuf[0]), pTurn->pnetsock, 
+                                        (const struct sockaddr *) &pTurn->saTurnSrv),
+               inet_ntop(TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).family == 
+                         STUN_MAPPED_ADDRESS_FAMILY_IPV6 ? AF_INET6 : AF_INET,
+                         &TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).u_addr, tmp, sizeof(tmp)),
+               TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).port);
   }
 
 }
@@ -943,7 +981,8 @@ static int turn_create_allocation_2(TURN_CTXT_T *pTurn, NETIO_SOCK_T *pnetsock) 
       if(pTurn->retryCnt++ > 1) {
         if(((pTurn->lastError.u.error.code & STUN_ERROR_CODE_MASK) == STUN_ERROR_CODE_UNAUTHORIZED)) {
           LOG(X_ERROR("Failed to Setup TURN relay allocation for %s, user: '%s', pass: '%s', realm: '%s'"),
-             stream_log_format_pkt_sock(logbuf[0], sizeof(logbuf[0]), pTurn->pnetsock, &pTurn->saTurnSrv),
+             stream_log_format_pkt_sock(logbuf[0], sizeof(logbuf[0]), pTurn->pnetsock, 
+                                        (const struct sockaddr *) &pTurn->saTurnSrv),
              (pTurn->integrity.user && pTurn->integrity.user[0]) ? pTurn->integrity.user : "<NONE>",
              (pTurn->integrity.pass && pTurn->integrity.pass[0]) ? pTurn->integrity.pass : "<NONE>",
              (pTurn->integrity.realm && pTurn->integrity.realm[0]) ? pTurn->integrity.realm: "<NONE>"); 
@@ -972,7 +1011,8 @@ static int turn_create_allocation_2(TURN_CTXT_T *pTurn, NETIO_SOCK_T *pnetsock) 
       if(pTurn->do_retry_alloc == 0) {
 
         LOG(X_DEBUG("Closing and retrying TURN relay allocations and retrying for %s"),
-             stream_log_format_pkt_sock(logbuf[0], sizeof(logbuf[0]), pTurn->pnetsock, &pTurn->saTurnSrv));
+             stream_log_format_pkt_sock(logbuf[0], sizeof(logbuf[0]), pTurn->pnetsock, 
+                                        (const struct sockaddr *) &pTurn->saTurnSrv));
 
         pTurn->do_retry_alloc++;
         turn_new_command(pTurn, TURN_OP_REQ_REFRESH);
@@ -997,7 +1037,7 @@ static int turn_create_allocation_2(TURN_CTXT_T *pTurn, NETIO_SOCK_T *pnetsock) 
     turn_on_created_allocation(pTurn);
   }
 
-  if(IS_ADDR_VALID(pTurn->saPeerRelay.sin_addr)) {
+  if(INET_ADDR_VALID(pTurn->saPeerRelay)) {
 
     //
     // We want to issue a createpermission command after a succesful allocation
@@ -1023,17 +1063,21 @@ static int turn_create_createpermission_1(TURN_CTXT_T *pTurn, NETIO_SOCK_T *pnet
 
   memset(&pTurn->lastError, 0, sizeof(pTurn->lastError));
 
-  if(TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).family != STUN_MAPPED_ADDRESS_FAMILY_IPV4 ||
-     TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).u_addr.ipv4.s_addr == INADDR_ANY ||
-     TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).u_addr.ipv4.s_addr == INADDR_NONE) {
+  if(TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).family == STUN_MAPPED_ADDRESS_FAMILY_IPV4 &&
+     !IS_ADDR4_VALID(TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).u_addr.ipv4)) {
     LOG(X_ERROR("TURN allocation response did not contain a valid ipv4 relayed peer address"));
     return -1;
-  } else if(!IS_ADDR_VALID(pTurn->saPeerRelay.sin_addr)) {
+  } else if(TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).family == STUN_MAPPED_ADDRESS_FAMILY_IPV6 &&
+     IN6_IS_ADDR_UNSPECIFIED(((struct in6_addr *) &(TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).u_addr.ipv6)))) {
+    LOG(X_ERROR("TURN allocation response did not contain a valid ipv6 relayed peer address"));
+    return -1;
+  } else if(!INET_ADDR_VALID(pTurn->saPeerRelay)) {
     LOG(X_ERROR("TURN createpermission no valid ipv4 peer-relay address"));
     return -1;
   }
 
-  if((rc = turn_send_createpermission_request(pTurn, pnetsock, &pTurn->saPeerRelay, &pTurn->integrity)) < 0) {
+  if((rc = turn_send_createpermission_request(pTurn, pnetsock, (const struct sockaddr *) &pTurn->saPeerRelay, 
+                                              &pTurn->integrity)) < 0) {
     return rc;
   }
 
@@ -1061,7 +1105,8 @@ static int turn_create_createpermission_2(TURN_CTXT_T *pTurn, NETIO_SOCK_T *pnet
       //
       // The nonce should have been updated in turn_onrcv_createpermission_response
       //
-      if((rc = turn_send_createpermission_request(pTurn, pnetsock, &pTurn->saPeerRelay, &pTurn->integrity)) < 0) {
+      if((rc = turn_send_createpermission_request(pTurn, pnetsock, (const struct sockaddr *) &pTurn->saPeerRelay, 
+                                                  &pTurn->integrity)) < 0) {
         return rc;
       }
 
@@ -1146,7 +1191,7 @@ static int turn_create_refresh_2(TURN_CTXT_T *pTurn, NETIO_SOCK_T *pnetsock, int
 static int turn_create_channel_1(TURN_CTXT_T *pTurn, NETIO_SOCK_T *pnetsock, uint16_t channelId) {
   int rc = 0;
 
-  if(!IS_ADDR_VALID(pTurn->saPeerRelay.sin_addr)) {
+  if(!INET_ADDR_VALID(pTurn->saPeerRelay)) {
     LOG(X_ERROR("TURN channel-binding no valid ipv4 peer-relay address set"));
     return -1;
   }
@@ -1155,7 +1200,7 @@ static int turn_create_channel_1(TURN_CTXT_T *pTurn, NETIO_SOCK_T *pnetsock, uin
 
   turn_new_command(pTurn, TURN_OP_REQ_CHANNEL);
 
-  if((rc = turn_send_channel_request(pTurn, pnetsock, &pTurn->saPeerRelay, 
+  if((rc = turn_send_channel_request(pTurn, pnetsock, (const struct sockaddr *) &pTurn->saPeerRelay, 
                                      channelId, &pTurn->integrity)) < 0) {
     return rc;
   }
@@ -1186,7 +1231,7 @@ static int turn_create_channel_2(TURN_CTXT_T *pTurn, NETIO_SOCK_T *pnetsock, uin
       //
       // The nonce should have been updated in turn_onrcv_refresh_response
       //
-      if((rc = turn_send_channel_request(pTurn, pnetsock, &pTurn->saPeerRelay, 
+      if((rc = turn_send_channel_request(pTurn, pnetsock, (const struct sockaddr *) &pTurn->saPeerRelay, 
                                          channelId, &pTurn->integrity)) < 0) {
         return rc;
       }
@@ -1246,8 +1291,8 @@ static int turn_state_machine(TURN_CTXT_T *pTurn, NETIO_SOCK_T *pnetsock, TIME_V
       rc = turn_send_request(pTurn, pnetsock, pTurn->szLastReq, 0);
 
       snprintf(buf, sizeof(buf), "Resent TURN %s", stun_type2str(ntohs(*((uint16_t *) &pTurn->bufLastReq[0]))));
-      log_turn_msg(pTurn->bufLastReq, pTurn->pnetsock, &pTurn->saTurnSrv, &pTurn->integrity, 
-                   pTurn->szLastReq, buf, NULL);
+      log_turn_msg(pTurn->bufLastReq, pTurn->pnetsock, (const struct sockaddr *) &pTurn->saTurnSrv, 
+                   &pTurn->integrity, pTurn->szLastReq, buf, NULL);
     } else {
       *pdo_sleep = 1;
     }
@@ -1295,7 +1340,7 @@ static int turn_state_machine(TURN_CTXT_T *pTurn, NETIO_SOCK_T *pnetsock, TIME_V
 static int turn_relay_bindchannel(TURN_CTXT_T *pTurn, int channelId) {
   int rc = 0;
 
-  if(!pTurn || pTurn->saTurnSrv.sin_port == 0 || !pTurn->pThreadCtxt) {
+  if(!pTurn || ((const struct sockaddr_in *) &pTurn->saTurnSrv)->sin_port == 0 || !pTurn->pThreadCtxt) {
     return -1;
   } else if(channelId > 0 && (channelId < TURN_CHANNEL_ID_MIN || channelId > TURN_CHANNEL_ID_MAX)) {
     return -1;
@@ -1318,12 +1363,13 @@ static int turn_refresh_relay(TURN_CTXT_T *pTurn) {
   int rc = 0;
   char logbuf[128];
 
-  if(!pTurn || pTurn->saTurnSrv.sin_port == 0 || !pTurn->pThreadCtxt) {
+  if(!pTurn || ((const struct sockaddr_in *) &pTurn->saTurnSrv)->sin_port == 0 || !pTurn->pThreadCtxt) {
     return -1;
   }
 
   LOG(X_DEBUG("Refreshing TURN relay permission allocation %s"),
-            stream_log_format_pkt_sock(logbuf, sizeof(logbuf), pTurn->pnetsock, &pTurn->saTurnSrv));
+            stream_log_format_pkt_sock(logbuf, sizeof(logbuf), pTurn->pnetsock, 
+                                       (const struct sockaddr *) &pTurn->saTurnSrv));
 
   //TODO: warn if currently running a command
 
@@ -1340,6 +1386,7 @@ int turn_relay_setup(TURN_THREAD_CTXT_T *pThreadCtxt, TURN_CTXT_T *pTurn,
                      NETIO_SOCK_T *pnetsock, TURN_RELAY_SETUP_RESULT_T *pOnResult) {
   int rc = 0;
   TURN_CTXT_T *pTurnHeadTmp = NULL;
+  char tmp[128];
   char logbuf[1][128];
 
   if(!pThreadCtxt || !pTurn || !pnetsock) {
@@ -1347,7 +1394,7 @@ int turn_relay_setup(TURN_THREAD_CTXT_T *pThreadCtxt, TURN_CTXT_T *pTurn,
   } else if(pThreadCtxt->flag <= 0) {
     LOG(X_ERROR("TURN thread is not active"));
     return -1;
-  } else if(!IS_ADDR_VALID(pTurn->saTurnSrv.sin_addr) || pTurn->saTurnSrv.sin_port == 0) {
+  } else if(!INET_ADDR_VALID(pTurn->saTurnSrv) || ((const struct sockaddr_in *) &pTurn->saTurnSrv)->sin_port == 0) {
     LOG(X_ERROR("TURN server address not set"));
     return -1;
   } else if(pTurn->relay_active > 0) {
@@ -1364,7 +1411,7 @@ int turn_relay_setup(TURN_THREAD_CTXT_T *pThreadCtxt, TURN_CTXT_T *pTurn,
 
   if(!pTurnHeadTmp) {
     LOG(X_DEBUG("TURN server: %s:%d, username: '%s', password: '%s', policy: %s"),
-        inet_ntoa(pTurn->saTurnSrv.sin_addr), htons(pTurn->saTurnSrv.sin_port),
+        FORMAT_NETADDR(pTurn->saTurnSrv, tmp, sizeof(tmp)), htons(INET_PORT(pTurn->saTurnSrv)),
         pTurn->integrity.user, pTurn->integrity.pass, turn_policy2str(pTurn->turnPolicy));
   }
 
@@ -1373,8 +1420,9 @@ int turn_relay_setup(TURN_THREAD_CTXT_T *pThreadCtxt, TURN_CTXT_T *pTurn,
   //TODO: warn if currently running a command
 
   LOG(X_DEBUG("Setting up TURN relay allocation %s, turn-remote-peer-address:%s:%d"), 
-             stream_log_format_pkt_sock(logbuf[0], sizeof(logbuf[0]), pnetsock, &pTurn->saTurnSrv), 
-             inet_ntoa(pTurn->saPeerRelay.sin_addr), htons(pTurn->saPeerRelay.sin_port));
+             stream_log_format_pkt_sock(logbuf[0], sizeof(logbuf[0]), pnetsock, 
+                                        (const struct sockaddr *) &pTurn->saTurnSrv), 
+             FORMAT_NETADDR(pTurn->saPeerRelay, tmp, sizeof(tmp)), htons(INET_PORT(pTurn->saPeerRelay)));
 
   //
   // Set the argument socket to utilize TURN for data relay
@@ -1396,7 +1444,7 @@ int turn_relay_setup(TURN_THREAD_CTXT_T *pThreadCtxt, TURN_CTXT_T *pTurn,
 int turn_close_relay(TURN_CTXT_T *pTurn, int do_wait) {
   int rc = 0;
 
-  if(!pTurn || pTurn->saTurnSrv.sin_port == 0 || !pTurn->pThreadCtxt) {
+  if(!pTurn || ((const struct sockaddr_in *) &pTurn->saTurnSrv)->sin_port == 0 || !pTurn->pThreadCtxt) {
     return -1;
   }
 
@@ -1533,8 +1581,8 @@ static int turn_relay_run(TURN_CTXT_T *pTurn, const TIME_VAL tm, int *pdo_sleep)
   *pdo_sleep = 1;
 
   if((rc = turn_state_machine(pTurn, pTurn->pnetsock, tm, pdo_sleep)) < 0) {
-    LOG(X_ERROR("TURN connection %s %s."), stream_log_format_pkt_sock(logbuf, sizeof(logbuf), 
-        pTurn->pnetsock, &pTurn->saTurnSrv), pTurn->relay_active ? "exiting" : "aborting");
+    LOG(X_ERROR("TURN connection %s %s."), stream_log_format_pkt_sock(logbuf, sizeof(logbuf), pTurn->pnetsock, 
+              (const struct sockaddr *) &pTurn->saTurnSrv), pTurn->relay_active ? "exiting" : "aborting");
 
     turn_on_connection_closed(pTurn, 0);
     pTurn->state |= TURN_OP_ERROR;
@@ -1603,7 +1651,8 @@ void turn_relay_ctrl_proc(void *pArg) {
   struct timeval tv;
   struct timespec ts;
   TIME_VAL tm;
-   int do_close = 0;
+  char tmp[128];
+  int do_close = 0;
 
   memcpy(&wrap, pArg, sizeof(wrap));
 
@@ -1638,8 +1687,11 @@ void turn_relay_ctrl_proc(void *pArg) {
       //
       if(do_close && pTurn->relay_active) {
         LOG(X_DEBUG("TURN thread closing relay %s:%d"), 
-           inet_ntoa(TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).u_addr.ipv4), 
-           TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).port);
+           //inet_ntoa(TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).u_addr.ipv4), 
+           inet_ntop(TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).family == 
+                     STUN_MAPPED_ADDRESS_FAMILY_IPV6 ? AF_INET6 : AF_INET,
+                     &TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).u_addr, tmp, sizeof(tmp)),
+                     TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).port);
 
         turn_close_relay(pTurn, 0);
       }
@@ -1813,7 +1865,7 @@ static void turn_close(TURN_CTXT_T *pTurn) {
 int turn_onrcv_pkt(TURN_CTXT_T *pTurn, STUN_CTXT_T *pStun, 
                    int is_turn_channeldata, int *pis_turn, int *pis_turn_indication,
                    unsigned char **ppData, int *plen, 
-                   const struct sockaddr_in *psaSrc, const struct sockaddr_in *psaDst, NETIO_SOCK_T *pnetsock) {
+                   const struct sockaddr *psaSrc, const struct sockaddr *psaDst, NETIO_SOCK_T *pnetsock) {
   int rc = 0;
 
   if(!pTurn || !pStun) {
@@ -1897,10 +1949,15 @@ static int turn_on_created_allocation(TURN_CTXT_T *pTurn) {
     //
     pCandidate->priority = ((0x10 << 24) | (0x1e << 8) | (0xff));
     memcpy(&pCandidate->address, &pTurn->saTurnSrv, sizeof(pCandidate->address));
-    pCandidate->address.sin_port = htons(TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).port);
+    INET_PORT(pCandidate->address) = htons(TURN_ATTRIB_VALUE_RELAYED_ADDRESS(pTurn->relayedAddress).port);
     pCandidate->type = SDP_ICE_TYPE_RELAY;
     memcpy(&pCandidate->raddress, &pResult->saListener, sizeof(pCandidate->raddress));
-    pCandidate->raddress.sin_addr.s_addr = net_getlocalip();
+    if(pCandidate->raddress.ss_family == AF_INET) {
+      ((struct sockaddr_in *) &pCandidate->raddress)->sin_addr.s_addr = net_getlocalip4();
+    } else {
+      LOG(X_ERROR("TURN IPv6 raddress not supported"));
+      return -1;
+    }
   }
 
   //
@@ -1982,7 +2039,7 @@ int turn_create_datamsg(const unsigned char *pData, unsigned int szdata,
 int turn_onrcv_pkt(TURN_CTXT_T *pTurn, STUN_CTXT_T *pStun,
                    int is_turn_channeldata, int *pis_turn, int *pis_turn_indication,
                    unsigned char **ppData, int *plen,
-                   const struct sockaddr_in *psaSrc, const struct sockaddr_in *psaDst, NETIO_SOCK_T *pnetsock) {
+                   const struct sockaddr *psaSrc, const struct sockaddr *psaDst, NETIO_SOCK_T *pnetsock) {
   return -1;
 }
 
@@ -2004,7 +2061,7 @@ int turn_can_send_data(TURN_SOCK_T *pTurnSock) {
 
   if(pTurnSock && pTurnSock->use_turn_indication_out &&
       (pTurnSock->turn_channel == 0 && (!pTurnSock->have_permission || 
-                                        !IS_ADDR_VALID(pTurnSock->saPeerRelay.sin_addr)))) {
+                                        !INET_ADDR_VALID(pTurnSock->saPeerRelay)))) {
     return 0;
   }
   return 1;

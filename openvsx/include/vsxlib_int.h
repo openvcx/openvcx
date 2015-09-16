@@ -179,7 +179,7 @@ int vsxlib_initRtspInterleaved(STREAMER_CFG_T *pStreamerCfg, unsigned int maxRts
 int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams, int do_httplive_segmentor);
 
 int vsxlib_check_prior_listeners(const SRV_LISTENER_CFG_T *arrCfgs, unsigned int max,
-                                 const struct sockaddr_in *psain);
+                                 const struct sockaddr *psa);
 int vsxlib_check_other_listeners(const SRV_START_CFG_T *pStartCfg,
                                  const SRV_LISTENER_CFG_T *arrCfgThis);
 int vsxlib_parse_listener(const char *arrAddr[], unsigned int max, SRV_LISTENER_CFG_T *arrCfgs,

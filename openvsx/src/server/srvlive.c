@@ -52,6 +52,7 @@ void srv_lock_conn_mutexes(CLIENT_CONN_T *pConn, int lock) {
 
 static int http_check_pass(const CLIENT_CONN_T *pConn) {
   const char *parg;
+  char tmp[128];
   int rc = 0;
 
   if(pConn->pCfg->livepwd &&
@@ -59,8 +60,8 @@ static int http_check_pass(const CLIENT_CONN_T *pConn) {
        strcmp(pConn->pCfg->livepwd, parg))) {
 
     LOG(X_WARNING("Invalid password for :%d%s from %s:%d (%d char given)"),
-         ntohs(pConn->pListenCfg->sain.sin_port), pConn->httpReq.url,
-         inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port),
+         ntohs(INET_PORT(pConn->pListenCfg->sa)), pConn->httpReq.url,
+         FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)),
          parg ? strlen(parg) : 0);
 
     rc = -1;
@@ -217,6 +218,7 @@ static int get_output_idx(const CLIENT_CONN_T *pConn,
                           unsigned int *poutidx) {
   int rc = 0;
   int ioutidx;
+  char tmp[128];
   const STREAMER_CFG_T *pStreamerCfg = NULL;
 
   pStreamerCfg = GET_STREAMER_FROM_CONN(pConn);
@@ -237,7 +239,7 @@ static int get_output_idx(const CLIENT_CONN_T *pConn,
         sprintf(stroutidx, "/%d", ioutidx + 1);
       }
       LOG(X_DEBUG("Set %s index file output format index to[%d] url:'%s', for %s:%d"), url, ioutidx,
-        pConn->httpReq.puri, inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port));
+        pConn->httpReq.puri, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
     }
   }
   *poutidx = ioutidx;
@@ -490,7 +492,7 @@ static int resp_index_file(CLIENT_CONN_T *pConn,
     LOG(X_ERROR("%s"), tmp);
     strerror = tmp;
     rc = -1;
-  } else if(!pListenCfg || pListenCfg ->sain.sin_port == 0) {
+  } else if(!pListenCfg || INET_PORT(pListenCfg->sa) == 0) {
     LOG(X_ERROR(" address / port substitution not set for %s"), protoUrl);
     rc = -1;
   } else {
@@ -549,6 +551,7 @@ int srv_ctrl_flvlive(CLIENT_CONN_T *pConn) {
   int outidx;
   OUTFMT_CFG_T *pOutFmt = NULL;
   STREAM_STATS_T *pstats = NULL;
+  char tmp[128];
   unsigned char buf[64];
 
   pStreamerCfg = GET_STREAMER_FROM_CONN(pConn);
@@ -581,14 +584,14 @@ int srv_ctrl_flvlive(CLIENT_CONN_T *pConn) {
       pLiveFmt = NULL;
     } else {
       LOG(X_DEBUG("Set "VSX_FLVLIVE_URL" output format index to[%d] url:'%s', for %s:%d"), outidx,
-        pConn->httpReq.puri, inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port));
+        pConn->httpReq.puri, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
     }
   }
 
   if(pLiveFmt) {
 
     if(pStreamerCfg && pStreamerCfg->pMonitor && pStreamerCfg->pMonitor->active) {
-      if(!(pstats = stream_monitor_createattach(pStreamerCfg->pMonitor, &pConn->sd.sain, 
+      if(!(pstats = stream_monitor_createattach(pStreamerCfg->pMonitor, (const struct sockaddr *) &pConn->sd.sa, 
                                                STREAM_METHOD_FLVLIVE, STREAM_MONITOR_ABR_NONE))) {
       }
     }
@@ -630,14 +633,13 @@ int srv_ctrl_flvlive(CLIENT_CONN_T *pConn) {
     outfmt_pause(pOutFmt, 0);
 
     LOG(X_INFO("Starting flvlive stream[%d] %d/%d to %s:%d"), pOutFmt->cbCtxt.idx, numQFull + 1,
-           pLiveFmt->max,
-           inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port));
+           pLiveFmt->max, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
 
     //
     // Set outbound QOS
     //
     // TODO: make QOS configurable
-    net_setqos(NETIOSOCK_FD(pConn->sd.netsocket), &pConn->sd.sain, DSCP_AF36);
+    net_setqos(NETIOSOCK_FD(pConn->sd.netsocket), (const struct sockaddr *) &pConn->sd.sa, DSCP_AF36);
 
     gettimeofday(&tv0, NULL);
 
@@ -670,12 +672,12 @@ int srv_ctrl_flvlive(CLIENT_CONN_T *pConn) {
     gettimeofday(&tv1, NULL);
 
     LOG(X_DEBUG("Finished sending flvlive %llu bytes to %s:%d (%.1fKb/s)"), flvCtxt.totXmit,
-             inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port),
+             FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)),
              (double) flvCtxt.totXmit / (((tv1.tv_sec - tv0.tv_sec) * 1000) +
                        ((tv1.tv_usec - tv0.tv_usec) / 1000)) * 7.8125);
 
     LOG(X_INFO("Ending flvlive stream[%d] to %s:%d"), pOutFmt->cbCtxt.idx,
-             inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port));
+             FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
 
     //
     // Remove the livefmt cb
@@ -693,9 +695,8 @@ int srv_ctrl_flvlive(CLIENT_CONN_T *pConn) {
       stream_stats_destroy(&pstats, NULL);
     }
 
-    LOG(X_WARNING("No flvlive resource available (max:%d) for %s:%d"),
-        (pLiveFmt ? pLiveFmt->max : 0),
-       inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port));
+    LOG(X_WARNING("No flvlive resource available (max:%d) for %s:%d"), (pLiveFmt ? pLiveFmt->max : 0),
+                  FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
 
     rc = -1;
   }
@@ -716,6 +717,7 @@ int srv_ctrl_mkvlive(CLIENT_CONN_T *pConn) {
   OUTFMT_CFG_T *pOutFmt = NULL;
   STREAM_STATS_T *pstats = NULL;
   double duration;
+  char tmp[128];
   unsigned char buf[64];
 
   pStreamerCfg = GET_STREAMER_FROM_CONN(pConn);
@@ -748,14 +750,14 @@ int srv_ctrl_mkvlive(CLIENT_CONN_T *pConn) {
       pLiveFmt = NULL;
     } else {
       LOG(X_DEBUG("Set "VSX_MKVLIVE_URL" output format index to[%d] url:'%s', for %s:%d"), outidx,
-        pConn->httpReq.puri, inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port));
+        pConn->httpReq.puri, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
     }
   }
 
   if(pLiveFmt) {
 
     if(pStreamerCfg && pStreamerCfg->pMonitor && pStreamerCfg->pMonitor->active) {
-      if(!(pstats = stream_monitor_createattach(pStreamerCfg->pMonitor, &pConn->sd.sain, 
+      if(!(pstats = stream_monitor_createattach(pStreamerCfg->pMonitor, (const struct sockaddr *) &pConn->sd.sa, 
                                                STREAM_METHOD_MKVLIVE, STREAM_MONITOR_ABR_NONE))) {
       }
     }
@@ -798,14 +800,13 @@ int srv_ctrl_mkvlive(CLIENT_CONN_T *pConn) {
     outfmt_pause(pOutFmt, 0);
 
     LOG(X_INFO("Starting mkvlive stream[%d] %d/%d to %s:%d"), pOutFmt->cbCtxt.idx, numQFull + 1,
-           pLiveFmt->max,
-           inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port));
+           pLiveFmt->max, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
 
     //
     // Set outbound QOS
     //
     // TODO: make QOS configurable
-    net_setqos(NETIOSOCK_FD(pConn->sd.netsocket), &pConn->sd.sain, DSCP_AF36);
+    net_setqos(NETIOSOCK_FD(pConn->sd.netsocket), (const struct sockaddr *) &pConn->sd.sa, DSCP_AF36);
 
     gettimeofday(&tv0, NULL);
 
@@ -839,11 +840,11 @@ int srv_ctrl_mkvlive(CLIENT_CONN_T *pConn) {
 
     duration = ((tv1.tv_sec - tv0.tv_sec) * 1000) +  ((tv1.tv_usec - tv0.tv_usec) / 1000);
     LOG(X_DEBUG("Finished sending mkvlive %llu bytes to %s:%d (%.1fKb/s)"), mkvCtxt.totXmit,
-             inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port),
+             FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)),
              duration > 0 ? (double) mkvCtxt.totXmit / duration  * 7.8125 : 0);
 
     LOG(X_INFO("Ending mkvlive stream[%d] to %s:%d"), pOutFmt->cbCtxt.idx,
-             inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port));
+             FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
 
     //
     // Remove the livefmt cb
@@ -863,7 +864,7 @@ int srv_ctrl_mkvlive(CLIENT_CONN_T *pConn) {
 
     LOG(X_WARNING("No mkvlive resource available (max:%d) for %s:%d"),
         (pLiveFmt ? pLiveFmt->max : 0),
-       inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port));
+        FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
 
     rc = http_resp_send(&pConn->sd, &pConn->httpReq, HTTP_STATUS_SERVERERROR,
       (unsigned char *) HTTP_STATUS_STR_SERVERERROR, strlen(HTTP_STATUS_STR_SERVERERROR));
@@ -886,6 +887,7 @@ int srv_ctrl_tslive(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
   PKTQUEUE_T *pQueue = NULL;
   unsigned int queueSz = 0;
   const char *parg;
+  char tmp[128];
   char resp[512];
   unsigned char *presp = NULL;
   //HTTP_STATUS_T statusCode = HTTP_STATUS_OK;
@@ -926,7 +928,7 @@ int srv_ctrl_tslive(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
        return -1;
     } else {
       LOG(X_DEBUG("Set "VSX_TSLIVE_URL" output format index to[%d] url:'%s', for %s:%d"), outidx,
-        pConn->httpReq.puri, inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port));
+        pConn->httpReq.puri, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
     }
   }
   
@@ -940,7 +942,7 @@ int srv_ctrl_tslive(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
   if(rc == 0 && !pStreamerCfg->action.do_tslive) {
 
     LOG(X_WARNING("tslive not currently enabled for request from %s:%d"),
-           inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port));
+           FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
 
     if((lenresp = snprintf(resp, sizeof(resp), "Live stream not currently enabled")) > 0) {
       presp = (unsigned char *) resp;
@@ -961,7 +963,7 @@ int srv_ctrl_tslive(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
       queueSz = pLiveQ->qCfg.growMaxPkts;
     }
     LOG(X_INFO("Custom tslive queue size set to %u for %s:%d"), queueSz, 
-         inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port));
+         FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
   }
 
   // TODO pktqueue size >= sizeof(PACKETGEN_PKT_UDP_T::data)
@@ -971,7 +973,7 @@ int srv_ctrl_tslive(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
       rc = -1;
       *pHttpStatus = HTTP_STATUS_SERVERERROR;
       LOG(X_ERROR("Failed to create %s queue %d x %d for %s:%d"), VSX_TSLIVE_URL, queueSz, 
-        pLiveQ->qCfg.maxPktLen, inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port));
+        pLiveQ->qCfg.maxPktLen, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
     } else {
       //
       // Set concataddenum to allow filling up as much of each slot as possible,
@@ -979,7 +981,7 @@ int srv_ctrl_tslive(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
       //
       pQueue->cfg.concataddenum = pLiveQ->qCfg.concataddenum;
       LOG(X_DEBUG("Created %s queue %d x %d for %s:%d"), VSX_TSLIVE_URL, queueSz, 
-        pLiveQ->qCfg.maxPktLen, inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port));
+        pLiveQ->qCfg.maxPktLen, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
     }
   }
 
@@ -998,7 +1000,7 @@ int srv_ctrl_tslive(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
           //
           if(pStreamerCfg->pMonitor && pStreamerCfg->pMonitor->active) {
 
-            if(!(pstats = stream_monitor_createattach(pStreamerCfg->pMonitor, &pConn->sd.sain, 
+            if(!(pstats = stream_monitor_createattach(pStreamerCfg->pMonitor, (const struct sockaddr *) &pConn->sd.sa, 
                                                      STREAM_METHOD_TSLIVE, STREAM_MONITOR_ABR_NONE))) {
             } else {
               pQueue->pstats = &pstats->throughput_rt[0];
@@ -1025,7 +1027,7 @@ int srv_ctrl_tslive(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
 
     if(liveQIdx < 0) {
       LOG(X_ERROR("No tslive queue (max:%d) for %s:%d"), maxQ, 
-          inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port));
+          FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
       if((lenresp = snprintf(resp, sizeof(resp), 
                      "All available resources currently in use")) > 0) {
         presp = (unsigned char *) resp;
@@ -1055,10 +1057,10 @@ int srv_ctrl_tslive(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
   // Set outbound QOS
   //
   // TODO: make QOS configurable
-  net_setqos(NETIOSOCK_FD(pConn->sd.netsocket), &pConn->sd.sain, DSCP_AF36);
+  net_setqos(NETIOSOCK_FD(pConn->sd.netsocket), (const struct sockaddr *) &pConn->sd.sa, DSCP_AF36);
 
   LOG(X_INFO("Starting tslive stream[%d] %d/%d to %s:%d"), liveQIdx, numQFull + 1, maxQ,
-           inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port));
+           FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
 
   //
   // Request an IDR from the underling encoder
@@ -1075,7 +1077,7 @@ int srv_ctrl_tslive(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
   rc = http_resp_sendtslive(&pConn->sd, &pConn->httpReq, pQueue, CONTENT_TYPE_MP2TS);
 
   LOG(X_INFO("Ending tslive stream[%d] to %s:%d"), liveQIdx,
-           inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port));
+           FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
 
   srv_lock_conn_mutexes(pConn, 1);
   pthread_mutex_lock(&pLiveQ->mtx);
@@ -1116,6 +1118,7 @@ static int get_requested_outidx(const CLIENT_CONN_T *pConn, STREAMER_CFG_T *pStr
   int rc = 0;
   size_t sz = 0;
   const char *pend;
+  char tmp[128];
 
   *ppuri = pConn->httpReq.puri;
   pend = *ppuri;
@@ -1146,7 +1149,7 @@ static int get_requested_outidx(const CLIENT_CONN_T *pConn, STREAMER_CFG_T *pStr
         rc = -1;
       } else {
         LOG(X_DEBUG("Set output format index to[%d] url:'%s', for %s:%d"), *poutidx,
-            pConn->httpReq.puri, inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port));
+            pConn->httpReq.puri, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
       }
     }
   }
@@ -1875,6 +1878,7 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
   int have_outidx = 0;
   const STREAM_DEVICE_T *pdevtype = NULL;
   size_t sz = 0;
+  char tmp[128];
   STREAM_METHOD_T streamMethod = STREAM_METHOD_UNKNOWN;
 
   //rsrcurl[0] = '\0';
@@ -2000,7 +2004,7 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
      strcmp(pConn->pCfg->livepwd, parg))) {
 
     LOG(X_WARNING("live invalid password from %s:%d (%d char given)"),
-       inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port),
+       FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)),
        parg ? strlen(parg) : 0);
 
     rc = http_resp_error(&pConn->sd, &pConn->httpReq, HTTP_STATUS_FORBIDDEN, 0, NULL, NULL);

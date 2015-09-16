@@ -1083,7 +1083,7 @@ int flvsrv_cbWriteDataNet(void *pArg, const unsigned char *pData, unsigned int l
   int rc = 0;
   FLVSRV_CTXT_T *pFlvCtxt = (FLVSRV_CTXT_T *) pArg;
 
-  if((rc = netio_send(&pFlvCtxt->pSd->netsocket, &pFlvCtxt->pSd->sain, pData, len)) < 0) {
+  if((rc = netio_send(&pFlvCtxt->pSd->netsocket, (const struct sockaddr *) &pFlvCtxt->pSd->sa, pData, len)) < 0) {
     LOG(X_ERROR("Failed to send flv %s %u bytes, total: %llu)"),
                (pFlvCtxt->writeErrDescr ? pFlvCtxt->writeErrDescr : ""), len, pFlvCtxt->totXmit);
   } else {

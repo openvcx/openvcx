@@ -59,7 +59,7 @@
 #define RTP_PT_MASK                                   0x7f
 #define RTP_PT_MARKER_MASK                            0x80
 
-#define MAX_IP_STR_LEN                                36
+#define MAX_IP_STR_LEN                                48
 
 
 

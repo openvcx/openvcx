@@ -173,7 +173,7 @@ static int cbparse_entry_rtspua(void *pArg, const char *p) {
 int rtspsrv_init(STREAM_RTSP_SESSIONS_T *pRtsp) {
 
   pthread_t ptdMonitor;
-  struct sockaddr_in sain;
+  struct sockaddr_storage sa;
   pthread_attr_t attrMonitor;
   RTSP_MONITOR_CTXT_T startCtxt;
   const char *s;
@@ -212,11 +212,11 @@ int rtspsrv_init(STREAM_RTSP_SESSIONS_T *pRtsp) {
   //
   pRtsp->sockStaticLocalPort = INVALID_SOCKET;
   if(pRtsp->staticLocalPort > 0) {
-    memset(&sain, 0, sizeof(sain));
-    sain.sin_family = AF_INET;
-    sain.sin_addr.s_addr = INADDR_ANY;
-    sain.sin_port = htons(pRtsp->staticLocalPort);
-    if((pRtsp->sockStaticLocalPort = net_opensocket(SOCK_DGRAM, 0, 0, &sain)) == INVALID_SOCKET) {
+    memset(&sa, 0, sizeof(sa));
+    sa.ss_family = AF_INET;
+    ((struct sockaddr_in *) &sa)->sin_addr.s_addr = INADDR_ANY;
+    INET_PORT(sa) = htons(pRtsp->staticLocalPort);
+    if((pRtsp->sockStaticLocalPort = net_opensocket(SOCK_DGRAM, 0, 0, (struct sockaddr *) &sa)) == INVALID_SOCKET) {
       LOG(X_ERROR("Failed to open RTSP static local RTP port %d"), pRtsp->staticLocalPort);
     } else {
       if(net_setsocknonblock(pRtsp->sockStaticLocalPort, 1) < 0) {
@@ -307,7 +307,7 @@ void rtspsrv_close(STREAM_RTSP_SESSIONS_T *pRtsp) {
 }
 
 RTSP_HTTP_SESSION_T *rtspsrv_newHttpSession(STREAM_RTSP_SESSIONS_T *pRtsp, const char *sessionCookie,
-                                               const struct sockaddr_in *psain) {
+                                               const struct sockaddr *psa) {
   RTSP_HTTP_SESSION_T *pRtspGetSession = NULL; 
   size_t szCookie;
   unsigned int idx;
@@ -347,8 +347,8 @@ RTSP_HTTP_SESSION_T *rtspsrv_newHttpSession(STREAM_RTSP_SESSIONS_T *pRtsp, const
       NETIOSOCK_FD(pRtspGetSession->netsocketPost) = INVALID_SOCKET;
       pRtspGetSession->expired = 0;
       strncpy(pRtspGetSession->cookie.sessionCookie, sessionCookie, RTSP_HTTP_SESSION_COOKIE_MAX - 1);
-      if(psain) {
-        memcpy(&pRtspGetSession->cookie.sain, psain, sizeof(pRtspGetSession->cookie.sain));
+      if(psa) {
+        memcpy(&pRtspGetSession->cookie.sa, psa, INET_SIZE(*psa));
       }
       gettimeofday(&pRtspGetSession->tvCreate, NULL);
       pRtspGetSession->tvLastMsg.tv_sec = 0;
@@ -378,7 +378,7 @@ RTSP_HTTP_SESSION_T *rtspsrv_newHttpSession(STREAM_RTSP_SESSIONS_T *pRtsp, const
 
 
 int rtspsrv_deleteHttpSession(STREAM_RTSP_SESSIONS_T *pRtsp, const char *sessionCookie,
-                              const struct sockaddr_in *psain) {
+                              const struct sockaddr *psa) {
   RTSP_HTTP_SESSION_T *pRtspGetSession = NULL; 
   RTSP_HTTP_SESSION_T *pRtspGetSessionPrev = NULL; 
 
@@ -393,7 +393,7 @@ int rtspsrv_deleteHttpSession(STREAM_RTSP_SESSIONS_T *pRtsp, const char *session
   while(pRtspGetSession) {
 
     if(!strcmp(sessionCookie, pRtspGetSession->cookie.sessionCookie) &&
-      (!psain || psain->sin_addr.s_addr == pRtspGetSession->cookie.sain.sin_addr.s_addr)) {
+      (!psa || INET_IS_SAMEADDR(*psa, pRtspGetSession->cookie.sa))) {
 
       if(pRtspGetSessionPrev) {
         pRtspGetSessionPrev->pnext = pRtspGetSession->pnext;
@@ -414,7 +414,7 @@ int rtspsrv_deleteHttpSession(STREAM_RTSP_SESSIONS_T *pRtsp, const char *session
       pRtspGetSession->expired = 1;
       pthread_mutex_lock(&pRtspGetSession->mtx);
       pRtspGetSession->cookie.sessionCookie[0] = '\0';
-      memset(&pRtspGetSession->cookie.sain.sin_addr, 0, sizeof(pRtspGetSession->cookie.sain.sin_addr));
+      memset(&pRtspGetSession->cookie.sa, 0, sizeof(pRtspGetSession->cookie.sa));
       pRtspGetSession->inuse = 0;
       pthread_mutex_unlock(&pRtspGetSession->mtx);
 
@@ -431,7 +431,7 @@ int rtspsrv_deleteHttpSession(STREAM_RTSP_SESSIONS_T *pRtsp, const char *session
 }
 
 RTSP_HTTP_SESSION_T *rtspsrv_findHttpSession(STREAM_RTSP_SESSIONS_T *pRtsp, const char *sessionCookie,
-                                                const struct sockaddr_in *psain, int lock) {
+                                              const struct sockaddr *psa, int lock) {
   RTSP_HTTP_SESSION_T *pRtspGetSession = NULL;
 
   if(!pRtsp || !pRtsp->pRtspGetSessionsBuf || !sessionCookie || sessionCookie[0] == '\0') {
@@ -444,7 +444,7 @@ RTSP_HTTP_SESSION_T *rtspsrv_findHttpSession(STREAM_RTSP_SESSIONS_T *pRtsp, cons
   while(pRtspGetSession) {
 
     if(!strcmp(sessionCookie, pRtspGetSession->cookie.sessionCookie) &&
-      (!psain || psain->sin_addr.s_addr == pRtspGetSession->cookie.sain.sin_addr.s_addr)) {
+      (!psa || INET_IS_SAMEADDR(*psa, pRtspGetSession->cookie.sa))) {
       break;
     }
 
@@ -504,8 +504,8 @@ void rtspsrv_initSession(const STREAM_RTSP_SESSIONS_T *pRtsp, RTSP_SESSION_T *pS
 
   memset(pSes, 0, sizeof(RTSP_SESSION_T));
 
-  pSes->vid.dstIp.s_addr = INADDR_NONE;
-  pSes->aud.dstIp.s_addr = INADDR_NONE;
+  //pSes->vid.dstAddr.s_addr = INADDR_NONE;
+  //pSes->aud.dstAddr.s_addr = INADDR_NONE;
   rtspsrv_create_sessionid(pSes->sessionid);
   gettimeofday(&pSes->tvlastupdate, NULL);
 
@@ -585,6 +585,7 @@ static int rtspsrv_closeSessionStreams(STREAM_RTSP_SESSIONS_T *pSessions,
   int rc = 0;
   //STREAM_DEST_CFG_T destCfg;
   unsigned int outidx;
+  char tmp[128];
 
   if(!pSessions || !pSession || !pSessions->pRtpMultis) {
     return -1;
@@ -600,7 +601,7 @@ static int rtspsrv_closeSessionStreams(STREAM_RTSP_SESSIONS_T *pSessions,
 
     if(rc < 0 && pSession->vid.isplaying) {
       LOG(X_WARNING("Failed to remove RTSP video destination[%d] %s:%d"), 
-              outidx, inet_ntoa(pSession->vid.dstIp), pSession->vid.ports[0]);
+              outidx, FORMAT_NETADDR(pSession->vid.dstAddr, tmp, sizeof(tmp)), pSession->vid.ports[0]);
     }
     pSession->vid.issetup = 0;
   }
@@ -613,7 +614,7 @@ static int rtspsrv_closeSessionStreams(STREAM_RTSP_SESSIONS_T *pSessions,
 
     if(rc < 0 && pSession->aud.isplaying) {
       LOG(X_WARNING("Failed to remove RTSP audio destination[%d] %s:%d"), 
-            outidx, inet_ntoa(pSession->aud.dstIp), pSession->aud.ports[0]);
+            outidx, FORMAT_NETADDR(pSession->aud.dstAddr, tmp, sizeof(tmp)), pSession->aud.ports[0]);
     }
     pSession->aud.issetup = 0;
   }

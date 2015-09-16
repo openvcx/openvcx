@@ -38,13 +38,16 @@
 
 typedef struct PACKETGEN_PKT_UDP {
     struct ether_header *peth;
-    struct ip *pip;
+    union {
+      struct ip *pip4;
+      struct ip6_hdr *pip6;
+    } u_ip;
     struct udphdr *pudp;
     unsigned char data[PACKETGEN_PKT_UDP_DATA_SZ];
 } PACKETGEN_PKT_UDP_T;
 
  
-int pktgen_InitUdpPacket(PACKETGEN_PKT_UDP_T *pkt,
+int pktgen_InitUdpPacketIpv4(PACKETGEN_PKT_UDP_T *pkt,
                           const unsigned char srcMac[],
                           const unsigned char dstMac[],
                           unsigned short haveVlan,
@@ -56,7 +59,7 @@ int pktgen_InitUdpPacket(PACKETGEN_PKT_UDP_T *pkt,
                           unsigned short dstPort,
                           unsigned short lenPayload);
 
-int pktgen_ChecksumUdpPacket(PACKETGEN_PKT_UDP_T *pkt);
+int pktgen_ChecksumUdpPacketIpv4(PACKETGEN_PKT_UDP_T *pkt);
 
 
 #define pktgen_ListInterfaces      pkt_ListInterfaces

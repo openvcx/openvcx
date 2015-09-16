@@ -38,6 +38,7 @@ typedef struct THREAD_FUNC_WRAPPER_ARG {
 
 void thread_func_wrapper(void *pArg) {
   THREAD_FUNC_WRAPPER_ARG_T wrap;
+  char tmp[128];
   int rc = 0;
 
   memcpy(&wrap, pArg, sizeof(THREAD_FUNC_WRAPPER_ARG_T));
@@ -55,9 +56,8 @@ void thread_func_wrapper(void *pArg) {
   if((wrap.pConn->sd.netsocket.flags & NETIO_FLAG_SSL_TLS)) {
 
     if((rc = netio_acceptssl(&wrap.pConn->sd.netsocket)) < 0) {
-      LOG(X_ERROR("Closing non-SSL connection on port %d from %s:%d"), 
-        htons(wrap.pConn->pListenCfg->sain.sin_port), inet_ntoa(wrap.pConn->sd.sain.sin_addr), 
-        htons(wrap.pConn->sd.sain.sin_port));
+      LOG(X_ERROR("Closing non-SSL connection on port %d from %s:%d"), htons(INET_PORT(wrap.pConn->pListenCfg->sa)), 
+          FORMAT_NETADDR(wrap.pConn->sd.sa, tmp, sizeof(tmp)), htons(INET_PORT(wrap.pConn->sd.sa)));
     }
   }
 
@@ -81,16 +81,16 @@ void thread_func_wrapper(void *pArg) {
 
 int srvlisten_loop(SRV_LISTENER_CFG_T *pListenCfg, void *thread_func) {
 
-  int sainlen;
+  int salen;
   THREAD_FUNC_WRAPPER_ARG_T wrapArg;
   CLIENT_CONN_T *pConn;
   SOCKET_DESCR_T sdclient;
-  //struct sockaddr_in saSrv;
   int rc = -1;
   const char *s;
   //pthread_cond_t cond;
   pthread_mutex_t mtx;
   TIME_VAL tv0, tv1;
+  char tmp[128];
 
 #if defined(__APPLE__) 
   int sockopt = 0;
@@ -103,9 +103,9 @@ int srvlisten_loop(SRV_LISTENER_CFG_T *pListenCfg, void *thread_func) {
 
   //memset(&saSrv, 0, sizeof(saSrv));
   memset(&sdclient.netsocket, 0, sizeof(sdclient.netsocket));
-  //sainlen = sizeof(saSrv);
+  //salen = sizeof(saSrv);
 
-  //if(getsockname(pListenCfg->pnetsockSrv->sock, (struct sockaddr *) &saSrv,  (socklen_t *) &sainlen) != 0) {
+  //if(getsockname(pListenCfg->pnetsockSrv->sock, (struct sockaddr *) &saSrv,  (socklen_t *) &salen) != 0) {
   //  LOG(X_ERROR("getsockopt failed on server socket"));
   //}
 
@@ -114,14 +114,15 @@ int srvlisten_loop(SRV_LISTENER_CFG_T *pListenCfg, void *thread_func) {
 
   while(!g_proc_exit) {
 
-    sainlen = sizeof(sdclient.sain);
-    if((NETIOSOCK_FD(sdclient.netsocket)= accept(PNETIOSOCK_FD(pListenCfg->pnetsockSrv), (struct sockaddr *) &sdclient.sain, 
-                                         (socklen_t *) &sainlen)) == INVALID_SOCKET) {
+    salen = sizeof(sdclient.sa);
+    if((NETIOSOCK_FD(sdclient.netsocket) = 
+                 accept(PNETIOSOCK_FD(pListenCfg->pnetsockSrv), (struct sockaddr *) &sdclient.sa, 
+                                      (socklen_t *) &salen)) == INVALID_SOCKET) {
       if(!g_proc_exit) {
         LOG(X_ERROR("%saccept failed on %s:%d"), 
              ((pListenCfg->pnetsockSrv->flags & NETIO_FLAG_SSL_TLS) ? "SSL " : ""),
                  //inet_ntoa(saSrv.sin_addr), ntohs(saSrv.sin_port));
-                 inet_ntoa(pListenCfg->sain.sin_addr), ntohs(pListenCfg->sain.sin_port));
+                 FORMAT_NETADDR(pListenCfg->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pListenCfg->sa)));
       }
       break;
     }
@@ -137,8 +138,8 @@ int srvlisten_loop(SRV_LISTENER_CFG_T *pListenCfg, void *thread_func) {
     //
     if((pConn = (CLIENT_CONN_T *) pool_get(pListenCfg->pConnPool)) == NULL) {
       LOG(X_WARNING("No available connection for %s:%d (max:%d) on port %d"), 
-           inet_ntoa(sdclient.sain.sin_addr), ntohs(sdclient.sain.sin_port), 
-           pListenCfg->pConnPool->numElements, ntohs(pListenCfg->sain.sin_port));
+           FORMAT_NETADDR(sdclient.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(sdclient.sa)), 
+           pListenCfg->pConnPool->numElements, ntohs(INET_PORT(pListenCfg->sa)));
 
       netio_closesocket(&sdclient.netsocket);
       continue;
@@ -155,15 +156,14 @@ int srvlisten_loop(SRV_LISTENER_CFG_T *pListenCfg, void *thread_func) {
     //pConn->psrvsaListen = &saSrv;
     //memcpy(&pConn->srvsaListen, &saSrv, sizeof(pConn->srvsaListen));
 
-    LOG(X_DEBUG("Accepted connection on port %d from %s:%d"), 
-        htons(pListenCfg->sain.sin_port), inet_ntoa(sdclient.sain.sin_addr), 
-        htons(sdclient.sain.sin_port));
+    LOG(X_DEBUG("Accepted connection on port %d from %s:%d"), htons(INET_PORT(pListenCfg->sa)), 
+        FORMAT_NETADDR(sdclient.sa, tmp, sizeof(tmp)), htons(INET_PORT(sdclient.sa)));
 
     pthread_attr_init(&pConn->attr);
     pthread_attr_setdetachstate(&pConn->attr, PTHREAD_CREATE_DETACHED);
     memset(&pConn->sd.netsocket, 0, sizeof(pConn->sd.netsocket));
     NETIO_SET(pConn->sd.netsocket, sdclient.netsocket);
-    memcpy(&pConn->sd.sain, &sdclient.sain, sizeof(struct sockaddr_in));
+    memcpy(&pConn->sd.sa, &sdclient.sa, INET_SIZE(sdclient));
     pConn->pListenCfg = pListenCfg;
     NETIOSOCK_FD(sdclient.netsocket) = INVALID_SOCKET;
     //pConn->nonce[0] = '\0';
@@ -186,8 +186,8 @@ int srvlisten_loop(SRV_LISTENER_CFG_T *pListenCfg, void *thread_func) {
                     (void *) thread_func_wrapper,
                     (void *) &wrapArg) != 0) {
       LOG(X_ERROR("Unable to create connection handler thread on port %d from %s:%d"), 
-          htons(pListenCfg->sain.sin_port), inet_ntoa(sdclient.sain.sin_addr), 
-          htons(sdclient.sain.sin_port));
+          htons(INET_PORT(pListenCfg->sa)), FORMAT_NETADDR(sdclient.sa, tmp, sizeof(tmp)),
+          htons(INET_PORT(sdclient.sa)));
       netio_closesocket(&pConn->sd.netsocket);
       pool_return(pListenCfg->pConnPool, &pConn->pool);
       wrapArg.flags = 0;
@@ -218,8 +218,8 @@ int srvlisten_loop(SRV_LISTENER_CFG_T *pListenCfg, void *thread_func) {
         usleep(100);
         if(((tv1 = timer_GetTime()) - tv0) / TIME_VAL_MS > 1000) {
           LOG(X_WARNING("Abandoning wait for connection thread start on port %d from %s:%d"),
-               htons(pListenCfg->sain.sin_port),
-              inet_ntoa(pListenCfg->sain.sin_addr), ntohs(pListenCfg->sain.sin_port));
+               htons(INET_PORT(pListenCfg->sa)),
+              FORMAT_NETADDR(pListenCfg->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pListenCfg->sa)));
           break;
         } 
       }

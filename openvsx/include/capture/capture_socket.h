@@ -38,13 +38,13 @@ typedef struct RTCP_NOTIFY_CTXT {
 int capture_socketStart(CAP_ASYNC_DESCR_T *pCapCfg);
 
 const CAPTURE_STREAM_T *capture_process_rtcp(RTCP_NOTIFY_CTXT_T *pRtcpNotifyCtxt,
-                                             const struct sockaddr_in *pSaSrc,
-                                             const struct sockaddr_in *pSaDst,
+                                             const struct sockaddr *pSaSrc,
+                                             const struct sockaddr *pSaDst,
                                              const RTCP_PKT_HDR_T *pData,
                                              unsigned int len);
 int capture_rtcp_srtp_decrypt(RTCP_NOTIFY_CTXT_T *pRtcpNotifyCtxt,
-                              const struct sockaddr_in *pSaSrc,      
-                              const struct sockaddr_in *pSaDst,      
+                              const struct sockaddr *pSaSrc,      
+                              const struct sockaddr *pSaDst,      
                               const RTCP_PKT_HDR_T *pHdr,      
                               unsigned int *plen);
 

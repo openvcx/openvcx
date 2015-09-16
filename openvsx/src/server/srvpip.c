@@ -45,14 +45,15 @@ int srv_ctrl_pip(CLIENT_CONN_T *pConn) {
   int activePipIds[MAX_PIPS];
   const char *do_pipconf = NULL;
   unsigned int idxResp;
+  char tmp[128];
   char buf[1024];
   char respExtra[512];
   STREAMER_CFG_T *pCfg = NULL;
   char *strxcodebuf = NULL;
 
   LOG(X_DEBUG("Received PIP command %s%s from %s:%d"), pConn->httpReq.puri,  
-      http_req_dump_uri(&pConn->httpReq, buf, sizeof(buf)), inet_ntoa(pConn->sd.sain.sin_addr), 
-      htons(pConn->sd.sain.sin_port));
+      http_req_dump_uri(&pConn->httpReq, buf, sizeof(buf)), FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), 
+      htons(INET_PORT(pConn->sd.sa)));
 
   buf[0] = '\0';
   respExtra[0] = '\0';
@@ -419,7 +420,8 @@ int srv_ctrl_pip(CLIENT_CONN_T *pConn) {
 
   rc = http_resp_send(&pConn->sd, &pConn->httpReq, statusCode, (unsigned char *) buf, strlen(buf));
 
-  LOG(X_DEBUG("Sent PIP response '%s' to %s:%d"), buf, inet_ntoa(pConn->sd.sain.sin_addr), htons(pConn->sd.sain.sin_port));
+  LOG(X_DEBUG("Sent PIP response '%s' to %s:%d"), buf, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), 
+                                                  htons(INET_PORT(pConn->sd.sa)));
 
   return rc;
 }

@@ -1037,6 +1037,7 @@ enum CMD_OPT {
   CMD_OPT_DEBUG_DASH,
   CMD_OPT_DEBUG_LIVE,
   CMD_OPT_DEBUG_OUTFMT,
+  CMD_OPT_DEBUG_NET,
   CMD_OPT_DEBUG_REMB,
   CMD_OPT_DEBUG_RTP,
   CMD_OPT_DEBUG_RTCP,
@@ -1044,6 +1045,7 @@ enum CMD_OPT {
   CMD_OPT_DEBUG_STREAMAV,
   CMD_OPT_DEBUG_SSL,
   CMD_OPT_DEBUG_SRTP,
+  CMD_OPT_DEBUG_DTLS,
   CMD_OPT_DEBUG_XCODE,
   CMD_OPT_TEST,
 };
@@ -1122,6 +1124,7 @@ int main(int argc, char *argv[]) {
                  { "debug-mkv",   optional_argument,       NULL, CMD_OPT_DEBUG_MKV },
                  { "debug-dash",  optional_argument,       NULL, CMD_OPT_DEBUG_DASH },
                  { "debug-live",  optional_argument,       NULL, CMD_OPT_DEBUG_LIVE  },
+                 { "debug-net",   optional_argument,       NULL, CMD_OPT_DEBUG_NET  },
                  { "debug-outfmt",optional_argument,       NULL, CMD_OPT_DEBUG_OUTFMT },
                  { "debug-remb",  optional_argument,       NULL, CMD_OPT_DEBUG_REMB },
                  { "debug-rtsp ", optional_argument,       NULL, CMD_OPT_DEBUG_RTSP },
@@ -1130,6 +1133,7 @@ int main(int argc, char *argv[]) {
                  { "debug-streamav", optional_argument,    NULL, CMD_OPT_DEBUG_STREAMAV },
                  { "debug-ssl",   optional_argument,       NULL, CMD_OPT_DEBUG_SSL },
                  { "debug-srtp",  optional_argument,       NULL, CMD_OPT_DEBUG_SRTP },
+                 { "debug-dtls",  optional_argument,       NULL, CMD_OPT_DEBUG_DTLS},
                  { "debug-xcode", optional_argument,       NULL, CMD_OPT_DEBUG_XCODE },
                  { "dump",        optional_argument,       NULL, 'd' },
                  { "duration",    required_argument,       NULL, CMD_OPT_DURATION },
@@ -2531,6 +2535,9 @@ int main(int argc, char *argv[]) {
         g_debug_flags |= VSX_DEBUG_FLAG_RTSP;
         g_debug_flags |= VSX_DEBUG_FLAG_HTTP;
         break;
+      case CMD_OPT_DEBUG_NET:
+        g_debug_flags |= VSX_DEBUG_FLAG_NET;
+        break;
       case CMD_OPT_DEBUG_STREAMAV:
         g_debug_flags |= VSX_DEBUG_FLAG_STREAMAV;
         break;
@@ -2539,6 +2546,9 @@ int main(int argc, char *argv[]) {
         break;
       case CMD_OPT_DEBUG_SRTP:
         g_debug_flags |= VSX_DEBUG_FLAG_SRTP;
+        break;
+      case CMD_OPT_DEBUG_DTLS:
+        g_debug_flags |= VSX_DEBUG_FLAG_DTLS;
         break;
       case CMD_OPT_DEBUG_XCODE:
         g_debug_flags |= VSX_DEBUG_FLAG_XCODE;

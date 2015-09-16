@@ -351,8 +351,8 @@ static int xmitout(XMIT_ASYNC_DESCR_T *pXmit) {
         } 
         pXmit->pStreamerCfg->sharedCtxt.av[idx].capSocket.pnetsock = &pSockList->netsockets[idxCap];
 
-        if(pSockList->salistRtcp[idxCap].sin_port != 0 &&
-           pSockList->salistRtcp[idxCap].sin_port == pSockList->salist[idxCap].sin_port) {
+        if(INET_PORT(pSockList->salistRtcp[idxCap]) != 0 &&
+           INET_PORT(pSockList->salistRtcp[idxCap]) == INET_PORT(pSockList->salist[idxCap])) {
           pXmit->pStreamerCfg->sharedCtxt.av[idx].capSocket.pnetsockRtcp = 
                 pXmit->pStreamerCfg->sharedCtxt.av[idx].capSocket.pnetsock; 
         } else {
@@ -1365,7 +1365,7 @@ int capture_net_async(CAPTURE_LOCAL_DESCR_T *pLocalCfg,
 
     if(pLocalCfg->common.addrsExt[0] == NULL || pLocalCfg->common.addrsExt[0] == '\0') {
       //LOG(X_DEBUG("RTSP capture server mode"));
-      memcpy(&pLocalCfg->common.rtsp.sd.sain, &sockList.salist[0], sizeof(pLocalCfg->common.rtsp.sd.sain));
+      memcpy(&pLocalCfg->common.rtsp.sd.sa, &sockList.salist[0], sizeof(pLocalCfg->common.rtsp.sd.sa));
 
       //
       // The global SSL server context is usually initialized when calling vsxlib_setupServer but that

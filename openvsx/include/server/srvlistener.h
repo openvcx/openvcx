@@ -28,7 +28,7 @@
 #include "unixcompat.h"
 #include "util/netutil.h"
 
-SOCKET srvlisten_listen(struct sockaddr_in *pSockAddr, int backlog);
+SOCKET srvlisten_listen(struct sockaddr *pSockAddr, int backlog);
 int srvlisten_loop(SRV_LISTENER_CFG_T *pListenCfg, void *thread_func);
 
 #endif // __SERVER_LISTENER_H__

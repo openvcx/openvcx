@@ -244,28 +244,28 @@ int setup_turn_socket(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_FILTERS_T *pFilt, unsigne
   // Infer the TURN peer-address from the output destination string.  This is the address:port allocated
   // by the remote TURN server connection(s) to reach the remote party.
   //
-  if(pCfg->pStreamerCfg && !IS_ADDR_VALID(pTurn->saPeerRelay.sin_addr)) {
+  if(pCfg->pStreamerCfg && !INET_ADDR_VALID(pTurn->saPeerRelay)) {
 
     memset(&pTurn->saPeerRelay, 0, sizeof(pTurn->saPeerRelay));
     if(is_rtcp) {
       if(pCfg->pStreamerCfg->pdestsCfg[0].portsRtcp[idx] == 0) {
-        pTurn->saPeerRelay.sin_port = htons(RTCP_PORT_FROM_RTP(pCfg->pStreamerCfg->pdestsCfg[0].ports[idx]));
+        INET_PORT(pTurn->saPeerRelay) = htons(RTCP_PORT_FROM_RTP(pCfg->pStreamerCfg->pdestsCfg[0].ports[idx]));
       } else {
-        pTurn->saPeerRelay.sin_port = htons(pCfg->pStreamerCfg->pdestsCfg[0].portsRtcp[idx]);
+        INET_PORT(pTurn->saPeerRelay) = htons(pCfg->pStreamerCfg->pdestsCfg[0].portsRtcp[idx]);
       }
     } else {
-      pTurn->saPeerRelay.sin_port = htons(pCfg->pStreamerCfg->pdestsCfg[0].ports[idx]);
+      INET_PORT(pTurn->saPeerRelay) = htons(pCfg->pStreamerCfg->pdestsCfg[0].ports[idx]);
     }
 
     if(pCfg->pStreamerCfg->pdestsCfg[0].dstHost[0] != '\0') {
-      pTurn->saPeerRelay.sin_addr.s_addr = net_resolvehost(pCfg->pStreamerCfg->pdestsCfg[0].dstHost);
+      net_resolvehost(pCfg->pStreamerCfg->pdestsCfg[0].dstHost, &pTurn->saPeerRelay);
     }
   }
 
   //
   // Setup TURN relay allocation for the socket
   //
-  if(IS_ADDR_VALID(pFilter->turn.saTurnSrv.sin_addr)) {
+  if(INET_ADDR_VALID(pFilter->turn.saTurnSrv)) {
   
     //
     // Set a result notification to modify the SDP argument with the server relay allocated ports once
@@ -301,6 +301,7 @@ static int capture_openLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_FILTERS_T *
   int is_dtls = 0;
   int is_srtp = 0;
   int is_audvidmux = 0;
+  char tmp[128];
   char tmpstr[32];
   char tmpstr2[32];
   CAPTURE_FILTER_T *pFilter = NULL;
@@ -339,11 +340,11 @@ static int capture_openLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_FILTERS_T *
     tmpstr[0] = tmpstr2[0] ='\0';
 
     if(netio_opensocket(&pSockList->netsockets[idx], SOCK_DGRAM, 
-           SOCK_RCVBUFSZ_UDP_DEFAULT, 0, &pSockList->salist[idx]) == INVALID_SOCKET) {
+           SOCK_RCVBUFSZ_UDP_DEFAULT, 0, (const struct sockaddr *) &pSockList->salist[idx]) == INVALID_SOCKET) {
       capture_closeLocalSockets(pCfg, pFilt);
       return -1;
     }
-     LOG(X_DEBUG("Created RTP capture socket on port:%d"), htons(pSockList->salist[idx].sin_port));
+     LOG(X_DEBUG("Created RTP capture socket on port:%d"), htons(INET_PORT(pSockList->salist[idx])));
 
     if(net_setsocknonblock(NETIOSOCK_FD(pSockList->netsockets[idx]), 1) < 0) {
       capture_closeLocalSockets(pCfg, pFilt);
@@ -443,7 +444,7 @@ static int capture_openLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_FILTERS_T *
 
         LOG(X_ERROR("Failed to initialize DTLS%s input RTP socket on port %d"), 
              pFilter->dtls.pDtlsShared && pFilter->dtls.pDtlsShared->dtls_srtp ? "-SRTP" : "", 
-             ntohs(pSockList->salist[idx].sin_port));
+             ntohs(INET_PORT(pSockList->salist[idx])));
         capture_closeLocalSockets(pCfg, pFilt);
         return -1;
 
@@ -456,7 +457,7 @@ static int capture_openLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_FILTERS_T *
 
         LOG(X_DEBUG("Initialized DTLS%s input RTP socket on port %d"), 
             pFilter->dtls.pDtlsShared && pFilter->dtls.pDtlsShared->dtls_srtp ? "-SRTP" : "", 
-            ntohs(pSockList->salist[idx].sin_port));
+            ntohs(INET_PORT(pSockList->salist[idx])));
       }
 
     } // end of (is_dtls...
@@ -465,8 +466,7 @@ static int capture_openLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_FILTERS_T *
     //
     // Setup any TURN relay allocation
     //
-    if(IS_ADDR_VALID(pFilter->turn.saTurnSrv.sin_addr) &&
-       (rc = setup_turn_socket(pCfg, pFilt, idx, 0)) < 0) {
+    if(INET_ADDR_VALID(pFilter->turn.saTurnSrv) && (rc = setup_turn_socket(pCfg, pFilt, idx, 0)) < 0) {
       capture_closeLocalSockets(pCfg, pFilt);
       return -1;
     }
@@ -476,23 +476,23 @@ static int capture_openLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_FILTERS_T *
       memcpy(&pSockList->salistRtcp[idx], &pSockList->salist[idx], 
              sizeof(pSockList->salistRtcp[idx]));
       if(idx < pFilt->numFilters && pFilt->filters[idx].dstPortRtcp != 0) {
-        pSockList->salistRtcp[idx].sin_port = htons(pFilt->filters[idx].dstPortRtcp);
+        INET_PORT(pSockList->salistRtcp[idx]) = htons(pFilt->filters[idx].dstPortRtcp);
       } else {
-        pSockList->salistRtcp[idx].sin_port = 
-                        htons(RTCP_PORT_FROM_RTP(htons(pSockList->salistRtcp[idx].sin_port)));
+        INET_PORT(pSockList->salistRtcp[idx]) = 
+                        htons(RTCP_PORT_FROM_RTP(htons(INET_PORT(pSockList->salistRtcp[idx]))));
       }
       
       //fprintf(stderr, "RTCP PORT:%d (RTP:%d)\n", htons(pSockList->salistRtcp[idx].sin_port), htons(pSockList->salist[idx].sin_port));
 
-      if(pSockList->salistRtcp[idx].sin_port != pSockList->salist[idx].sin_port) {
+      if(INET_PORT(pSockList->salistRtcp[idx]) != INET_PORT(pSockList->salist[idx])) {
 
         //if((NETIOSOCK_FD(pSockList->netsocketsRtcp[idx]) = net_opensocket(SOCK_DGRAM, 
         if(netio_opensocket(&pSockList->netsocketsRtcp[idx], SOCK_DGRAM, 
-               SOCK_RCVBUFSZ_DEFAULT, 0, &pSockList->salistRtcp[idx]) == INVALID_SOCKET) {
+               SOCK_RCVBUFSZ_DEFAULT, 0, (const struct sockaddr *) &pSockList->salistRtcp[idx]) == INVALID_SOCKET) {
           capture_closeLocalSockets(pCfg, pFilt);
           return -1;
         }
-        LOG(X_DEBUG("Created RTCP capture socket on port:%d"), htons(pSockList->salistRtcp[idx].sin_port));
+        LOG(X_DEBUG("Created RTCP capture socket on port:%d"), htons(INET_PORT(pSockList->salistRtcp[idx])));
         if(net_setsocknonblock(NETIOSOCK_FD(pSockList->netsocketsRtcp[idx]), 1) < 0) {
           capture_closeLocalSockets(pCfg, pFilt);
           return -1;
@@ -517,7 +517,7 @@ static int capture_openLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_FILTERS_T *
                     dtls_netsock_setclient(&pSockList->netsocketsRtcp[idx], dtls_handshake_client) < 0) {
             LOG(X_DEBUG("Failed to initialize DTLS%s input RTCP socket on port %d"), 
                   pFilter->dtls.pDtlsShared && pFilter->dtls.pDtlsShared->dtls_srtp ? "-SRTP" : "", 
-                  ntohs(pSockList->salistRtcp[idx].sin_port));
+                  ntohs(INET_PORT(pSockList->salistRtcp[idx])));
             capture_closeLocalSockets(pCfg, pFilt);
             return -1;
           } else {
@@ -530,7 +530,7 @@ static int capture_openLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_FILTERS_T *
 
             LOG(X_DEBUG("Initialized DTLS%s input RTCP socket on port %d"), 
                   pFilter->dtls.pDtlsShared && pFilter->dtls.pDtlsShared->dtls_srtp ? "-SRTP" : "", 
-                  ntohs(pSockList->salistRtcp[idx].sin_port));
+                  ntohs(INET_PORT(pSockList->salistRtcp[idx])));
 
           }
         } // end of (is_dtls...
@@ -539,19 +539,18 @@ static int capture_openLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_FILTERS_T *
         //
         // Setup any TURN relay allocation
         //
-        if(IS_ADDR_VALID(pFilter->turn.saTurnSrv.sin_addr) &&
-           (rc = setup_turn_socket(pCfg, pFilt, idx, 1)) < 0) {
+        if(INET_ADDR_VALID(pFilter->turn.saTurnSrv) && (rc = setup_turn_socket(pCfg, pFilt, idx, 1)) < 0) {
           capture_closeLocalSockets(pCfg, pFilt);
           return -1;
         }
 
-        if(IN_MULTICAST(htonl(pSockList->salistRtcp[idx].sin_addr.s_addr))) {
+        if(INET_IS_MULTICAST(pSockList->salistRtcp[idx])) {
           all_unicast_rtcp = 0;
         }
 
       } // end of if(pSockList->salistRtcp[idx].sin_port != ...
 
-      snprintf(tmpstr2, sizeof(tmpstr2), " RTCP:%d", ntohs(pSockList->salistRtcp[idx].sin_port));
+      snprintf(tmpstr2, sizeof(tmpstr2), " RTCP:%d", ntohs(INET_PORT(pSockList->salistRtcp[idx])));
 
     } // end of if(rtcp...
 
@@ -560,8 +559,9 @@ static int capture_openLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_FILTERS_T *
     //  pFilterPeer->srtps[1].pSrtpShared = pFilter->srtps[1].pSrtpShared;
     //}
 
-    LOG(X_DEBUG("Listening on %s:%d%s%s"), inet_ntoa(pSockList->salist[idx].sin_addr), 
-                ntohs(pSockList->salist[idx].sin_port), tmpstr, tmpstr2);
+    LOG(X_DEBUG("Listening on %s:%d%s%s"), FORMAT_NETADDR(pSockList->salist[idx], tmp, sizeof(tmp)), 
+                           ntohs(INET_PORT(pSockList->salist[idx])), tmpstr, tmpstr2);
+
   } // end of for(idx = 0...
 
   if(rtcp) {
@@ -590,8 +590,8 @@ static int capture_openLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_FILTERS_T *
   return 0;
 }
 /*
-char *capture_log_format_pkt(char *buf, unsigned int sz, const struct sockaddr_in *pSaSrc, 
-                    const struct sockaddr_in *pSaDst) {
+char *capture_log_format_pkt(char *buf, unsigned int sz, const struct sockaddr *pSaSrc, 
+                    const struct sockaddr *pSaDst) {
   int rc;
   if((rc = snprintf(buf, sz, "%s:%d -> :%d", inet_ntoa(pSaSrc->sin_addr), htons(pSaSrc->sin_port), 
            htons(pSaDst->sin_port))) <= 0 && sz > 0) {
@@ -614,7 +614,7 @@ static int send_rtcp_toxmitter(CAPTURE_SOCKET_CTXT_T *pCtxt,
                                const CAPTURE_STREAM_T *pStream,
                                SOCKET_LIST_T *pSockList, 
                                unsigned int idx,
-                               const struct sockaddr_in *psaSrc) {
+                               const struct sockaddr *psaSrc) {
 
   int rc = 0;
   int do_rr = 0;
@@ -625,6 +625,7 @@ static int send_rtcp_toxmitter(CAPTURE_SOCKET_CTXT_T *pCtxt,
   double bwPayloadBpsCurRemb = 0;
   STREAM_RTCP_RR_T *pRtcpRr;
   SRTP_CTXT_T *pSrtp = NULL;
+  char tmp[128];
   unsigned char buf[512];
   unsigned char buf2[512];
   unsigned char *pData = buf;
@@ -639,8 +640,7 @@ static int send_rtcp_toxmitter(CAPTURE_SOCKET_CTXT_T *pCtxt,
   //
   // If the RTCP listener is for a multicast, ensure its ok to send back any RTCP
   //
-  if(IN_MULTICAST(htonl(pSockList->salistRtcp[idx].sin_addr.s_addr)) && 
-     !pCtxt->pCfg->pcommon->rtcp_reply_from_mcast) {
+  if(!pCtxt->pCfg->pcommon->rtcp_reply_from_mcast && INET_IS_MULTICAST(pSockList->salistRtcp[idx])) {
     //fprintf(stderr, "NOT TO MCAST..\n");
     return 0;
   } else if(!pCtxt->pCfg->pStreamerCfg) {
@@ -734,23 +734,23 @@ static int send_rtcp_toxmitter(CAPTURE_SOCKET_CTXT_T *pCtxt,
   //
   // Make sure we have the sender's remote address to where to send the RTCP packet to
   //
-  if(pSockList->saRemoteRtcp[idx].sin_port == 0) {
+  if(INET_PORT(pSockList->saRemoteRtcp[idx]) == 0) {
 
     //
     // No prior RTCP (SR) received from transmitter, so we try to infer the RTCP ip:port
     // from the previous RTP packet
     //
-    if(psaSrc && psaSrc->sin_port != 0 && IS_ADDR_VALID(psaSrc->sin_addr)) {
+    if(psaSrc && PINET_PORT(psaSrc) != 0 && INET_ADDR_VALID(*psaSrc)) {
 
-      memcpy(&pSockList->saRemoteRtcp[idx], psaSrc, sizeof(pSockList->saRemoteRtcp[idx]));
+      memcpy(&pSockList->saRemoteRtcp[idx], psaSrc, INET_SIZE(*psaSrc));
 
-      if(pSockList->salistRtcp[idx].sin_port != pSockList->salist[idx].sin_port) {
-        pSockList->saRemoteRtcp[idx].sin_port = htons(RTCP_PORT_FROM_RTP(
-                                                      ntohs(pSockList->saRemoteRtcp[idx].sin_port)));
+      if(INET_PORT(pSockList->salistRtcp[idx]) != INET_PORT(pSockList->salist[idx])) {
+        INET_PORT(pSockList->saRemoteRtcp[idx]) = htons(RTCP_PORT_FROM_RTP(
+                                                      ntohs(INET_PORT(pSockList->saRemoteRtcp[idx]))));
       }
 
       LOG(X_WARNING("Using remote RTCP destination obtained from RTP port %s:%d"), 
-          inet_ntoa(psaSrc->sin_addr), ntohs(pSockList->saRemoteRtcp[idx].sin_port)); 
+          FORMAT_NETADDR(*psaSrc, tmp, sizeof(tmp)), ntohs(INET_PORT(pSockList->saRemoteRtcp[idx]))); 
     } else {
       LOG(X_ERROR("Remote RTCP destination not set ant not available from inbound RTP (idx:%d)"), idx);
       return 0;
@@ -786,11 +786,11 @@ static int send_rtcp_toxmitter(CAPTURE_SOCKET_CTXT_T *pCtxt,
     //LOG(X_DEBUG("RTCP capture_rtcp_create len:%d, do_rr:%d, do_fir:%d, do_pli:%d, do_nack:%d, do_remb:%d"), rc, do_rr, do_fir, do_pli, do_nack, do_remb); LOGHEX_DEBUG(&buf, rc);
 
     VSX_DEBUG_RTCP (
-      snprintf((char *) buf2, sizeof(buf2), ", via %s:%d", inet_ntoa(pSockList->salistRtcp[idx].sin_addr), 
-               htons(pSockList->salistRtcp[idx].sin_port));
+      snprintf((char *) buf2, sizeof(buf2), ", via %s:%d", FORMAT_NETADDR(pSockList->salistRtcp[idx], tmp, sizeof(tmp)),
+               htons(INET_PORT(pSockList->salistRtcp[idx])));
       LOG(X_DEBUG("RTCP - rtcp-rcvr-xmt [idx:%d], rtcp-type:%d sender-ssrc: 0x%x, len:%d to %s:%d%s"), idx, buf[1], 
-             htonl( *((uint32_t *) &buf[8])  ), rc,
-             inet_ntoa(pSockList->saRemoteRtcp[idx].sin_addr), htons(pSockList->saRemoteRtcp[idx].sin_port), buf2); 
+            htonl( *((uint32_t *) &buf[8])  ), rc, FORMAT_NETADDR(pSockList->saRemoteRtcp[idx], tmp, sizeof(tmp)),
+            htons(INET_PORT(pSockList->saRemoteRtcp[idx])), buf2); 
       LOGHEX_DEBUG(buf, rc);
     );
 
@@ -833,8 +833,8 @@ static int send_rtcp_toxmitter(CAPTURE_SOCKET_CTXT_T *pCtxt,
     }
 
     VSX_DEBUG_RTCP( LOG(X_DEBUG("RTCP - sendto (rtcp %s%s%s)[%d] %s:%d %d bytes"), 
-           do_rr ? "RR " : "", do_fir ? "FIR " : "", do_pli ? "PLI " : "", idx, 
-           inet_ntoa(pSockList->saRemoteRtcp[idx].sin_addr), ntohs(pSockList->saRemoteRtcp[idx].sin_port), rc) );
+      do_rr ? "RR " : "", do_fir ? "FIR " : "", do_pli ? "PLI " : "", idx, 
+      FORMAT_NETADDR(pSockList->saRemoteRtcp[idx], tmp, sizeof(tmp)), ntohs(INET_PORT(pSockList->saRemoteRtcp[idx])), rc));
 
   } else {
     if(pSrtp) {
@@ -887,21 +887,30 @@ static CAPTURE_STREAM_T *capture_lookup_stream_fromrtcp_nossrc(CAPTURE_STATE_T *
 
 static CAPTURE_STREAM_T *capture_lookup_stream_fromrtcp(CAPTURE_STATE_T *pState,
                                            const SOCKET_LIST_T *pSockList,
-                                           const struct sockaddr_in *pSaSrc, 
-                                           const struct sockaddr_in *pSaDst,
+                                           const struct sockaddr *pSaSrc, 
+                                           const struct sockaddr *pSaDst,
                                            uint32_t ssrc)  {
   CAPTURE_STREAM_T *pStream = NULL;
   COLLECT_STREAM_KEY_T key;
 
   key.ssrc = htonl(ssrc);
-  key.srcPort = htons(pSaSrc->sin_port);
-  key.dstPort = htons(pSaDst->sin_port);
+  key.srcPort = htons(PINET_PORT(pSaSrc));
+  key.dstPort = htons(PINET_PORT(pSaDst));
   
-  // ipv4 only
-  key.lenIp = ADDR_LEN_IPV4;
+  if(pSaSrc->sa_family == AF_INET6) {
+    key.lenIp = ADDR_LEN_IPV6;
+    memcpy(&key.pair_srcipv6.s6_addr[0], &((const struct sockaddr_in6 *) pSaSrc)->sin6_addr.s6_addr[0], ADDR_LEN_IPV6);
+    memcpy(&key.pair_dstipv6.s6_addr[0], &((const struct sockaddr_in6 *) pSaDst)->sin6_addr.s6_addr[0], ADDR_LEN_IPV6);
+
+  } else {
+    //
+    // IPv4
+    //
+    key.lenIp = ADDR_LEN_IPV4;
+    key.pair_srcipv4.s_addr = ((const struct sockaddr_in *) pSaSrc)->sin_addr.s_addr;
+    key.pair_dstipv4.s_addr = ((const struct sockaddr_in *) pSaDst)->sin_addr.s_addr;
+  }
   key.lenKey = COLLECT_STREAM_KEY_SZ_NO_IP + (key.lenIp * 2);
-  key.pair_srcipv4.s_addr = pSaSrc->sin_addr.s_addr;
-  key.pair_dstipv4.s_addr = pSaSrc->sin_addr.s_addr;
 
   if(!(pStream = capture_rtcp_lookup(pState, &key))) {
     //
@@ -922,8 +931,8 @@ static int process_rtcp_pkt(STREAMER_CFG_T *pStreamerCfg,
                             CAPTURE_STREAM_T *pStream,
                             const RTCP_PKT_HDR_T *pHdr,
                             unsigned int len,
-                            const struct sockaddr_in *pSaSrc,
-                            const struct sockaddr_in *pSaDst) {
+                            const struct sockaddr *pSaSrc,
+                            const struct sockaddr *pSaDst) {
   int rc = 0;
   char buf[128];
   RTCP_PKT_RR_T *pRR;
@@ -1016,8 +1025,8 @@ static int process_rtcp_pkt(STREAMER_CFG_T *pStreamerCfg,
 } 
 
 static int validate_rtcp(const RTCP_PKT_HDR_T *pHdr, 
-                         const struct sockaddr_in *pSaSrc, 
-                         const struct sockaddr_in *pSaDst, 
+                         const struct sockaddr *pSaSrc, 
+                         const struct sockaddr *pSaDst, 
                          unsigned int len) {
   char buf[128];
 
@@ -1038,8 +1047,8 @@ static int validate_rtcp(const RTCP_PKT_HDR_T *pHdr,
 static const CAPTURE_STREAM_T *process_rtcp(CAPTURE_STATE_T *pState,
                                             SOCKET_LIST_T     *pSockList,
                                             STREAMER_CFG_T *pStreamerCfg,
-                                            const struct sockaddr_in *pSaSrc, 
-                                            const struct sockaddr_in *pSaDst, 
+                                            const struct sockaddr *pSaSrc, 
+                                            const struct sockaddr *pSaDst, 
                                             const RTCP_PKT_HDR_T *pData, 
                                             unsigned int len,
                                             int do_srtp,
@@ -1076,7 +1085,8 @@ static const CAPTURE_STREAM_T *process_rtcp(CAPTURE_STATE_T *pState,
   //
   if(do_srtp && (pSrtp = CAPTURE_RTCP_SRTP_CTXT(pStream->pFilter)) && pSrtp->do_rtcp) {
     if(pnetsock && pSrtp->kt.k.lenKey == 0) {
-      LOG(X_ERROR("Capture SRTP input key not set for RTCP packet length %d port:%d"), len, htons(pSaDst->sin_port));
+      LOG(X_ERROR("Capture SRTP input key not set for RTCP packet length %d port:%d"), 
+                    len, htons(PINET_PORT(pSaDst)));
     } else if(pSrtp->kt.k.lenKey > 0 && (rc = srtp_decryptPacket(pSrtp, (unsigned char *) pHdr, &len, 1)) < 0) {
       return NULL;
     } 
@@ -1111,8 +1121,8 @@ static const CAPTURE_STREAM_T *process_rtcp(CAPTURE_STATE_T *pState,
 }
 
 static int rtcp_srtp_decrypt(CAPTURE_STATE_T *pState,
-                             const struct sockaddr_in *pSaSrc, 
-                             const struct sockaddr_in *pSaDst, 
+                             const struct sockaddr *pSaSrc, 
+                             const struct sockaddr *pSaDst, 
                              const RTCP_PKT_HDR_T *pHdr, 
                              unsigned int *plen) {
   int rc = 0;
@@ -1144,8 +1154,8 @@ static int rtcp_srtp_decrypt(CAPTURE_STATE_T *pState,
 }
 
 int capture_rtcp_srtp_decrypt(RTCP_NOTIFY_CTXT_T *pRtcpNotifyCtxt,
-                              const struct sockaddr_in *pSaSrc, 
-                              const struct sockaddr_in *pSaDst, 
+                              const struct sockaddr *pSaSrc, 
+                              const struct sockaddr *pSaDst, 
                               const RTCP_PKT_HDR_T *pHdr, 
                               unsigned int *plen) {
 
@@ -1157,8 +1167,8 @@ int capture_rtcp_srtp_decrypt(RTCP_NOTIFY_CTXT_T *pRtcpNotifyCtxt,
 }
 
 const CAPTURE_STREAM_T *capture_process_rtcp(RTCP_NOTIFY_CTXT_T *pRtcpNotifyCtxt,
-                                             const struct sockaddr_in *pSaSrc, 
-                                             const struct sockaddr_in *pSaDst, 
+                                             const struct sockaddr *pSaSrc, 
+                                             const struct sockaddr *pSaDst, 
                                              const RTCP_PKT_HDR_T *pData, 
                                              unsigned int len) {
 
@@ -1176,7 +1186,7 @@ const CAPTURE_STREAM_T *capture_process_rtcp(RTCP_NOTIFY_CTXT_T *pRtcpNotifyCtxt
                               pRtcpNotifyCtxt->pStreamerCfg, pSaSrc, pSaDst, pData, len, 0, NULL))) {
 
     for(idx = 0; idx < pRtcpNotifyCtxt->pSockList->numSockets; idx++) {
-      if(pSaDst->sin_port == pRtcpNotifyCtxt->pSockList->salistRtcp[idx].sin_port) {
+      if((PINET_PORT(pSaDst) == INET_PORT(pRtcpNotifyCtxt->pSockList->salistRtcp[idx]))) {
 
 //TODO: test for TURN here!
         if(!DEPRECATED_IS_TURN_ENABLED(pRtcpNotifyCtxt->pState->filt.filters[idx])) {
@@ -1251,7 +1261,7 @@ static int have_sendonly(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_STATE_T *pState) {
 #define DTLS_RECORD_HEADER_LEN   13
 
 static int rcv_handle_dtls(CAP_ASYNC_DESCR_T *pCfg, unsigned int idx, unsigned char *pData, int *pktlen,
-                           const struct sockaddr_in *psaSrc, const struct sockaddr_in *psaDst, 
+                           const struct sockaddr *psaSrc, const struct sockaddr *psaDst, 
                            NETIO_SOCK_T *pnetsock) {
 #if defined(VSX_HAVE_SSL_DTLS)
 
@@ -1279,12 +1289,13 @@ static int rcv_handle_dtls(CAP_ASYNC_DESCR_T *pCfg, unsigned int idx, unsigned c
 
 static int rcv_handle_turn(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_FILTERS_T *pFilt, 
                            unsigned int idx, unsigned char **ppData, int *pktlen,
-                           const struct sockaddr_in *psaSrc, SOCKET_LIST_T *pSockList,
+                           const struct sockaddr *psaSrc, SOCKET_LIST_T *pSockList,
                            int is_rtcp, int is_turn_channeldata, int *pis_turn, int *pis_turn_indication) {
 
   int rc = 0;
   NETIO_SOCK_T *pnetsock = is_rtcp ? &pSockList->netsocketsRtcp[idx] : &pSockList->netsockets[idx];
-  const struct sockaddr_in *psaDst = is_rtcp ? &pSockList->salistRtcp[idx] : &pSockList->salist[idx];
+  const struct sockaddr *psaDst = (const struct sockaddr *) (is_rtcp ? 
+                                  &pSockList->salistRtcp[idx] : &pSockList->salist[idx]);
   TURN_CTXT_T *pTurn = is_rtcp ? &pFilt->filters[idx].turnRtcp : &pFilt->filters[idx].turn;
 
   rc = turn_onrcv_pkt(pTurn, &pFilt->filters[idx].stun, is_turn_channeldata,  pis_turn, pis_turn_indication,
@@ -1294,8 +1305,8 @@ static int rcv_handle_turn(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_FILTERS_T *pFilt,
 
 static int rcv_check_stun(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_FILTERS_T *pFilt,
                           unsigned int idx, const unsigned char *pData, 
-                          unsigned int pktlen, const struct sockaddr_in *psaSrc, 
-                          const struct sockaddr_in *psaDst, NETIO_SOCK_T *pnetsock, 
+                          unsigned int pktlen, const struct sockaddr *psaSrc, 
+                          const struct sockaddr *psaDst, NETIO_SOCK_T *pnetsock, 
                           int *pis_stun, int is_turn, int is_rtcp) {
   int rc = 0;
   TURN_CTXT_T *pTurn = is_rtcp ? &pFilt->filters[idx].turnRtcp : &pFilt->filters[idx].turn;
@@ -1317,9 +1328,13 @@ static int rcv_check_stun(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_FILTERS_T *pFilt,
       pFilt->filters[idx].stun.pPeer = pCfg->pStreamerCfg->sharedCtxt.av[idx].pstun;
     }
 
-    // If TURN is enabled, check if this is a packet originating from the TURN server without use of a TURN channel / send indication
+    //
+    // If TURN is enabled, check if this is a packet originating from the TURN server 
+    // without use of a TURN channel / send indication
+    //
     if(!is_turn && pnetsock->turn.use_turn_indication_in &&
-       psaSrc->sin_addr.s_addr == pnetsock->turn.saTurnSrv.sin_addr.s_addr) {
+       INET_IS_SAMEADDR(*psaSrc, pnetsock->turn.saTurnSrv)) {
+       //psaSrc->sin_addr.s_addr == pnetsock->turn.saTurnSrv.sin_addr.s_addr) {
       is_turn = 1;
     }
 
@@ -1343,7 +1358,7 @@ static int readLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_STATE_T *pState, in
   int rc;
   int pktlen;
   struct timeval tv;
-  struct sockaddr_in saSrc;
+  struct sockaddr_storage saSrc;
   SOCKET fdHighest;
   fd_set fdsetRd;
   int len;
@@ -1473,7 +1488,7 @@ static int readLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_STATE_T *pState, in
       //
       // Set any RTCP sockets to listen
       //
-      if(rtcp && pSockList->salistRtcp[idx].sin_port != pSockList->salist[idx].sin_port &&
+      if(rtcp && INET_PORT(pSockList->salistRtcp[idx]) != INET_PORT(pSockList->salist[idx]) &&
          NETIOSOCK_FD(pSockList->netsocketsRtcp[idx]) != INVALID_SOCKET) {
         FD_SET(NETIOSOCK_FD(pSockList->netsocketsRtcp[idx]), &fdsetRd);
         if(NETIOSOCK_FD(pSockList->netsocketsRtcp[idx]) > fdHighest) {
@@ -1512,7 +1527,7 @@ static int readLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_STATE_T *pState, in
           is_turn_indication = 0;
           is_turn_channeldata = 0;
           is_dtls = 0;
-          len = sizeof(struct sockaddr_in);
+          len = sizeof(struct sockaddr_storage);
           pStream = NULL;
           if((pktlen = recvfrom(NETIOSOCK_FD(pSockList->netsockets[idx]), 
                             (void *) pData, 
@@ -1532,8 +1547,8 @@ static int readLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_STATE_T *pState, in
                (pData[0] & RTPHDR8_VERSION_MASK) != RTP8_VERSION && 
                (stun_ispacket(pData, pktlen) || (is_turn_channeldata = turn_ischanneldata(pData, pktlen)))) {
 
-              if((rc = rcv_handle_turn(pCfg, &pState->filt, idx, &pData, &pktlen, &saSrc, pSockList,
-                                       0, is_turn_channeldata, &is_turn, &is_turn_indication)) < 0) {
+              if((rc = rcv_handle_turn(pCfg, &pState->filt, idx, &pData, &pktlen, (const struct sockaddr *) &saSrc, 
+                                   pSockList, 0, is_turn_channeldata, &is_turn, &is_turn_indication)) < 0) {
 
               }
 
@@ -1541,7 +1556,8 @@ static int readLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_STATE_T *pState, in
 
             if(rc >= 0 && (!is_turn || is_turn_indication || is_turn_channeldata) && 
                (pSockList->netsockets[idx].flags & NETIO_FLAG_SSL_DTLS) && DTLS_ISPACKET(pData, pktlen)) {
-              if((rc = rcv_handle_dtls(pCfg, idx, pData, &pktlen, &saSrc, &pSockList->salist[idx], 
+              if((rc = rcv_handle_dtls(pCfg, idx, pData, &pktlen, (const struct sockaddr *) &saSrc, 
+                                       (const struct sockaddr *) &pSockList->salist[idx], 
                                        &pSockList->netsockets[idx])) < 0 ||
                  pktlen <=  0) {
                 is_dtls = 1;
@@ -1552,8 +1568,9 @@ static int readLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_STATE_T *pState, in
             // Check for a STUN packet
             //
             if(rc >= 0 && !is_dtls && (!is_turn || is_turn_indication || is_turn_channeldata)) { 
-              rc = rcv_check_stun(pCfg, &pState->filt, idx, pData, pktlen, &saSrc, 
-                                  &pSockList->salist[idx], &pSockList->netsockets[idx], &is_stun, is_turn, 0);
+              rc = rcv_check_stun(pCfg, &pState->filt, idx, pData, pktlen, (const struct sockaddr *) &saSrc, 
+                                  (const struct sockaddr *) &pSockList->salist[idx], &pSockList->netsockets[idx], 
+                                  &is_stun, is_turn, 0);
             }
 
 #if 0 && defined(VSX_HAVE_DEBUG)
@@ -1586,13 +1603,13 @@ static int readLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_STATE_T *pState, in
             //
             if(rc >= 0) {
             if(!no_output && rtcp &&
-               pSockList->salistRtcp[idx].sin_port == pSockList->salist[idx].sin_port && 
+               INET_PORT(pSockList->salistRtcp[idx]) == INET_PORT(pSockList->salist[idx]) && 
                (!is_turn || is_turn_indication || is_turn_channeldata) && !is_stun && !is_dtls && len > 2 &&
                pData[1] >= RTCP_PT_SR && pData[1] <= RTCP_PT_PSFB) {
              
-              if((pStream  = process_rtcp(pState, pSockList, pCfg->pStreamerCfg, &saSrc, 
-                                          &pSockList->salistRtcp[idx], (RTCP_PKT_HDR_T *) pData, pktlen, 
-                                          1, &pSockList->netsockets[idx]))) {
+              if((pStream  = process_rtcp(pState, pSockList, pCfg->pStreamerCfg, (const struct sockaddr *) &saSrc, 
+                                          (const struct sockaddr *) &pSockList->salistRtcp[idx], 
+                                          (RTCP_PKT_HDR_T *) pData, pktlen, 1, &pSockList->netsockets[idx]))) {
 
                 //if(!IS_TURN_ENABLED(pState->filt.filters[idx])) {
                 if(!IS_SOCK_TURN(&pSockList->netsockets[idx])) {
@@ -1610,8 +1627,8 @@ static int readLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_STATE_T *pState, in
                 pthread_mutex_lock(&mtx_sendonly);
               }
 
-              pStream = capture_onUdpSockPkt(pState, pData, pktlen, (pData - buf),
-                                 &saSrc, &pSockList->salist[idx], &tv, &pSockList->netsockets[idx]);
+              pStream = capture_onUdpSockPkt(pState, pData, pktlen, (pData - buf), (const struct sockaddr *) &saSrc, 
+                                   (const struct sockaddr *) &pSockList->salist[idx], &tv, &pSockList->netsockets[idx]);
 
               if(have_sendonly_generator) {
                 pthread_mutex_unlock(&mtx_sendonly);
@@ -1628,7 +1645,7 @@ static int readLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_STATE_T *pState, in
             // Send any RTCP packet(s) back to the RTP sender 
             //
             if(!sendonly && !no_output) {
-              rc = send_rtcp_toxmitter(&ctxt, pStream, pSockList, idx, &saSrc);
+              rc = send_rtcp_toxmitter(&ctxt, pStream, pSockList, idx, (const struct sockaddr *) &saSrc);
             }
 
 #if defined(WIN32) && !defined(__MINGW32__)
@@ -1683,7 +1700,7 @@ static int readLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_STATE_T *pState, in
             //
             // Skip this if the RTCP port is the same as RTP
             //
-            if(pSockList->salistRtcp[idx].sin_port == pSockList->salist[idx].sin_port) {
+            if(INET_PORT(pSockList->salistRtcp[idx]) == INET_PORT(pSockList->salist[idx])) {
               continue;
             }
 
@@ -1702,7 +1719,7 @@ static int readLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_STATE_T *pState, in
             is_turn_channeldata = 0;
             is_dtls = 0;
             pnetsock = CAPTURE_RTCP_PNETIOSOCK(pSockList, idx);
-            len = sizeof(struct sockaddr_in);
+            len = sizeof(struct sockaddr_storage);
             pStream = NULL;
 
             //if((pktlen = recvfrom(CAPTURE_RTCP_FD(pSockList, idx), 
@@ -1723,8 +1740,8 @@ static int readLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_STATE_T *pState, in
                  (pData[0] & RTPHDR8_VERSION_MASK) != RTP8_VERSION && 
                  (stun_ispacket(pData, pktlen) || (is_turn_channeldata = turn_ischanneldata(pData, pktlen)))) {
 
-                if((rc = rcv_handle_turn(pCfg, &pState->filt, idx, &pData, &pktlen, &saSrc, pSockList,
-                                         1, is_turn_channeldata, &is_turn, &is_turn_indication)) < 0) {
+                if((rc = rcv_handle_turn(pCfg, &pState->filt, idx, &pData, &pktlen, (const struct sockaddr *) &saSrc, 
+                                         pSockList, 1, is_turn_channeldata, &is_turn, &is_turn_indication)) < 0) {
   
                 }
               }
@@ -1732,7 +1749,8 @@ static int readLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_STATE_T *pState, in
               //if(rc >= 0 && (CAPTURE_RTCP_PNETIOSOCK(pSockList, idx)->flags & NETIO_FLAG_SSL_DTLS) && DTLS_ISPACKET(pData, pktlen)) {
               if(rc >= 0 && (pnetsock->flags & NETIO_FLAG_SSL_DTLS) && DTLS_ISPACKET(pData, pktlen)) {
 
-                if((rc = rcv_handle_dtls(pCfg, idx, pData, &pktlen, &saSrc, &pSockList->salistRtcp[idx], 
+                if((rc = rcv_handle_dtls(pCfg, idx, pData, &pktlen, (const struct sockaddr *) &saSrc, 
+                                         (const struct sockaddr *) &pSockList->salistRtcp[idx], 
                                          //CAPTURE_RTCP_PNETIOSOCK(pSockList, idx))) < 0 || pktlen <=  0) {
                                          pnetsock)) < 0 || pktlen <=  0) {
                   is_dtls = 1;
@@ -1743,14 +1761,15 @@ static int readLocalSockets(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_STATE_T *pState, in
               // Check for a STUN packet
               //
               if(rc >= 0 && !is_dtls && (!is_turn || is_turn_indication || is_turn_channeldata)) { 
-                rc = rcv_check_stun(pCfg, &pState->filt, idx, pData, pktlen, &saSrc, &pSockList->salistRtcp[idx], 
-                                    pnetsock, &is_stun, is_turn, 1);
+                rc = rcv_check_stun(pCfg, &pState->filt, idx, pData, pktlen, (const struct sockaddr *) &saSrc, 
+                            (const struct sockaddr *) &pSockList->salistRtcp[idx], pnetsock, &is_stun, is_turn, 1);
               }
 
-              if(rc >= 0 && !is_stun && (!is_turn || is_turn_indication || is_turn_channeldata) && !is_dtls && !no_output && 
-                 (pStream  = process_rtcp(pState, pSockList, pCfg->pStreamerCfg, &saSrc, 
-                                          &pSockList->salistRtcp[idx], (RTCP_PKT_HDR_T *) pData, pktlen, 
-                                          1, pnetsock))) {
+              if(rc >= 0 && !is_stun && (!is_turn || is_turn_indication || is_turn_channeldata) && 
+                                         !is_dtls && !no_output && 
+                 (pStream  = process_rtcp(pState, pSockList, pCfg->pStreamerCfg, (const struct sockaddr *) &saSrc, 
+                                    (const struct sockaddr *) &pSockList->salistRtcp[idx], (RTCP_PKT_HDR_T *) pData, 
+                                     pktlen, 1, pnetsock))) {
                 
                 if(!IS_SOCK_TURN(pnetsock)) {
                   //

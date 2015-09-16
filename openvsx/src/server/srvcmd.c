@@ -1499,6 +1499,7 @@ int srv_ctrl_oncommand(CLIENT_CONN_T *pConn, enum HTTP_STATUS *pHttpStatus,
                        unsigned char *pout, unsigned int *plenout) {
   int rc = -1;
   unsigned int idx;
+  char tmp[128];
   int havehandler = 0;
   const char *pcmd = NULL;
   const KEYVAL_PAIR_T *pKeyvals = (const KEYVAL_PAIR_T *) &pConn->httpReq.uriPairs;
@@ -1520,7 +1521,7 @@ int srv_ctrl_oncommand(CLIENT_CONN_T *pConn, enum HTTP_STATUS *pHttpStatus,
 
     if(!havehandler) {
       LOG(X_WARNING("Received unsupported command '%s' from  %s:%d"), 
-          pcmd, inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port));
+          pcmd, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
       havehandler = 1;
       *plenout = snprintf((char *) pout, *plenout, "Unsupported command");
     }
@@ -1529,7 +1530,7 @@ int srv_ctrl_oncommand(CLIENT_CONN_T *pConn, enum HTTP_STATUS *pHttpStatus,
 
   if(!havehandler) {
     LOG(X_WARNING("Received unknown request from %s:%u '%s'"), 
-          inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port), pConn->httpReq.puri);
+          FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)), pConn->httpReq.puri);
     *plenout = snprintf((char *) pout, *plenout, "No command argument found");
   }
 

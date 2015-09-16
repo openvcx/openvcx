@@ -56,18 +56,24 @@ int sdputil_init(SDP_DESCR_T *pSdp,
                  const VID_ENCODER_FBREQUEST_T *pFbReq) {
 
   int rc = 0;
-  struct in_addr connectip;
+  char tmp[128];
+  struct sockaddr_storage connectip;
 
   if(!pSdp || payloadType > 0x7f || !pDstHost) {
     return -1;
   }
 
   memset(&connectip, 0, sizeof(connectip));
-  connectip.s_addr = inet_addr(pDstHost);
-
-  if(connectip.s_addr != INADDR_NONE && IN_MULTICAST( htonl(connectip.s_addr) )) {
+  if(pDstHost[0] == '\0') {
+    //
+    // INADDR_NONE
+    //
+    pDstHost = "0.0.0.0";
+  }
+  net_getaddress(pDstHost, &connectip);
+  if(INET_ADDR_VALID(connectip) && INET_IS_MULTICAST(connectip)) {
     pSdp->c.ttl = 64;
-  } else if(connectip.s_addr != INADDR_NONE && IN_LOCALHOST( htonl(connectip.s_addr) )) {
+  } else if(INET_ADDR_VALID(connectip) && INET_ADDR_LOCALHOST(connectip)) {
     pSdp->c.ttl = 0;
   } else {
     //connectip.s_addr = net_getlocalip();
@@ -81,7 +87,8 @@ int sdputil_init(SDP_DESCR_T *pSdp,
     pSdp->c.ttl = 0;
   }
 
-  strncpy(pSdp->c.iphost, inet_ntoa(connectip), sizeof(pSdp->c.iphost));
+  pSdp->c.ip_family = connectip.ss_family;
+  strncpy(pSdp->c.iphost, INET_NTOP(connectip, tmp, sizeof(tmp)), sizeof(pSdp->c.iphost));
 
   //
   // Only write the RTCP port attribute in the SDP if using a non-default port

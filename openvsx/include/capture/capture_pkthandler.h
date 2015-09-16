@@ -35,8 +35,8 @@ const CAPTURE_STREAM_T *capture_onUdpSockPkt(CAPTURE_STATE_T *pState,
                                              unsigned char *pData, 
                                              unsigned int len,
                                              unsigned int lenPrepend,
-                                             struct sockaddr_in *pSaSrc,
-                                             struct sockaddr_in *pSaDst,
+                                             const struct sockaddr *pSaSrc,
+                                             const struct sockaddr *pSaDst,
                                              struct timeval *ptv,
                                              const struct NETIO_SOCK *pnetsock);
 

@@ -1571,7 +1571,7 @@ int vsxlib_stream_setupcap(const VSXLIB_STREAM_PARAMS_T *pParams, CAPTURE_LOCAL_
     }
 
   } // end of for
-LOG(X_DEBUG("SETUP CAP...pes:%d"), pParams->extractpes);
+
   if(pFilt->numFilters > 0) {
     if(BOOL_ISENABLED(pParams->extractpes)) {
       for(idx = 0; idx < pFilt->numFilters; idx++) {
@@ -1603,18 +1603,18 @@ LOG(X_DEBUG("SETUP CAP...pes:%d"), pParams->extractpes);
 
 int vsxlib_check_prior_listeners(const SRV_LISTENER_CFG_T *arrCfgs, 
                                  unsigned int max,
-                                 const struct sockaddr_in *psain) {
+                                 const struct sockaddr *psa) {
   unsigned int idx;
 
-  if(!arrCfgs || !psain) {
+  if(!arrCfgs || !psa) {
     return 0;
   }
 
   for(idx = 0; idx < max; idx++) {
 
     if(arrCfgs[idx].active &&
-       arrCfgs[idx].sain.sin_addr.s_addr == psain->sin_addr.s_addr &&
-       arrCfgs[idx].sain.sin_port == psain->sin_port) {
+       INET_PORT(arrCfgs[idx].sa) == PINET_PORT(psa) &&
+       INET_IS_SAMEADDR(arrCfgs[idx].sa, *psa)) {
       return idx + 1;
     }
   }
@@ -1661,11 +1661,11 @@ int vsxlib_check_other_listeners(const SRV_START_CFG_T *pStartCfg,
       continue;
     }
 
-    if(arrCfgs1 && (rc = vsxlib_check_prior_listeners(arrCfgs1, max1, &arrCfgThis[idx].sain)) > 0) {
+    if(arrCfgs1 && (rc = vsxlib_check_prior_listeners(arrCfgs1, max1, (const struct sockaddr *) &arrCfgThis[idx].sa)) > 0) {
       return idx + 1;
     }
 
-    if(arrCfgs2 && (rc = vsxlib_check_prior_listeners(arrCfgs2, max2, &arrCfgThis[idx].sain)) > 0) {
+    if(arrCfgs2 && (rc = vsxlib_check_prior_listeners(arrCfgs2, max2, (const struct sockaddr *) &arrCfgThis[idx].sa)) > 0) {
       return idx + 1;
     }
 
@@ -1731,7 +1731,7 @@ int vsxlib_parse_listener(const char *arrAddr[], unsigned int maxListenerCfgs, S
       netflags |= NETIO_FLAG_SSL_TLS;
     }
     //LOG(X_DEBUG("AUTHSTORE: user:'%s', pass:'%s'"), authStore.username, authStore.pass);
-    if((rc = vsxlib_check_prior_listeners(arrCfgs, maxListenerCfgs, &sockList.salist[0])) > 0) {
+    if((rc = vsxlib_check_prior_listeners(arrCfgs, maxListenerCfgs, (const struct sockaddr *) &sockList.salist[0])) > 0) {
       if(arrCfgs[rc - 1].netflags != netflags) {
         LOG(X_ERROR("Cannot mix SSL and non-SSL listener for %s"), arrAddr[idxArr]);
         return -1;
@@ -1760,7 +1760,7 @@ int vsxlib_parse_listener(const char *arrAddr[], unsigned int maxListenerCfgs, S
 
     //fprintf(stderr, "ADDING idxArr[%d] 0x%x idxCfg[%d], port: %d, urlCap: 0x%x, pAuthStore: 0x%x\n", idxArr, arrAddr[idxArr], idxCfgs, htons(arrCfgs[idxCfgs].sain.sin_port), urlCap, ppAuthStores ? ppAuthStores : NULL);
 
-    memcpy(&arrCfgs[idxCfgs].sain, &sockList.salist[0], sizeof(arrCfgs[idxCfgs].sain));
+    memcpy(&arrCfgs[idxCfgs].sa, &sockList.salist[0], sizeof(arrCfgs[idxCfgs].sa));
     arrCfgs[idxCfgs].netflags = netflags;
     arrCfgs[idxCfgs].urlCapabilities |= urlCap;
     arrCfgs[idxCfgs].idxCfg = idxCfgs;
@@ -2055,6 +2055,8 @@ int vsxlib_ssl_initserver(const VSXLIB_STREAM_PARAMS_T *pParams, const SRV_LISTE
   int rc = 0;
   const char *sslcertpath;
   const char *sslprivkeypath;
+#else // (VSX_HAVE_SSL)
+  char tmp[128];
 #endif // (VSX_HAVE_SSL)
 
   if(!pParams || !pListenCfg) {
@@ -2105,7 +2107,7 @@ int vsxlib_ssl_initserver(const VSXLIB_STREAM_PARAMS_T *pParams, const SRV_LISTE
 #else // VSX_HAVE_SSL
 
   LOG(X_ERROR("SSL not enabled for server listener on %s:%d"), 
-      inet_ntoa(pListenCfg->sain.sin_addr), ntohs(pListenCfg->sain.sin_port));
+      INET_NTOP(pListenCfg->sa, tmp, sizeof(tmp)), ntohs(INET_ADDR(pListenCfg->sa)));
   LOG(X_ERROR(VSX_SSL_DISABLED_BANNER));
   LOG(X_ERROR(VSX_FEATURE_DISABLED_BANNER));
   return -1;

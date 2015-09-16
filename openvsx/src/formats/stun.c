@@ -323,25 +323,42 @@ static int serialize_error(const STUN_ATTRIB_ERROR_T *pError,
 static int serialize_mapped_address(const STUN_ATTRIB_MAPPED_ADDRESS_T *pAddr, 
                                     unsigned int length, unsigned char *buf, int xor) {
   int rc = 0;
-  struct in_addr ipv4;
+  //struct in_addr ipv4;
+  unsigned int idx;
+  struct sockaddr_storage sa;
   uint16_t port;
 
-  if(pAddr->family != STUN_MAPPED_ADDRESS_FAMILY_IPV4) {
-    return -1;
-  } else if(length != 8) {
+  if((pAddr->family == STUN_MAPPED_ADDRESS_FAMILY_IPV4 && length != 8) ||
+     (pAddr->family == STUN_MAPPED_ADDRESS_FAMILY_IPV6 && length != 20)) {
+    LOG(X_ERROR("Unable to serialize STUN address family type: %d"), pAddr->family);
     return -1;
   }
   buf[0] = 0x00;
   buf[1] = pAddr->family;
   port = pAddr->port;
-  memcpy(&ipv4, &pAddr->u_addr.ipv4, sizeof(ipv4));
+  ((struct sockaddr_in *) &sa)->sin_addr.s_addr = pAddr->u_addr.ipv4.s_addr;
 
   if(xor) {
-   port ^= (STUN_COOKIE >> 16);
-   ipv4.s_addr = htonl( htonl(ipv4.s_addr) ^ STUN_COOKIE );
+    port ^= (STUN_COOKIE >> 16);
+
+
+    if(pAddr->family == STUN_MAPPED_ADDRESS_FAMILY_IPV4) {
+      //ipv4.s_addr = htonl( htonl(ipv4.s_addr) ^ STUN_COOKIE );
+      ((struct sockaddr_in *) &sa)->sin_addr.s_addr = 
+                          htonl( htonl(((struct sockaddr_in *) &sa)->sin_addr.s_addr) ^ STUN_COOKIE );
+    } else {
+      for(idx = 0; idx * 4 < length - 4; idx++) {
+        ((struct sockaddr_in6 *) &sa)->sin6_addr.s6_addr32[idx] = 
+           htonl( htonl(((struct sockaddr_in6 *) &sa)->sin6_addr.s6_addr32[idx]) ^ STUN_COOKIE );
+      }
+    }
   }
   *((uint16_t *) &buf[2]) = htons(port);
-  *((uint32_t *) &buf[4]) = (ipv4.s_addr);
+  if(pAddr->family == STUN_MAPPED_ADDRESS_FAMILY_IPV4) {
+    *((uint32_t *) &buf[4]) = ((struct sockaddr_in *) &sa)->sin_addr.s_addr; 
+  } else {
+    memcpy(&buf[4], &((struct sockaddr_in6 *) &sa)->sin6_addr.s6_addr[0], ADDR_LEN_IPV6);
+  }
 
   return rc;
 }
@@ -737,6 +754,7 @@ char *stun_log_error(char *buf, unsigned int sz, const STUN_MSG_T *pMsg) {
 void stun_dump_attrib(FILE *fp, const STUN_ATTRIB_T *pAttr) {
   //STUN_ATTRIB_MAPPED_ADDRESS_T mappedAddr;
   unsigned int idx;
+  char tmp[128];
 
   fprintf(fp, "attrib type: 0x%x, length:%d - ", pAttr->type, pAttr->length);
 
@@ -761,7 +779,11 @@ void stun_dump_attrib(FILE *fp, const STUN_ATTRIB_T *pAttr) {
          pAttr->type == TURN_ATTRIB_XOR_RELAYED_ADDRESS ? "relayed" : 
          pAttr->type == TURN_ATTRIB_XOR_PEER_ADDRESS ? "peer" : "mapped",
          STUN_ATTRIB_VALUE_MAPPED_ADDRESS(*pAttr).family, 
-         inet_ntoa(STUN_ATTRIB_VALUE_MAPPED_ADDRESS(*pAttr).u_addr.ipv4), 
+         inet_ntop(STUN_ATTRIB_VALUE_MAPPED_ADDRESS(*pAttr).family == STUN_MAPPED_ADDRESS_FAMILY_IPV6 ? 
+           AF_INET6 : AF_INET,
+           STUN_ATTRIB_VALUE_MAPPED_ADDRESS(*pAttr).family == STUN_MAPPED_ADDRESS_FAMILY_IPV6 ?
+               &STUN_ATTRIB_VALUE_MAPPED_ADDRESS(*pAttr).u_addr.ipv6[0] :
+               &STUN_ATTRIB_VALUE_MAPPED_ADDRESS(*pAttr).u_addr.ipv4.s_addr, tmp, sizeof(tmp)),
          STUN_ATTRIB_VALUE_MAPPED_ADDRESS(*pAttr).port);
       break;
     case STUN_ATTRIB_USERNAME:

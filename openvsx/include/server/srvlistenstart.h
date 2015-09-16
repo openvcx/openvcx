@@ -52,7 +52,7 @@ typedef struct SRV_LISTENER_CFG {
                                             // within the group of this type
   unsigned int                    max;      // max available client connections (from pool) within 
                                             // entire listener group of this type
-  struct sockaddr_in              sain;
+  struct sockaddr_storage         sa;
   NETIO_FLAG_T                    netflags;
   NETIO_SOCK_T                   *pnetsockSrv;
   POOL_T                         *pConnPool;

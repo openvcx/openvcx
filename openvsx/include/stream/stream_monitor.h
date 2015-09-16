@@ -58,7 +58,7 @@ typedef struct STREAM_STATS_CTRS {
 typedef struct STREAM_STATS {
   int                           active;
   STREAM_METHOD_T               method;
-  struct sockaddr_in            saRemote;
+  struct sockaddr_storage       saRemote;
   struct STREAM_RTP_DEST       *pRtpDest;
   STREAM_MONITOR_ABR_TYPE_T     abrEnabled;
   struct timeval                tvstart;
@@ -102,7 +102,7 @@ int stream_stats_destroy(STREAM_STATS_T **ppStats, pthread_mutex_t *pmtx);
 void stream_stats_addPktSample(STREAM_STATS_T *pStats, pthread_mutex_t *pmtx, unsigned int len, int rtp);
 int stream_stats_addRTCPRR(STREAM_STATS_T *pStats, pthread_mutex_t *pmtx, const STREAM_RTCP_SR_T *pSr);
 STREAM_STATS_T *stream_monitor_createattach(STREAM_STATS_MONITOR_T *pMonitor, 
-                                            const struct sockaddr_in *psaRemote,
+                                            const struct sockaddr *psaRemote,
                                             STREAM_METHOD_T method,
                                             STREAM_MONITOR_ABR_TYPE_T abrEnabled);
 int stream_monitor_dump_url(char *buf, unsigned int szbuf, STREAM_STATS_MONITOR_T *pMonitor);

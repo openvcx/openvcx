@@ -72,6 +72,7 @@ static int ctrl_status_show_turn(STREAMER_CFG_T *pStreamerCfg, char *buf, unsign
   SDP_STREAM_DESCR_T *pVid;
   SDP_STREAM_DESCR_T *pAud;
   int statusCode = 0;
+  char tmp[128];
   char bufRtp[256];
   char bufRtcp[256];
 
@@ -82,16 +83,16 @@ static int ctrl_status_show_turn(STREAMER_CFG_T *pStreamerCfg, char *buf, unsign
 
   if(!pVid->available && !pAud->available) {
     statusCode = -1; 
-  } else if((pVid->available && pVid->iceCandidates[0].address.sin_port != 0) ||
-            (pAud->available && pAud->iceCandidates[0].address.sin_port != 0)) {
+  } else if((pVid->available && INET_PORT(pVid->iceCandidates[0].address) != 0) ||
+            (pAud->available && INET_PORT(pAud->iceCandidates[0].address) != 0)) {
 
     // 
     // Write the RTP video TURN relay address:port
     //
     idx = 0;
     if(pVid->available && (rc = snprintf(&bufRtp[idx], sizeof(bufRtp) - idx, "%s:%d", 
-                                         inet_ntoa(pVid->iceCandidates[0].address.sin_addr),
-                                         htons(pVid->iceCandidates[0].address.sin_port))) > 0) {
+                                         FORMAT_NETADDR(pVid->iceCandidates[0].address, tmp, sizeof(tmp)),
+                                         htons(INET_PORT(pVid->iceCandidates[0].address)))) > 0) {
       idx += rc;
     }
 
@@ -99,26 +100,26 @@ static int ctrl_status_show_turn(STREAMER_CFG_T *pStreamerCfg, char *buf, unsign
     // Write the RTP audio TURN relay address:port if not using rtp-mux
     //
     if(pAud->available && (!pVid->available || 
-                           pAud->iceCandidates[0].address.sin_port != pVid->iceCandidates[0].address.sin_port) &&
-                           (rc = snprintf(&bufRtp[idx], sizeof(bufRtp) - idx, "%s%s:%d", 
-                             pVid->available ? "," : "", 
-                             inet_ntoa(pAud->iceCandidates[0].address.sin_addr),
-                             htons(pAud->iceCandidates[0].address.sin_port))) > 0) {
+                 INET_PORT(pAud->iceCandidates[0].address) != INET_PORT(pVid->iceCandidates[0].address)) &&
+                 (rc = snprintf(&bufRtp[idx], sizeof(bufRtp) - idx, "%s%s:%d", 
+                  pVid->available ? "," : "", 
+                  FORMAT_NETADDR(pAud->iceCandidates[0].address, tmp, sizeof(tmp)),
+                  htons(INET_PORT(pAud->iceCandidates[0].address)))) > 0) {
       idx += rc;
     }
 
-    if((pVid->available && pVid->iceCandidates[1].address.sin_port != 0 &&
-        pVid->iceCandidates[1].address.sin_port != pVid->iceCandidates[0].address.sin_port) ||
-       (pAud->available && pAud->iceCandidates[1].address.sin_port != 0 &&
-        pAud->iceCandidates[1].address.sin_port != pAud->iceCandidates[0].address.sin_port)) {
+    if((pVid->available && INET_PORT(pVid->iceCandidates[1].address) != 0 &&
+        INET_PORT(pVid->iceCandidates[1].address) != INET_PORT(pVid->iceCandidates[0].address)) ||
+       (pAud->available && INET_PORT(pAud->iceCandidates[1].address) != 0 &&
+        INET_PORT(pAud->iceCandidates[1].address) != INET_PORT(pAud->iceCandidates[0].address))) {
 
       // 
       // Write the RTCP video TURN relay address:port if not using rtcp-mux
       //
       idx = 0;
       if(pVid->available && (rc = snprintf(&bufRtcp[idx], sizeof(bufRtcp) - idx, "%s:%d", 
-                                          inet_ntoa(pVid->iceCandidates[1].address.sin_addr),
-                                          htons(pVid->iceCandidates[1].address.sin_port))) > 0) {
+                                          FORMAT_NETADDR(pVid->iceCandidates[1].address, tmp, sizeof(tmp)),
+                                          htons(INET_PORT(pVid->iceCandidates[1].address)))) > 0) {
         idx += rc;
       }
 
@@ -126,11 +127,11 @@ static int ctrl_status_show_turn(STREAMER_CFG_T *pStreamerCfg, char *buf, unsign
       // Write the RTCP video TURN relay address:port if not using rtcp-mux and rtp-mux
       //
       if(pAud->available && (!pVid->available ||
-                             pAud->iceCandidates[1].address.sin_port != pVid->iceCandidates[1].address.sin_port) &&
-                             (rc = snprintf(&bufRtcp[idx], sizeof(bufRtcp) - idx, "%s%s:%d", 
-                                           pVid->available ? "," : "", 
-                                           inet_ntoa(pAud->iceCandidates[1].address.sin_addr),
-                                           htons(pAud->iceCandidates[1].address.sin_port))) > 0) {
+            INET_PORT(pAud->iceCandidates[1].address) != INET_PORT(pVid->iceCandidates[1].address)) &&
+            (rc = snprintf(&bufRtcp[idx], sizeof(bufRtcp) - idx, "%s%s:%d", 
+            pVid->available ? "," : "", 
+            FORMAT_NETADDR(pAud->iceCandidates[1].address, tmp, sizeof(tmp)),
+            htons(INET_PORT(pAud->iceCandidates[1].address)))) > 0) {
         idx += rc;
       }
     }
@@ -160,11 +161,12 @@ int srv_ctrl_status(CLIENT_CONN_T *pConn) {
   const char *parg;
   int pip_id = 0;
   unsigned int idx;
+  char tmp[128];
   char buf[2048];
 
   LOG(X_DEBUG("Received status command %s%s from %s:%d"), pConn->httpReq.puri,
-      http_req_dump_uri(&pConn->httpReq, buf, sizeof(buf)), inet_ntoa(pConn->sd.sain.sin_addr), 
-                        htons(pConn->sd.sain.sin_port));
+      http_req_dump_uri(&pConn->httpReq, buf, sizeof(buf)), FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), 
+                        htons(INET_PORT(pConn->sd.sa)));
 
   if(pConn->pStreamerCfg0) {
     pStreamerCfg = pConn->pStreamerCfg0;

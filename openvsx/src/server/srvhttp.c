@@ -491,6 +491,7 @@ int http_log(const SOCKET_DESCR_T *pSd, const HTTP_REQ_T *pReq,
              enum HTTP_STATUS statusCode, FILE_OFFSET_T len) {
   int rc = 0;
   char dateStr[96];
+  char tmp[128];
   char buf[1024];
   const char *path = "log/access_log";
   const char *userAgent = NULL;
@@ -527,7 +528,7 @@ int http_log(const SOCKET_DESCR_T *pSd, const HTTP_REQ_T *pReq,
     }
 
     rc = snprintf(buf, sizeof(buf), "%s - - [%s] \"%s %s %s\" %d %lld \"%s\" \"%s\""EOL,
-          inet_ntoa(pSd->sain.sin_addr), dateStr, pReq->method, pReq->url, pReq->version, 
+          FORMAT_NETADDR(pSd->sa, tmp, sizeof(tmp)), dateStr, pReq->method, pReq->url, pReq->version, 
           statusCode, len, referer, userAgent);
 
     pthread_mutex_lock(&g_http_log_mtx);
@@ -727,7 +728,7 @@ int http_resp_sendhdr(SOCKET_DESCR_T *pSd,
     LOGHEXT_DEBUG(buf, MIN(sz, 512));
   )
 
-  if((rc = netio_send(&pSd->netsocket,  &pSd->sain, (unsigned char *) buf, sz)) < 0) {
+  if((rc = netio_send(&pSd->netsocket, (struct sockaddr *) &pSd->sa, (unsigned char *) buf, sz)) < 0) {
     LOG(X_ERROR("Failed to send HTTP header %d bytes"), sz);
   }
 
@@ -766,7 +767,7 @@ int http_resp_send(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq,
       LOGHEXT_DEBUG(pData, MIN(len, 512));
     )
 
-    if((rc = netio_send(&pSd->netsocket,  &pSd->sain, pData, len)) < 0) {
+    if((rc = netio_send(&pSd->netsocket, (const struct sockaddr *) &pSd->sa, pData, len)) < 0) {
       LOG(X_ERROR("Failed to send HTTP content data %d bytes"), len);
     }
   }
@@ -865,7 +866,7 @@ static int resp_sendfile(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq,
       //LOGHEXT_DEBUG(buf, MIN(len, 16));
     )
 
-    if((rc = netio_send(&pSd->netsocket,  &pSd->sain, buf, lenread)) < 0) {
+    if((rc = netio_send(&pSd->netsocket, (const struct sockaddr *) &pSd->sa, buf, lenread)) < 0) {
       LOG(X_ERROR("Failed to send HTTP payload '%s' %u bytes (%llu/%llu)"), 
             path, lenread, idx, lentot);
       return -1;

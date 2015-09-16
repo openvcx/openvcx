@@ -116,9 +116,10 @@ static void setDtlsTimeouts(DTLS_TIMEOUT_CFG_T *pdtlsTimeouts, const STREAM_XMIT
 }
 
 
-static void do_dtls_handshake(NETIO_SOCK_T *pnetsock, const struct sockaddr_in *psaDst,
+static void do_dtls_handshake(NETIO_SOCK_T *pnetsock, const struct sockaddr *psaDst,
                               NET_PROGRESS_T *pProgress) {
 
+  char tmp[128];
   pProgress->numTotal++;
 
   //LOG(X_DEBUG("flags_dtls_server:%d"), pnetsock->flags & NETIO_FLAG_SSL_DTLS_SERVER);
@@ -126,7 +127,9 @@ static void do_dtls_handshake(NETIO_SOCK_T *pnetsock, const struct sockaddr_in *
      pnetsock->ssl.state != SSL_SOCK_STATE_HANDSHAKE_COMPLETED &&
     !(pnetsock->flags & NETIO_FLAG_SSL_DTLS_SERVER)) {
 
-    //LOG(X_DEBUG("%u.%u Calling dtls_netsock_handshake %s:%d state:%d"), timer_GetTime()/TIME_VAL_US, timer_GetTime()%TIME_VAL_US, inet_ntoa(psaDst->sin_addr), ntohs(psaDst->sin_port), pnetsock->ssl.state); 
+    VSX_DEBUG_DTLS( LOG(X_DEBUG("DTLS - %u.%u Calling dtls_netsock_handshake %s:%d state:%d"), 
+                          timer_GetTime()/TIME_VAL_US, timer_GetTime()%TIME_VAL_US, 
+      FORMAT_NETADDR(*psaDst, tmp, sizeof(tmp)), ntohs(PINET_PORT(psaDst)), pnetsock->ssl.state) ); 
     dtls_netsock_handshake(pnetsock, psaDst);
   }
 
@@ -203,10 +206,10 @@ static int do_dtls_handshakes(STREAM_XMIT_NODE_T *pStream,
             continue;
           }
 
-          if(pDestPrior->saDsts.sin_port == pDest->saDsts.sin_port) {
+          if(INET_PORT(pDestPrior->saDsts) == INET_PORT(pDest->saDsts)) {
             sameRtpSock = 1;
           }
-          if(pDestPrior->saDstsRtcp.sin_port == pDest->saDstsRtcp.sin_port) {
+          if(INET_PORT(pDestPrior->saDstsRtcp) == INET_PORT(pDest->saDstsRtcp)) {
             sameRtcpSock = 1;
           }
         }
@@ -218,19 +221,25 @@ static int do_dtls_handshakes(STREAM_XMIT_NODE_T *pStream,
 
       if(progRtp && (STREAM_RTP_PNETIOSOCK(*pDest)->flags & NETIO_FLAG_SSL_DTLS) && !sameRtpSock &&
          STREAM_RTP_FD(*pDest) != INVALID_SOCKET) {
-        //if(pDest->pRtpMulti->pStreamerCfg->xcode.vid.pip.active) 
-        //LOG(X_DEBUG("DO_DTLS_HS RTP pnetsock.state: %d, flags:0x%x"), STREAM_RTP_PNETIOSOCK(*pDest)->ssl.state, STREAM_RTP_PNETIOSOCK(*pDest)->flags);
+        
+        VSX_DEBUG_DTLS( 
+         LOG(X_DEBUG("DTLS - calling do_dtls_handshake RTP pnetsock.state: %d, flags:0x%x, af_family: %d"), 
+           STREAM_RTP_PNETIOSOCK(*pDest)->ssl.state, STREAM_RTP_PNETIOSOCK(*pDest)->flags, 
+           pDest->saDsts.ss_family ));
 
-        do_dtls_handshake(STREAM_RTP_PNETIOSOCK(*pDest), &pDest->saDsts, progRtp);
+        do_dtls_handshake(STREAM_RTP_PNETIOSOCK(*pDest), (const struct sockaddr *) &pDest->saDsts, progRtp);
       }
 
       if(progRtcp && STREAM_RTP_FD(*pDest) != STREAM_RTCP_FD(*pDest) &&
         (STREAM_RTCP_PNETIOSOCK(*pDest)->flags & NETIO_FLAG_SSL_DTLS) && !sameRtcpSock &&
          STREAM_RTCP_FD(*pDest) != INVALID_SOCKET) {
-        //if(pDest->pRtpMulti->pStreamerCfg->xcode.vid.pip.active) 
-        //LOG(X_DEBUG("DO_DTLS_HS RCTP pnetsock.state: %d, flags:0x%x"), STREAM_RTCP_PNETIOSOCK(*pDest)->ssl.state, STREAM_RTCP_PNETIOSOCK(*pDest)->flags);
+       
+        VSX_DEBUG_DTLS( 
+          LOG(X_DEBUG("DTLS - calling do_dtls_handshake RCTP pnetsock.state: %d, flags:0x%x, af_family: %d"), 
+             STREAM_RTCP_PNETIOSOCK(*pDest)->ssl.state, STREAM_RTCP_PNETIOSOCK(*pDest)->flags,
+             pDest->saDstsRtcp.ss_family));
 
-        do_dtls_handshake(STREAM_RTCP_PNETIOSOCK(*pDest), &pDest->saDstsRtcp, progRtcp);
+        do_dtls_handshake(STREAM_RTCP_PNETIOSOCK(*pDest), (const struct sockaddr *) &pDest->saDstsRtcp, progRtcp);
       }
 
     } // end of for(idxDest..

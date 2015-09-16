@@ -30,8 +30,9 @@ static void srvlisten_http_proc(void *pArg) {
 
   SRV_LISTENER_CFG_T *pListenCfg = (SRV_LISTENER_CFG_T *) pArg;
   NETIO_SOCK_T netsocksrv;
-  struct sockaddr_in  sa;
+  struct sockaddr_storage sa;
   CLIENT_CONN_T *pConn;
+  char tmp[128];
   unsigned int tsMax = 0;
   unsigned int flvMax = 0;
   unsigned int mkvMax = 0;
@@ -48,7 +49,7 @@ static void srvlisten_http_proc(void *pArg) {
 */
   int haveAuth = 0;
   int rc = 0;
-  char buf[SAFE_INET_NTOA_LEN_MAX];
+  //char buf[SAFE_INET_NTOA_LEN_MAX];
 
   logutil_tid_add(pthread_self(), pListenCfg->tid_tag);
 
@@ -56,19 +57,16 @@ static void srvlisten_http_proc(void *pArg) {
                                      URL_CAP_MKVLIVE | URL_CAP_LIVE | URL_CAP_STATUS | URL_CAP_MOOFLIVE |
                                      URL_CAP_PIP | URL_CAP_CONFIG | URL_CAP_BROADCAST)) == 0) {
     LOG(X_WARNING("http listener exiting because no capabilities enabled on %s:%d"),
-        inet_ntoa(pListenCfg->sain.sin_addr), ntohs(pListenCfg->sain.sin_port));
+         FORMAT_NETADDR(pListenCfg->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pListenCfg->sa)));
     logutil_tid_remove(pthread_self());
     return;
   }
 
-  memset(&sa, 0, sizeof(sa));
   memset(&netsocksrv, 0, sizeof(netsocksrv));
-  sa.sin_family = PF_INET;
-  sa.sin_addr = pListenCfg->sain.sin_addr;
-  sa.sin_port = pListenCfg->sain.sin_port;
+  memcpy(&sa, &pListenCfg->sa, sizeof(pListenCfg->sa));
   netsocksrv.flags = pListenCfg->netflags;
 
-  if((NETIOSOCK_FD(netsocksrv) = net_listen(&sa, 5)) == INVALID_SOCKET) {
+  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, 5)) == INVALID_SOCKET) {
     logutil_tid_remove(pthread_self());
     return;
   }
@@ -124,7 +122,7 @@ static void srvlisten_http_proc(void *pArg) {
 
   if((pListenCfg->urlCapabilities & URL_CAP_ROOTHTML)) {
     LOG(X_INFO("broadcast interface available at "URL_HTTP_FMT_STR"%s%s%s max:%d"), 
-           URL_HTTP_FMT_ARGS2(pListenCfg, net_inet_ntoa(sa.sin_addr, buf)), VSX_ROOT_URL,
+           URL_HTTP_FMT_ARGS2(pListenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))), VSX_ROOT_URL,
            //(haveRootAuth ? " (Using auth)" : ""),
            (haveAuth ? " (Using auth)" : ""),
            (pListenCfg->pCfg->cfgShared.livepwd ? " (Using password)" : ""), pListenCfg->max);
@@ -132,7 +130,7 @@ static void srvlisten_http_proc(void *pArg) {
 
   if((pListenCfg->urlCapabilities & URL_CAP_LIVE)) {
     LOG(X_INFO("live available at "URL_HTTP_FMT_STR"%s%s%s max:%d"), 
-           URL_HTTP_FMT_ARGS2(pListenCfg, net_inet_ntoa(sa.sin_addr, buf)), VSX_LIVE_URL,
+           URL_HTTP_FMT_ARGS2(pListenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))), VSX_LIVE_URL,
            //(haveRootAuth ? " (Using auth)" : ""),
            (haveAuth ? " (Using auth)" : ""),
            (pListenCfg->pCfg->cfgShared.livepwd ? " (Using password)" : ""), pListenCfg->max);
@@ -140,7 +138,7 @@ static void srvlisten_http_proc(void *pArg) {
 
   if((pListenCfg->urlCapabilities & URL_CAP_TSLIVE)) {
     LOG(X_INFO("tslive available at "URL_HTTP_FMT_STR"%s%s%s max:%d"), 
-           URL_HTTP_FMT_ARGS2(pListenCfg, net_inet_ntoa(sa.sin_addr, buf)), VSX_TSLIVE_URL,
+           URL_HTTP_FMT_ARGS2(pListenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))), VSX_TSLIVE_URL,
            //(haveTsliveAuth ? " (Using auth)" : ""),
            (haveAuth ? " (Using auth)" : ""),
            (pListenCfg->pCfg->cfgShared.livepwd ? " (Using password)" : ""), tsMax);
@@ -148,7 +146,7 @@ static void srvlisten_http_proc(void *pArg) {
 
   if((pListenCfg->urlCapabilities & URL_CAP_TSHTTPLIVE)) {
     LOG(X_INFO("httplive available at "URL_HTTP_FMT_STR"%s%s%s max:%d"), 
-           URL_HTTP_FMT_ARGS2(pListenCfg, net_inet_ntoa(sa.sin_addr, buf)), VSX_HTTPLIVE_URL,
+           URL_HTTP_FMT_ARGS2(pListenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))), VSX_HTTPLIVE_URL,
            //(haveHttpliveAuth ? " (Using auth)" : ""),
            (haveAuth ? " (Using auth)" : ""),
            (pListenCfg->pCfg->cfgShared.livepwd ? " (Using password)" : ""), pListenCfg->max);
@@ -156,7 +154,7 @@ static void srvlisten_http_proc(void *pArg) {
 
   if((pListenCfg->urlCapabilities & URL_CAP_FLVLIVE)) {
     LOG(X_INFO("flvlive available at "URL_HTTP_FMT_STR"%s%s%s max:%d"), 
-           URL_HTTP_FMT_ARGS2(pListenCfg, net_inet_ntoa(sa.sin_addr, buf)), VSX_FLVLIVE_URL,
+           URL_HTTP_FMT_ARGS2(pListenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))), VSX_FLVLIVE_URL,
            //(haveFlvAuth ? " (Using auth)" : ""),
            (haveAuth ? " (Using auth)" : ""),
            (pListenCfg->pCfg->cfgShared.livepwd ? " (Using password)" : ""), flvMax);
@@ -164,7 +162,7 @@ static void srvlisten_http_proc(void *pArg) {
 
   if((pListenCfg->urlCapabilities & URL_CAP_MKVLIVE)) {
     LOG(X_INFO("mkvlive available at "URL_HTTP_FMT_STR"%s%s%s max:%d"), 
-           URL_HTTP_FMT_ARGS2(pListenCfg, net_inet_ntoa(sa.sin_addr, buf)), VSX_MKVLIVE_URL,
+           URL_HTTP_FMT_ARGS2(pListenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))), VSX_MKVLIVE_URL,
            //(haveMkvAuth ? " (Using auth)" : ""),
            (haveAuth ? " (Using auth)" : ""),
            (pListenCfg->pCfg->cfgShared.livepwd ? " (Using password)" : ""), mkvMax);
@@ -172,7 +170,7 @@ static void srvlisten_http_proc(void *pArg) {
 
   if((pListenCfg->urlCapabilities & URL_CAP_MOOFLIVE)) {
     LOG(X_INFO("dash available at "URL_HTTP_FMT_STR"%s%s%s max:%d"), 
-           URL_HTTP_FMT_ARGS2(pListenCfg, net_inet_ntoa(sa.sin_addr, buf)), VSX_DASH_URL,
+           URL_HTTP_FMT_ARGS2(pListenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))), VSX_DASH_URL,
            // (haveMoofAuth ? " (Using auth)" : ""),
            (haveAuth ? " (Using auth)" : ""),
            (pListenCfg->pCfg->cfgShared.livepwd ? " (Using password)" : ""), pListenCfg->max);
@@ -180,7 +178,7 @@ static void srvlisten_http_proc(void *pArg) {
 
   if((pListenCfg->urlCapabilities & URL_CAP_STATUS)) {
     LOG(X_INFO("status available at "URL_HTTP_FMT_STR"%s%s%s"), 
-           URL_HTTP_FMT_ARGS2(pListenCfg, net_inet_ntoa(sa.sin_addr, buf)), VSX_STATUS_URL,
+           URL_HTTP_FMT_ARGS2(pListenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))), VSX_STATUS_URL,
             //(haveStatusAuth ? " (Using auth)" : ""),
             (haveAuth ? " (Using auth)" : ""),
            (pListenCfg->pCfg->cfgShared.livepwd ? " (Using password)" : ""));
@@ -188,7 +186,7 @@ static void srvlisten_http_proc(void *pArg) {
 
   if((pListenCfg->urlCapabilities & URL_CAP_PIP)) {
     LOG(X_INFO("pip available at "URL_HTTP_FMT_STR"%s%s%s"), 
-           URL_HTTP_FMT_ARGS2(pListenCfg, net_inet_ntoa(sa.sin_addr, buf)), VSX_PIP_URL,
+           URL_HTTP_FMT_ARGS2(pListenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))), VSX_PIP_URL,
             //(havePipAuth ? " (Using auth)" : ""),
             (haveAuth ? " (Using auth)" : ""),
            (pListenCfg->pCfg->cfgShared.livepwd ? " (Using password)" : ""));
@@ -196,7 +194,7 @@ static void srvlisten_http_proc(void *pArg) {
 
   if((pListenCfg->urlCapabilities & URL_CAP_CONFIG)) {
     LOG(X_INFO("config available at "URL_HTTP_FMT_STR"%s%s%s"), 
-           URL_HTTP_FMT_ARGS2(pListenCfg, net_inet_ntoa(sa.sin_addr, buf)), VSX_CONFIG_URL,
+           URL_HTTP_FMT_ARGS2(pListenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))), VSX_CONFIG_URL,
             //(haveConfigAuth ? " (Using auth)" : ""),
             (haveAuth ? " (Using auth)" : ""),
            (pListenCfg->pCfg->cfgShared.livepwd ? " (Using password)" : ""));
@@ -228,7 +226,7 @@ static void srv_rtmp_proc(void *pfuncarg) {
   STREAM_STATS_T *pstats = NULL;
   RTMP_CTXT_T rtmpCtxt;
   unsigned int numQFull = 0;
-  char buf[SAFE_INET_NTOA_LEN_MAX];
+  char tmp[128];
   OUTFMT_CFG_T *pOutFmt = NULL;
 
   pStreamerCfg = GET_STREAMER_FROM_CONN(pConn);
@@ -239,7 +237,7 @@ static void srv_rtmp_proc(void *pfuncarg) {
 
     if(pStreamerCfg->pMonitor && pStreamerCfg->pMonitor->active) {
       if(!(pstats = stream_monitor_createattach(pStreamerCfg->pMonitor,
-                      &pConn->sd.sain, STREAM_METHOD_RTMP, STREAM_MONITOR_ABR_NONE))) {
+             (const struct sockaddr *) &pConn->sd.sa, STREAM_METHOD_RTMP, STREAM_MONITOR_ABR_NONE))) {
       }
     }
 
@@ -268,12 +266,12 @@ static void srv_rtmp_proc(void *pfuncarg) {
 
     LOG(X_INFO("Starting rtmp stream[%d] %d/%d to %s:%d"), pOutFmt->cbCtxt.idx, numQFull + 1, 
            pLiveFmt->max,
-           net_inet_ntoa(pConn->sd.sain.sin_addr, buf), ntohs(pConn->sd.sain.sin_port));
+           FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
 
     rtmp_handle_conn(&rtmpCtxt);
 
     LOG(X_INFO("Ending rtmp stream[%d] to %s:%d"), pOutFmt->cbCtxt.idx,
-           net_inet_ntoa(pConn->sd.sain.sin_addr, buf), ntohs(pConn->sd.sain.sin_port));
+           FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
 
     //
     // Remove the livefmt cb
@@ -293,14 +291,14 @@ static void srv_rtmp_proc(void *pfuncarg) {
 
     LOG(X_WARNING("No rtmp resource available (max:%d) for %s:%d"), 
         (pLiveFmt ? pLiveFmt->max : 0),
-       net_inet_ntoa(pConn->sd.sain.sin_addr, buf), ntohs(pConn->sd.sain.sin_port));
+        FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
 
   }
 
   netio_closesocket(&pConn->sd.netsocket);
 
-  LOG(X_DEBUG("RTMP connection thread ended %s:%d"), net_inet_ntoa(pConn->sd.sain.sin_addr, buf),
-                                        ntohs(pConn->sd.sain.sin_port));
+  LOG(X_DEBUG("RTMP connection thread ended %s:%d"), FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), 
+                                                     ntohs(INET_PORT(pConn->sd.sa)));
 
 }
 
@@ -309,20 +307,22 @@ static void srvlisten_rtmplive_proc(void *pArg) {
 
   SRV_LISTENER_CFG_T *pListenCfg = (SRV_LISTENER_CFG_T *) pArg;
   NETIO_SOCK_T netsocksrv;
-  struct sockaddr_in  sa;
+  struct sockaddr_storage  sa;
   int rc = 0;
-  char buf[SAFE_INET_NTOA_LEN_MAX];
+  char tmp[128];
+  //char buf[SAFE_INET_NTOA_LEN_MAX];
 
   logutil_tid_add(pthread_self(), pListenCfg->tid_tag);
 
   memset(&sa, 0, sizeof(sa));
   memset(&netsocksrv, 0, sizeof(netsocksrv));
-  sa.sin_family = PF_INET;
-  sa.sin_addr = pListenCfg->sain.sin_addr;
-  sa.sin_port = pListenCfg->sain.sin_port;
+  memcpy(&sa, &pListenCfg->sa, sizeof(sa));
+  //sa.sin_family = PF_INET;
+  //sa.sin_addr = pListenCfg->sain.sin_addr;
+  //sa.sin_port = pListenCfg->sain.sin_port;
   netsocksrv.flags = pListenCfg->netflags;
 
-  if((NETIOSOCK_FD(netsocksrv) = net_listen(&sa, 5)) == INVALID_SOCKET) {
+  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, 5)) == INVALID_SOCKET) {
     logutil_tid_remove(pthread_self());
     return;
   }
@@ -333,7 +333,7 @@ static void srvlisten_rtmplive_proc(void *pArg) {
 
   LOG(X_INFO("rtmp %sserver available at rtmp://%s:%d max:%d"), 
            ((pListenCfg->netflags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : ""), 
-           net_inet_ntoa(sa.sin_addr, buf), ntohs(sa.sin_port), pListenCfg->max);
+           FORMAT_NETADDR(sa, tmp, sizeof(tmp)), ntohs(INET_PORT(sa)), pListenCfg->max);
 
   //
   // Service any client connections on the live listening port
@@ -387,8 +387,9 @@ int srvlisten_startrtmplive(SRV_LISTENER_CFG_T *pListenCfg) {
 
 static void srv_rtsp_proc(void *pfuncarg) {
   CLIENT_CONN_T *pConn = (CLIENT_CONN_T *) pfuncarg;
-  char buf[SAFE_INET_NTOA_LEN_MAX];
+  //char buf[SAFE_INET_NTOA_LEN_MAX];
   RTSP_REQ_CTXT_T rtspCtxt;
+  char tmp[128];
 
   memset(&rtspCtxt, 0, sizeof(rtspCtxt));
   rtspCtxt.pSd = &pConn->sd;
@@ -406,8 +407,8 @@ static void srv_rtsp_proc(void *pfuncarg) {
 
   netio_closesocket(&pConn->sd.netsocket);
 
-  LOG(X_DEBUG("RTSP connection thread ended %s:%d"), net_inet_ntoa(pConn->sd.sain.sin_addr, buf),
-                                        ntohs(pConn->sd.sain.sin_port));
+  LOG(X_DEBUG("RTSP connection thread ended %s:%d"), FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)),
+                                                     ntohs(INET_PORT(pConn->sd.sa)));
 }
 
 static void srvlisten_rtsplive_proc(void *pArg) {
@@ -415,9 +416,10 @@ static void srvlisten_rtsplive_proc(void *pArg) {
   SRV_LISTENER_CFG_T *pListenCfg = (SRV_LISTENER_CFG_T *) pArg;
   CLIENT_CONN_T *pConn = NULL;
   NETIO_SOCK_T netsocksrv;
-  struct sockaddr_in  sa;
+  struct sockaddr_storage  sa;
   int haveRtspAuth = 0;
-  char buf[SAFE_INET_NTOA_LEN_MAX];
+  char tmp[128];
+  //char buf[SAFE_INET_NTOA_LEN_MAX];
   char bufses[32];
   int rc = 0;
 
@@ -425,12 +427,13 @@ static void srvlisten_rtsplive_proc(void *pArg) {
 
   memset(&sa, 0, sizeof(sa));
   memset(&netsocksrv, 0, sizeof(netsocksrv));
-  sa.sin_family = PF_INET;
-  sa.sin_addr = pListenCfg->sain.sin_addr;
-  sa.sin_port = pListenCfg->sain.sin_port;
+  memcpy(&sa, &pListenCfg->sa, sizeof(sa));
+  //sa.sin_family = PF_INET;
+  //sa.sin_addr = pListenCfg->sain.sin_addr;
+  //sa.sin_port = pListenCfg->sain.sin_port;
   netsocksrv.flags = pListenCfg->netflags;
 
-  if((NETIOSOCK_FD(netsocksrv) = net_listen(&sa, 5)) == INVALID_SOCKET) {
+  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, 5)) == INVALID_SOCKET) {
     logutil_tid_remove(pthread_self());
     return;
   }
@@ -456,7 +459,7 @@ static void srvlisten_rtsplive_proc(void *pArg) {
            ((pListenCfg->netflags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : ""),
            URL_RTSP_FMT2_ARGS(
                (pListenCfg->netflags & NETIO_FLAG_SSL_TLS),
-                 net_inet_ntoa(sa.sin_addr, buf)), ntohs(sa.sin_port), 
+                 FORMAT_NETADDR(sa, tmp, sizeof(tmp))), ntohs(INET_PORT(sa)), 
            (haveRtspAuth ? " (Using auth)" : ""),
            pListenCfg->max, bufses);
 

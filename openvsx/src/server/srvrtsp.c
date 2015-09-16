@@ -83,6 +83,7 @@ static int rtsp_req_get(const RTSP_REQ_CTXT_T *pRtsp, RTSP_REQ_T *pReq) {
   struct timespec ts;
   struct timeval tv;
   unsigned int requestSz = 0;
+  char tmp[128];
   char requestStr[RTSP_HTTP_POST_BUFFER_SZ];
 
   //fprintf(stderr, "rtsp_req_get -- \n");
@@ -112,7 +113,7 @@ static int rtsp_req_get(const RTSP_REQ_CTXT_T *pRtsp, RTSP_REQ_T *pReq) {
       break;
     } else if(net_issockremotelyclosed(NETIOSOCK_FD(pRtsp->pSd->netsocket), 1)) { 
           LOG(X_DEBUG("RTSP HTTP GET connection to %s:%d remotely closed"),
-               inet_ntoa(pRtsp->pSd->sain.sin_addr), ntohs(pRtsp->pSd->sain.sin_port));
+               FORMAT_NETADDR(pRtsp->pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pRtsp->pSd->sa)));
       rc = -1;
       break;
     } else if(pHttpSession->requestSz > 0) {
@@ -127,14 +128,14 @@ static int rtsp_req_get(const RTSP_REQ_CTXT_T *pRtsp, RTSP_REQ_T *pReq) {
         //
         if(tv.tv_sec - pHttpSession->tvCreate.tv_sec > 10) {
           LOG(X_WARNING("RTSP HTTP GET from %s:%d exiting due to POST inactivity"),
-               inet_ntoa(pRtsp->pSd->sain.sin_addr), ntohs(pRtsp->pSd->sain.sin_port));
+               FORMAT_NETADDR(pRtsp->pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pRtsp->pSd->sa)));
           rc = -1;
           break;
         }
         
       } else if(!pRtsp->pSession && tv.tv_sec - pHttpSession->tvLastMsg.tv_sec > 10) {
         LOG(X_DEBUG("RTSP HTTP GET connection to %s:%d no longer active"),
-               inet_ntoa(pRtsp->pSd->sain.sin_addr), ntohs(pRtsp->pSd->sain.sin_port));
+               FORMAT_NETADDR(pRtsp->pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pRtsp->pSd->sa)));
         rc = -1;
         break;
       }
@@ -412,6 +413,7 @@ static int handle_rtsphttp_postdata(RTSP_REQ_CTXT_T *pRtsp, RTSP_REQ_T *pRtspReq
   unsigned int szmax;
   size_t sz;
   RTSP_HTTP_SESSION_T *pHttpSession;  
+  char tmp[128];
   char buf[RTSP_HTTP_POST_BUFFER_SZ * 4 / 3];
 
   VSX_DEBUG_RTSP( LOG(X_DEBUG("RTSP - POST connection start")) );
@@ -443,11 +445,11 @@ static int handle_rtsphttp_postdata(RTSP_REQ_CTXT_T *pRtsp, RTSP_REQ_T *pRtspReq
     }
 
     if(!(pHttpSession = rtspsrv_findHttpSession(pRtsp->pStreamerCfg->pRtspSessions,
-                                pRtspReq->httpSessionCookie, &pRtsp->pSd->sain, 1))) {
+                                pRtspReq->httpSessionCookie, (const struct sockaddr *) &pRtsp->pSd->sa, 1))) {
 
       LOG(X_ERROR("RTSP HTTP POST from %s:%d unable to find GET prior session "
                   RTSP_HDR_SESSIONCOOKIE":%s"), 
-                  net_inet_ntoa(pRtsp->pSd->sain.sin_addr, buf), ntohs(pRtsp->pSd->sain.sin_port),
+                  FORMAT_NETADDR(pRtsp->pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pRtsp->pSd->sa)),
                   pRtspReq->httpSessionCookie);
 
       snprintf(buf, sizeof(buf), "Invalid "RTSP_HDR_SESSIONCOOKIE" %s", pRtspReq->httpSessionCookie);
@@ -490,7 +492,7 @@ static int handle_rtsphttp_req(RTSP_REQ_CTXT_T *pRtsp, RTSP_REQ_T *pRtspReq) {
   int rc = 0;
   RTSP_HTTP_SESSION_T *pHttpSession = NULL;
   const char *sessionCookie, *p;
-  char buf[SAFE_INET_NTOA_LEN_MAX];
+  char tmp[128];
   HTTP_REQ_T *pHttpReq = &pRtspReq->hr;
 
   if(!pRtsp->pSd) {
@@ -508,7 +510,7 @@ static int handle_rtsphttp_req(RTSP_REQ_CTXT_T *pRtsp, RTSP_REQ_T *pRtspReq) {
   if(!strncmp(pHttpReq->method, HTTP_METHOD_GET, 4)) {
 
     pHttpSession = rtspsrv_findHttpSession(pRtsp->pStreamerCfg->pRtspSessions, 
-                              sessionCookie, &pRtsp->pSd->sain, 0);
+                              sessionCookie, (const struct sockaddr *) &pRtsp->pSd->sa, 0);
 
     if(pHttpSession) {
 
@@ -517,7 +519,7 @@ static int handle_rtsphttp_req(RTSP_REQ_CTXT_T *pRtsp, RTSP_REQ_T *pRtspReq) {
       rc = -1;
 
     } else if((!(pHttpSession = rtspsrv_newHttpSession(pRtsp->pStreamerCfg->pRtspSessions, 
-                              sessionCookie, &pRtsp->pSd->sain)))) {
+                              sessionCookie, (const struct sockaddr *) &pRtsp->pSd->sa)))) {
 
       LOG(X_ERROR("RTSP HTTP GET unable to allocate new session"));
       http_resp_error(pRtsp->pSd, pHttpReq, HTTP_STATUS_SERVERERROR, 1, "No HTTP session available", NULL);
@@ -547,11 +549,11 @@ static int handle_rtsphttp_req(RTSP_REQ_CTXT_T *pRtsp, RTSP_REQ_T *pRtspReq) {
     } 
 
     if(!(pHttpSession = rtspsrv_findHttpSession(pRtsp->pStreamerCfg->pRtspSessions, 
-                              sessionCookie, &pRtsp->pSd->sain, 1))) {
+                              sessionCookie, (const struct sockaddr *) &pRtsp->pSd->sa, 1))) {
 
       LOG(X_ERROR("RTSP HTTP POST from %s:%d unable to find GET session "
                   RTSP_HDR_SESSIONCOOKIE":%s"), 
-                  net_inet_ntoa(pRtsp->pSd->sain.sin_addr, buf), ntohs(pRtsp->pSd->sain.sin_port),
+                  FORMAT_NETADDR(pRtsp->pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pRtsp->pSd->sa)),
                   sessionCookie);
       http_resp_error(pRtsp->pSd, pHttpReq, HTTP_STATUS_SERVERERROR, 1, "Invalid "RTSP_HDR_SESSIONCOOKIE, NULL);
       rc = -1;
@@ -583,7 +585,8 @@ int rtsp_handle_conn(RTSP_REQ_CTXT_T *pRtsp) {
   int rc = 0;
   int ishttp = -1;
   int doread = 1;
-  char netbuf[128];
+  //char netbuf[128];
+  char tmp[128];
   unsigned char buf[4096];
   RTSP_REQ_T req, reqHttp;
   RTSP_REQ_T *pReq = &req;
@@ -602,7 +605,7 @@ int rtsp_handle_conn(RTSP_REQ_CTXT_T *pRtsp) {
   pthread_mutex_init(&pRtsp->mtx, NULL);
 
   VSX_DEBUG_RTSP( LOG(X_DEBUG("RTSP - New control connection from remote %s:%d"), 
-                       net_inet_ntoa(pRtsp->pSd->sain.sin_addr, netbuf), ntohs(pRtsp->pSd->sain.sin_port)) );
+                       FORMAT_NETADDR(pRtsp->pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pRtsp->pSd->sa))) );
 
   while(!g_proc_exit) {
 
@@ -714,7 +717,7 @@ int rtsp_handle_conn(RTSP_REQ_CTXT_T *pRtsp) {
                              "(interleaved) " : "") : ""),
         (pRtsp->pSession ? "session " : ""),
         (pRtsp->pSession ? pRtsp->pSession->sessionid : ""),
-        net_inet_ntoa(pRtsp->pSd->sain.sin_addr, netbuf), ntohs(pRtsp->pSd->sain.sin_port));
+        FORMAT_NETADDR(pRtsp->pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pRtsp->pSd->sa)));
 
     if(ishttp == -1 && (!strncmp(pReq->hr.method, HTTP_METHOD_GET, 4) ||
        !strncmp(pReq->hr.method, HTTP_METHOD_POST, 5))) {
@@ -810,7 +813,8 @@ int rtsp_handle_conn(RTSP_REQ_CTXT_T *pRtsp) {
   //
   if(req.pHttpSession) {
     netio_closesocket(&req.pHttpSession->netsocketPost);
-    rtspsrv_deleteHttpSession(pRtsp->pStreamerCfg->pRtspSessions, req.httpSessionCookie, &pRtsp->pSd->sain);
+    rtspsrv_deleteHttpSession(pRtsp->pStreamerCfg->pRtspSessions, req.httpSessionCookie, 
+                              (const struct sockaddr *) &pRtsp->pSd->sa);
   }
 
   pthread_mutex_destroy(&pRtsp->mtx);
@@ -938,11 +942,11 @@ int rtsp_addFrame(void *pArg, const OUTFMT_FRAME_DATA_T *pFrame) {
       //LOGHEX_DEBUG(OUTFMT_DATA_IDX(pFrame, outidx),  MIN(dataLen, 32));
     )
 
-    if((rc = netio_send(&pRtsp->pSd->netsocket,  &pRtsp->pSd->sain, buf, 4)) < 0) {
+    if((rc = netio_send(&pRtsp->pSd->netsocket, (const struct sockaddr *) &pRtsp->pSd->sa, buf, 4)) < 0) {
       LOG(X_ERROR("Failed to send RTSP interleaved header for packet length %d"), OUTFMT_LEN_IDX(pFrame, outidx));
     }
 
-    if(rc >= 0 && (rc = netio_send(&pRtsp->pSd->netsocket,  &pRtsp->pSd->sain, 
+    if(rc >= 0 && (rc = netio_send(&pRtsp->pSd->netsocket, (const struct sockaddr *) &pRtsp->pSd->sa, 
                     OUTFMT_DATA_IDX(pFrame, outidx), OUTFMT_LEN_IDX(pFrame, outidx))) < 0) {
       LOG(X_ERROR("Failed to send RTSP interleaved data length %d"), OUTFMT_LEN_IDX(pFrame, outidx));
     }

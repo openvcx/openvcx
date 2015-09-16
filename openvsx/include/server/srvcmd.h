@@ -165,7 +165,7 @@ typedef struct CLIENT_CONN {
   pthread_t                  ptd;
   pthread_attr_t             attr;
   SOCKET_DESCR_T             sd;
-  //const struct sockaddr_in  *psrvsaListen; // server tcp listener port
+  //const struct sockaddr    *psrvsaListen; // server tcp listener port
 
   // Digest auth connection specific state
   //char nonce[AUTH_NONCE_MAXLEN];

@@ -31,6 +31,7 @@ static int validatePwd(CLIENT_CONN_T *pConn,
                  unsigned char **ppout, unsigned int *plenout,
                  int sendresp) {
   const char *parg;
+  char tmp[128];
   int rc = 0;
 
   //
@@ -43,7 +44,7 @@ static int validatePwd(CLIENT_CONN_T *pConn,
     rc = -1;
 
     LOG(X_WARNING("Invalid password from %s:%d%s (%d char given)"),
-         inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port),
+         FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)),
          pConn->httpReq.puri, parg ? strlen(parg) : 0);
 
     if(pHttpStatus && ppout && plenout) {
@@ -70,7 +71,7 @@ void srv_cmd_proc(void *pfuncarg) {
   //int forbidden = 0;
   char buf[1024];
   char authbuf[AUTH_BUF_SZ];
-  char inetbuf[SAFE_INET_NTOA_LEN_MAX];
+  char tmp[128];
   const char *pauthbuf = NULL;
   struct stat st;
   char *p;
@@ -86,8 +87,8 @@ void srv_cmd_proc(void *pfuncarg) {
 
   LOG(X_DEBUG("Handling %sconnection on port %d from %s:%d"), 
               ((pConn->sd.netsocket.flags & NETIO_FLAG_SSL_TLS) ? "SSL " : ""),
-              ntohs(pConn->pListenCfg->sain.sin_port),
-              net_inet_ntoa(pConn->sd.sain.sin_addr, inetbuf), ntohs(pConn->sd.sain.sin_port));
+              ntohs(INET_PORT(pConn->pListenCfg->sa)),
+              FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
 
   do {
 
@@ -483,9 +484,9 @@ fprintf(stderr, "COOKIE: '%s' 0x%x\n", phdrcookie, pSession);
 
     if(httpStatus != HTTP_STATUS_OK) {
       LOG(X_WARNING("HTTP %s :%d%s %s from %s:%d"), pConn->httpReq.method, 
-           ntohs(pConn->pListenCfg->sain.sin_port), pConn->httpReq.puri, 
+           ntohs(INET_PORT(pConn->pListenCfg->sa)), pConn->httpReq.puri, 
            http_lookup_statuscode(httpStatus), 
-           net_inet_ntoa(pConn->sd.sain.sin_addr, inetbuf), ntohs(pConn->sd.sain.sin_port));
+           FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
 
       rc = http_resp_error(&pConn->sd, &pConn->httpReq, httpStatus, 1, NULL, pauthbuf);
       break;
@@ -504,8 +505,8 @@ fprintf(stderr, "COOKIE: '%s' 0x%x\n", phdrcookie, pSession);
 
   LOG(X_DEBUG("HTTP%s connection ended on port %d from %s:%d"), 
           (pConn->sd.netsocket.flags & NETIO_FLAG_SSL_TLS) ? "S" : "", 
-          ntohs(pConn->pListenCfg->sain.sin_port),
-          net_inet_ntoa(pConn->sd.sain.sin_addr, inetbuf), ntohs(pConn->sd.sain.sin_port));
+          ntohs(INET_PORT(pConn->pListenCfg->sa)),
+          FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
 }
 
 

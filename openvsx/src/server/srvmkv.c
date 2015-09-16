@@ -588,7 +588,7 @@ int mkvsrv_cbWriteDataNet(void *pArg, const unsigned char *pData, unsigned int l
   //avc_dumpHex(stderr, pData, len, 1);
   //if(mkv_fd==0) mkv_fd = open("testout.mkv", O_CREAT | O_RDWR, 0660); write(mkv_fd, pData, len);
 
-  if((rc = netio_send(&pMkvCtxt->pSd->netsocket, &pMkvCtxt->pSd->sain, pData, len)) < 0) {
+  if((rc = netio_send(&pMkvCtxt->pSd->netsocket, (const struct sockaddr *) &pMkvCtxt->pSd->sa, pData, len)) < 0) {
     LOG(X_ERROR("Failed to send mkv %s %u bytes, total: %llu)"),
                (pMkvCtxt->writeErrDescr ? pMkvCtxt->writeErrDescr : ""), len, pMkvCtxt->totXmit);
   } else {

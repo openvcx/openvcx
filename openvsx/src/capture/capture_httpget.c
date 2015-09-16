@@ -85,7 +85,8 @@ int connect_with_retry(CONNECT_RETRY_CTXT_T *pRetryCtxt) {
 
     rccb = 0;
 
-    if((rcconn = httpcli_connect(pRetryCtxt->pnetsock, pRetryCtxt->psa, pRetryCtxt->connectDescr)) < 0) {
+    if((rcconn = httpcli_connect(pRetryCtxt->pnetsock, (const struct sockaddr *) pRetryCtxt->psa, 
+                                 pRetryCtxt->connectDescr)) < 0) {
 
       if(pRetryCtxt->pAuthCliCtxt && consecunauth > 0) {
         pRetryCtxt->pAuthCliCtxt->authorization[0] = '\0';
@@ -157,7 +158,7 @@ int connect_with_retry(CONNECT_RETRY_CTXT_T *pRetryCtxt) {
 
 int http_recvloop(CAP_ASYNC_DESCR_T *pCfg,
                   NETIO_SOCK_T *pnetsock,
-                  struct sockaddr_in *psa,
+                  const struct sockaddr *psa,
                   CAPTURE_CBDATA_T *pStreamsOut,
                   CAPTURE_STREAM_T *pStream,
                   unsigned int offset,
@@ -168,6 +169,7 @@ int http_recvloop(CAP_ASYNC_DESCR_T *pCfg,
 
   COLLECT_STREAM_PKTDATA_T pkt;
   unsigned int sztot = 0;
+  char tmp[128];
 
   if(!pnetsock) {
     return -1;
@@ -186,7 +188,7 @@ int http_recvloop(CAP_ASYNC_DESCR_T *pCfg,
 
         LOG(X_ERROR("Failed to recv HTTP%s data %d/%d bytes from %s:%d "ERRNO_FMT_STR), 
             (pnetsock->flags & NETIO_FLAG_SSL_TLS) ? "S" : "",
-            sz, szbuf, inet_ntoa(psa->sin_addr), ntohs(psa->sin_port), ERRNO_FMT_ARGS);
+            sz, szbuf, FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)), ERRNO_FMT_ARGS);
         break;
       }
     }
@@ -227,15 +229,16 @@ int http_recvloop(CAP_ASYNC_DESCR_T *pCfg,
 
 unsigned char *http_read_net(CAP_HTTP_COMMON_T *pCommon,
                              NETIO_SOCK_T *pnetsock,
-                             struct sockaddr_in *psa,
+                             const struct sockaddr *psa,
                              unsigned int bytesToRead,
                              unsigned char *bufout, 
                              unsigned int szbuf,
                              unsigned int *pBytesRead) {
   int rc;
   unsigned int idx = 0;
+  char tmp[128];
   //NETIO_SOCK_T *pnetsock = &pCommon->pCfg->pSockList->netsockets[0];
-  //struct sockaddr_in *psa = &pCommon->pCfg->pSockList->salist[0];
+  //struct sockaddr *psa = &pCommon->pCfg->pSockList->salist[0];
 
   if(bytesToRead > szbuf) {
     LOG(X_ERROR("HTTP GET live media read request too large %d > %d"), bytesToRead, szbuf);
@@ -260,7 +263,7 @@ unsigned char *http_read_net(CAP_HTTP_COMMON_T *pCommon,
     if((rc = netio_recvnb_exact(pnetsock, &bufout[idx], bytesToRead, 7000)) != bytesToRead) {
       LOG(X_ERROR("Failed to recv HTTP%s data %d bytes from %s:%d "ERRNO_FMT_STR), 
         (pnetsock->flags & NETIO_FLAG_SSL_TLS) ? "S" : "",
-        bytesToRead, inet_ntoa(psa->sin_addr), ntohs(psa->sin_port), ERRNO_FMT_ARGS);
+        bytesToRead, FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)), ERRNO_FMT_ARGS);
       return NULL;
     }
     idx += rc;
@@ -306,7 +309,7 @@ static CONNECT_RETRY_RC_T gethttpdata(CAP_ASYNC_DESCR_T *pCfg,
   hdrCtxt.szbuf = sizeof(buf);
   hdrCtxt.tmtms = 0;
 
-  if((httpcli_gethdrs(&hdrCtxt, &httpResp, &pCfg->pSockList->salist[0], puri,
+  if((httpcli_gethdrs(&hdrCtxt, &httpResp, (const struct sockaddr *) &pCfg->pSockList->salist[0], puri,
           http_getConnTypeStr(HTTP_CONN_TYPE_CLOSE), 0, 0, pCfg->pcommon->addrsExtHost[0],
           pAuthCliCtxt)) < 0) {
     return CONNECT_RETRY_RC_ERROR;
@@ -409,8 +412,8 @@ static CONNECT_RETRY_RC_T gethttpdata(CAP_ASYNC_DESCR_T *pCfg,
         pCapHttpMp4Stream = (CAP_HTTP_MP4_STREAM_T *) pCfg->pUserData;
         pCapHttpMp4Stream->pl.endOfList = 1;
 
-        if(http_mp4_recv(pCfg, &pCfg->pSockList->netsockets[0], &pCfg->pSockList->salist[0],
-                           contentLen, &hdrCtxt, NULL) < 0) {
+        if(http_mp4_recv(pCfg, &pCfg->pSockList->netsockets[0], (const struct sockaddr *) 
+                         &pCfg->pSockList->salist[0], contentLen, &hdrCtxt, NULL) < 0) {
           rc = CONNECT_RETRY_RC_ERROR;
         }
         break;
@@ -442,7 +445,7 @@ static CONNECT_RETRY_RC_T gethttpdata(CAP_ASYNC_DESCR_T *pCfg,
         // continuous non-segmented stream using mpeg-2 ts encapsulation
         //
         if(http_recvloop(pCfg, &pCfg->pSockList->netsockets[0],
-               &pCfg->pSockList->salist[0], pStreamsOut, pStream, 
+               (const struct sockaddr *) &pCfg->pSockList->salist[0], pStreamsOut, pStream, 
                hdrCtxt.hdrslen, hdrCtxt.idxbuf - hdrCtxt.hdrslen, 
                contentLen, buf, sizeof(buf)) < 0) {
           rc = CONNECT_RETRY_RC_ERROR;
@@ -536,7 +539,7 @@ int capture_httpget(CAP_ASYNC_DESCR_T *pCfg) {
   retryCtxt.pConnectedActionArg = &retryCbCtxt;
   retryCtxt.pAuthCliCtxt = &authCliCtxt;
   retryCtxt.pnetsock = &pCfg->pSockList->netsockets[0];
-  retryCtxt.psa = &pCfg->pSockList->salist[0];
+  retryCtxt.psa = (const struct sockaddr *) &pCfg->pSockList->salist[0];
   retryCtxt.pByteCtr = &stream.numBytes;
   retryCtxt.connectDescr = "HTTP";
   retryCtxt.pconnectretrycntminone = &pCfg->pcommon->connectretrycntminone;

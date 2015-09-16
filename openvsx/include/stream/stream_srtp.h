@@ -102,7 +102,7 @@ int srtp_dtls_protect(const NETIO_SOCK_T *pnetsock,
                       unsigned int lengthIn,
                       unsigned char *pDataOut,
                       unsigned int lengthOut,
-                      const struct sockaddr_in *dest_addr,
+                      const struct sockaddr *dest_addr,
                       const SRTP_CTXT_T *pSrtp,
                       enum SENDTO_PKT_TYPE pktType);
 
@@ -110,28 +110,28 @@ int srtp_sendto(const NETIO_SOCK_T *pnetsock,
                 void *buffer, 
                 size_t length, 
                 int flags, 
-                const struct sockaddr_in *dest_addr,
+                const struct sockaddr *dest_addr,
                 const SRTP_CTXT_T *pSrtp, 
                 enum SENDTO_PKT_TYPE pktType,
                 int no_protect);
 
 #define SENDTO_RTP(s, buf, len, flags, dest_addr, pSrtp) \
-       srtp_sendto((s), buf, len, flags, dest_addr, (pSrtp), SENDTO_PKT_TYPE_RTP, 0)
+   srtp_sendto((s), buf, len, flags, (const struct sockaddr *)dest_addr, (pSrtp), SENDTO_PKT_TYPE_RTP, 0)
 
 #define SENDTO_RTCP(s, buf, len, flags, dest_addr, pSrtp) \
-       srtp_sendto((s), buf, len, flags, dest_addr, (pSrtp), SENDTO_PKT_TYPE_RTCP, 0)
+   srtp_sendto((s), buf, len, flags, (const struct sockaddr *)dest_addr, (pSrtp), SENDTO_PKT_TYPE_RTCP, 0)
 
 #define SENDTO_STUN(s, buf, len, flags, dest_addr) \
-       srtp_sendto((s), buf, len, flags, dest_addr, NULL, SENDTO_PKT_TYPE_STUN, 0)
+   srtp_sendto((s), buf, len, flags, (const struct sockaddr *)dest_addr, NULL, SENDTO_PKT_TYPE_STUN, 0)
 
 #define SENDTO_STUN_BYPASSTURN(s, buf, len, flags, dest_addr) \
-       srtp_sendto((s), buf, len, flags, dest_addr, NULL, SENDTO_PKT_TYPE_STUN_BYPASSTURN, 0)
+   srtp_sendto((s), buf, len, flags, (const struct sockaddr *) dest_addr, NULL, SENDTO_PKT_TYPE_STUN_BYPASSTURN, 0)
 
 #define SENDTO_TURN(s, buf, len, flags, dest_addr) \
-       srtp_sendto((s), buf, len, flags, dest_addr, NULL, SENDTO_PKT_TYPE_TURN, 0)
+   srtp_sendto((s), buf, len, flags, (const struct sockaddr *) dest_addr, NULL, SENDTO_PKT_TYPE_TURN, 0)
 
 #define SENDTO_DTLS(s, buf, len, flags, dest_addr) \
-       srtp_sendto((s), buf, len, flags, dest_addr, NULL, SENDTO_PKT_TYPE_DTLS, 0)
+   srtp_sendto((s), buf, len, flags, (const struct sockaddr *) dest_addr, NULL, SENDTO_PKT_TYPE_DTLS, 0)
 
 int srtp_decryptPacket(const SRTP_CTXT_T *pCtxt, unsigned char *pData, unsigned int *plength, int rtcp);
 int srtp_initInputStream(SRTP_CTXT_T *pCtxt, uint32_t ssrc, int rtcp);

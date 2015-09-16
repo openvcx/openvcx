@@ -85,7 +85,7 @@ typedef struct STREAM_SHARED_CTXT {
 typedef struct STREAM_DEST_CFG {
   union {
     char                     *pDstHost;
-    struct in_addr            dstAddr; 
+    struct sockaddr_storage   dstAddr;   // holds only destination host ip address and not port
   } u;
   int                         haveDstAddr;  // indicates a valid u.dstAddr entry, otherwise u.pDstHost
 
@@ -124,8 +124,8 @@ typedef struct STREAM_XMIT_QUEUE {
 
 typedef struct STREAM_RTP_DEST {
   int                       isactive;
-  struct sockaddr_in        saDsts;
-  struct sockaddr_in        saDstsRtcp;
+  struct sockaddr_storage   saDsts;
+  struct sockaddr_storage   saDstsRtcp;
   STREAM_RTP_SOCKETS_T      xmit;
   int                       sendrtcpsr;
   TIME_VAL                  tmLastRtcpSr;
@@ -144,15 +144,16 @@ typedef struct STREAM_RTP_DEST {
   struct STREAM_RTP_DEST   *pDestPeer;  // audio-video peer
 } STREAM_RTP_DEST_T;
 
-#define STREAM_RTCP_PNETIOSOCK(dest)  ((dest).saDstsRtcp.sin_port == (dest).saDsts.sin_port ? \
+#define STREAM_RTCP_PNETIOSOCK(dest)  ((INET_PORT((dest).saDstsRtcp)) == INET_PORT((dest).saDsts) ? \
                  ((dest).xmit.pnetsock ? ((dest).xmit.pnetsock) : (&(dest).xmit.netsock)) : \
                  ((dest).xmit.pnetsockRtcp ? ((dest).xmit.pnetsockRtcp) : (&(dest).xmit.netsockRtcp)))
+
 
 #define STREAM_RTCP_PSTUNSOCK(dest) PSTUNSOCK(STREAM_RTCP_PNETIOSOCK(dest))
 
 #define STREAM_RTCP_FD(dest)  PNETIOSOCK_FD(STREAM_RTCP_PNETIOSOCK(dest))
 
-#define STREAM_RTCP_FD_NONP(dest)  ((dest).saDstsRtcp.sin_port == (dest).saDsts.sin_port ? \
+#define STREAM_RTCP_FD_NONP(dest)  (INET_PORT((dest).saDstsRtcp) == INET_PORT((dest).saDsts) ? \
                            STUNSOCK_FD((dest).xmit.sock) : STUNSOCK_FD((dest).xmit.sockRtcp))
 
 #define STREAM_RTP_PNETIOSOCK(dest)   ((dest).xmit.pnetsock ? ((dest).xmit.pnetsock) : (&(dest).xmit.netsock))
@@ -361,15 +362,15 @@ STREAM_RTP_DEST_T *stream_rtp_adddest(STREAM_RTP_MULTI_T *pRtp, const STREAM_DES
 int stream_rtp_updatedest(STREAM_RTP_DEST_T *pDest, const STREAM_DEST_CFG_T *pDestCfg);
 int stream_rtp_removedest(STREAM_RTP_MULTI_T *pRtp, const STREAM_RTP_DEST_T *pDest);
 int stream_rtp_handlertcp(STREAM_RTP_DEST_T *pRtpDest, const RTCP_PKT_HDR_T *pHdr, unsigned int len,
-                          const struct sockaddr_in *psaSrc, const struct sockaddr_in *psaDst);
+                          const struct sockaddr *psaSrc, const struct sockaddr *psaDst);
 int stream_rtp_preparepkt(STREAM_RTP_MULTI_T *pRtp);
 const unsigned char *stream_rtp_data(STREAM_RTP_MULTI_T *pRtp);
 unsigned int stream_rtp_datalen(STREAM_RTP_MULTI_T *pRtp);
 
 int stream_rtcp_createsr(STREAM_RTP_MULTI_T *pRtp, unsigned int idxDest,
                          unsigned char *pBuf, unsigned int lenbuf);
-int stream_process_rtcp(STREAM_RTP_MULTI_T *pRtpHeadall, const struct sockaddr_in *psaSrc, 
-                        const struct sockaddr_in *psaDst, const RTCP_PKT_HDR_T *pHdr, unsigned int len);
+int stream_process_rtcp(STREAM_RTP_MULTI_T *pRtpHeadall, const struct sockaddr *psaSrc, 
+                        const struct sockaddr *psaDst, const RTCP_PKT_HDR_T *pHdr, unsigned int len);
 int stream_dtls_netsock_key_update(void *pCbData, NETIO_SOCK_T *pnetsock, const char *srtpProfileName,
                                    int dtls_serverkey, int is_rtcp, const unsigned char *pKeys, unsigned int lenKeys);
 

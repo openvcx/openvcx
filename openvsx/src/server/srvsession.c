@@ -73,10 +73,11 @@ SESSION_DESCR_T *session_find(const SESSION_CACHE_T *pCache, const char *cookie)
   return pSession;
 }
 
-SESSION_DESCR_T *session_add(SESSION_CACHE_T *pCache, struct sockaddr_in *pSockAddr) {
+SESSION_DESCR_T *session_add(SESSION_CACHE_T *pCache, struct sockaddr *pSockAddr) {
   SESSION_DESCR_T *pSession = NULL;
   SESSION_DESCR_T *pSessionPrev = NULL;
   unsigned int numSessions = 0;
+  char tmp[128];
 
   //TODO: need a hash
 
@@ -99,7 +100,7 @@ SESSION_DESCR_T *session_add(SESSION_CACHE_T *pCache, struct sockaddr_in *pSockA
       }
     } else {
       LOG(X_WARNING("No available session for %s:%d"), 
-           inet_ntoa(pSockAddr->sin_addr),  ntohs(pSockAddr->sin_port));
+           FORMAT_NETADDR(*pSockAddr, tmp, sizeof(tmp)),  ntohs(PINET_PORT(pSockAddr)));
       return NULL;
     }
   }

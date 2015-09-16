@@ -50,8 +50,8 @@ typedef struct _STUN_SOCKET {
   TIME_VAL                           tmLastXmit;
   TIME_VAL                           tmLastRcv;
 
-  struct sockaddr_in                 sainLastRcv;
-  struct sockaddr_in                 sainLastXmit;
+  struct sockaddr_storage            sainLastRcv;
+  struct sockaddr_storage            sainLastXmit;
 
   //TODO: store last rcv,src addr pair, several versions for numerous ice candidates
 
@@ -90,9 +90,9 @@ typedef struct TURN_SOCK {
   int                        have_permission;
   int                        have_error;
   TURN_POLICY_T              turnPolicy;
-  struct sockaddr_in         saPeerRelay;        // The peer's relay address:port assigned by the TURN server
+  struct sockaddr_storage    saPeerRelay;        // The peer's relay address:port assigned by the TURN server
                                                  // for which we create a permission for
-  struct sockaddr_in         saTurnSrv;          // The TURN server address:port used for relaying output data
+  struct sockaddr_storage    saTurnSrv;          // The TURN server address:port used for relaying output data
 } TURN_SOCK_T;
 
 typedef struct NETIO_SOCK {
@@ -120,22 +120,24 @@ typedef struct NETIO_SOCK {
                             (to).ssl.pBioRd = (from).ssl.pBioRd; \
                             (to).ssl.pBioWr = (from).ssl.pBioWr;
 
-#define IS_ADDR_VALID(sin_addr) ((sin_addr).s_addr != INADDR_NONE && (sin_addr).s_addr != INADDR_ANY)
+#define IS_ADDR4_VALID(sin_addr) ((sin_addr).s_addr != INADDR_NONE && (sin_addr).s_addr != INADDR_ANY)
 
 int netio_recvnb(NETIO_SOCK_T *psock, unsigned char *buf, unsigned int len,
                  unsigned int mstmt);
 int netio_recvnb_exact(NETIO_SOCK_T *psock, unsigned char *buf, unsigned int len,
                      unsigned int mstmt);
-int netio_recv_exact(NETIO_SOCK_T *psock, const struct sockaddr_in *psa,
+int netio_recv_exact(NETIO_SOCK_T *psock, const struct sockaddr *psa,
                    unsigned char *buf, unsigned int len);
-int netio_recv(NETIO_SOCK_T *psock, const struct sockaddr_in *psa,
+int netio_recv(NETIO_SOCK_T *psock, const struct sockaddr *psa,
              unsigned char *buf, unsigned int len);
 int netio_peek(NETIO_SOCK_T *psock, unsigned char *buf, unsigned int len);
-int netio_send(NETIO_SOCK_T *psock, const struct sockaddr_in *psa,
+int netio_send(NETIO_SOCK_T *psock, const struct sockaddr *psa,
                const unsigned char *buf, unsigned int len);
+int netio_sendto(NETIO_SOCK_T *psock, const struct sockaddr *psa, 
+                 const unsigned char *buf, unsigned int len, const char *descr);
 void netio_closesocket(NETIO_SOCK_T *psock);
 SOCKET netio_opensocket(NETIO_SOCK_T *psock, int socktype, unsigned int rcvbufsz, int sndbufsz,
-                      struct sockaddr_in *psain);
+                       const struct sockaddr *psa);
 int netio_acceptssl(NETIO_SOCK_T *psock);
 int netio_connectssl(NETIO_SOCK_T *psock);
 int netio_ssl_init_srv(const char *certPath, const char *privKeyPath);

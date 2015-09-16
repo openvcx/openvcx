@@ -350,6 +350,7 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
   HTTPLIVE_DATA_T *pHttpLiveData = NULL;
   CB_PARSE_HTTPLIVE_BITRATES_T httpLiveBitrates;
   unsigned int numHttp = 0;
+  char tmp[128];
   char fileprefix[128];
   STREAMER_CFG_T *pStreamerCfg = pSrv->pStreamerCfg;
   HTTPLIVE_DATA_T *pHttpLiveDatas[IXCODE_VIDEO_OUT_MAX];
@@ -856,8 +857,8 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
     }
     if((rc = vsxlib_check_other_listeners(&pSrv->startcfg, pSrv->startcfg.listenRtmp)) > 0) {
       LOG(X_WARNING("RTMP server listener %s:%d cannot be shared with another protocol"),
-          inet_ntoa(pSrv->startcfg.listenRtmp[rc - 1].sain.sin_addr),
-          htons(pSrv->startcfg.listenRtmp[rc - 1].sain.sin_port));
+          INET_NTOP(pSrv->startcfg.listenRtmp[rc - 1].sa, tmp, sizeof(tmp)),
+          htons(INET_PORT(pSrv->startcfg.listenRtmp[rc - 1].sa)));
     } else {
 
       pStreamerCfg->action.do_rtmplive = 1;
@@ -898,8 +899,8 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
 
     if((rc = vsxlib_check_other_listeners(&pSrv->startcfg, pSrv->startcfg.listenRtsp)) > 0) {
       LOG(X_WARNING("RTSP server listener %s:%d cannot be shared with another protocol"),
-          inet_ntoa(pSrv->startcfg.listenRtsp[rc - 1].sain.sin_addr),
-          htons(pSrv->startcfg.listenRtsp[rc - 1].sain.sin_port));
+          INET_NTOP(pSrv->startcfg.listenRtsp[rc - 1].sa, tmp, sizeof(tmp)),
+          htons(INET_PORT(pSrv->startcfg.listenRtsp[rc - 1].sa)));
 
     } else {
 

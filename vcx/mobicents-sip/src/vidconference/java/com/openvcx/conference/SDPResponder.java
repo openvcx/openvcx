@@ -60,6 +60,7 @@ public class SDPResponder {
     public static final String CONFIG_SERVER_CONNECT_ADDRESS                 = "sdp.connect.location";
     private static final String CONFIG_SERVER_CODEC_AUDIO                    = "codec.audio";
     private static final String CONFIG_SERVER_CODEC_VIDEO                    = "codec.video";
+    private static final String CONFIG_SERVER_SDP_IPV6                       = "sdp.ipv6";
     private static final int MAX_CODEC_COUNT                                 = 30;
 
     private String m_connectLocation;
@@ -68,6 +69,7 @@ public class SDPResponder {
     private InetAddress m_listenAddress;
     private ISDPNaming m_namingI;
     private SDP.Fingerprint m_dtlsCertFingerprint;
+    private boolean m_doIPv6 = false;
 
     /**
      * Enumeration defining the type of SDP document to be created
@@ -148,6 +150,8 @@ public class SDPResponder {
         }
 
         initDtls(config);
+
+        m_doIPv6 = config.getBoolean(CONFIG_SERVER_SDP_IPV6, m_doIPv6);
 
     }
 
@@ -483,7 +487,7 @@ public class SDPResponder {
             //
             if((SDP.ICECandidate.TRANSPORT.udp == iceCandidate.getTransport())) {
 
-                if(iceCandidate.getICEAddress().isIPv6()) {
+                if(iceCandidate.getICEAddress().isIPv6() && !m_doIPv6) {
                     m_log.debug("Skipping ICE IPv6 candidate: " + iceCandidate);
                     continue;
                 }
@@ -510,6 +514,17 @@ public class SDPResponder {
                 iceCandidateRTCP = iceCandidateMatch[index][1];
                 break;
             }
+        }
+
+        if(null == iceCandidateRTP) {
+            m_log.warn("NO RTP ICE Candidate selected!");
+        } else {
+            m_log.debug("RTP ICE Candidate: " + iceCandidateRTP);
+        }
+        if(null == iceCandidateRTCP) {
+            m_log.warn("NO RTCP ICE Candidate selected!");
+        } else {
+            m_log.debug("RTCP ICE Candidate: " + iceCandidateRTCP);
         }
 
         if(bSet && null != iceCandidateRTP) {

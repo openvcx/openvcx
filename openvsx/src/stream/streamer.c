@@ -32,6 +32,7 @@
 
 static int sendRtcpSr(STREAM_XMIT_NODE_T *pStream, unsigned int idxDest) {
   int rc = 0;
+  //char tmp[128];
   unsigned char buf[256];
   int len = 0;
 
@@ -46,15 +47,8 @@ static int sendRtcpSr(STREAM_XMIT_NODE_T *pStream, unsigned int idxDest) {
 
   //fprintf(stderr, "sendto rtcp sr [dest:%d] %s:%d %d pkt:%u,%u ts:%u\n", idxDest, inet_ntoa(pStream->saDstsRtcp[idxDest].sin_addr), ntohs(pStream->saDstsRtcp[idxDest].sin_port), len, pStream->pRtpMulti[idxDest].rtcp.sr.pktcnt,pStream->pRtpMulti[idxDest].rtcp.sr.octetcnt,htonl(pStream->pRtpMulti[idxDest].rtcp.sr.rtpts));
 
-  if((rc = sendto(STREAM_RTCP_FD(pStream->pRtpMulti->pdests[idxDest]),
-                  (void *) buf, len, 0,
-                  (struct sockaddr *) &pStream->pRtpMulti->pdests[idxDest].saDstsRtcp,
-                  sizeof(pStream->pRtpMulti->pdests[idxDest].saDstsRtcp))) != len) {
-
-    LOG(X_ERROR("sendto (rtcp) %s:%d for %d bytes failed with "ERRNO_FMT_STR),
-                inet_ntoa(pStream->pRtpMulti->pdests[idxDest].saDstsRtcp.sin_addr),
-                ntohs(pStream->pRtpMulti->pdests[idxDest].saDstsRtcp.sin_port),
-                len, ERRNO_FMT_ARGS);
+  if((rc = netio_sendto(STREAM_RTCP_PNETIOSOCK(pStream->pRtpMulti->pdests[idxDest]), 
+           (struct sockaddr *) &pStream->pRtpMulti->pdests[idxDest].saDstsRtcp, buf, len, "(rtcp)")) != len) {
     return -1;
   }
 
@@ -65,6 +59,7 @@ static int sendRtcpSr(STREAM_XMIT_NODE_T *pStream, unsigned int idxDest) {
 static int sendPktUdpRtp(STREAM_XMIT_NODE_T *pStream, unsigned int idxDest,
                       const unsigned char *pData, unsigned int len) {
   int rc = 0;
+  //char tmp[128];
 
   if(!pStream->pXmitAction->do_output_rtphdr) {
     if(len >= RTP_HEADER_LEN) {
@@ -86,15 +81,9 @@ static int sendPktUdpRtp(STREAM_XMIT_NODE_T *pStream, unsigned int idxDest,
 
   //fprintf(stderr, "sendto [dest:%d] %s:%d %d bytes seq:%u ts:%u ssrc:0x%x\n", idxDest, inet_ntoa(pStream->saDsts[idxDest].sin_addr), ntohs(pStream->saDsts[idxDest].sin_port), len, htons(pStream->pRtpMulti[idxDest].m_pRtp->sequence_num), htonl(pStream->pRtpMulti[idxDest].m_pRtp->timeStamp), pStream->pRtpMulti[idxDest].m_pRtp->ssrc);
 
-  if((rc = sendto(STREAM_RTP_FD(pStream->pRtpMulti->pdests[idxDest]),
-                  (void *) pData, len, 0,
+  if((rc = netio_sendto(STREAM_RTP_PNETIOSOCK(pStream->pRtpMulti->pdests[idxDest]),
                   (struct sockaddr *) &pStream->pRtpMulti->pdests[idxDest].saDsts,
-                  sizeof(pStream->pRtpMulti->pdests[idxDest].saDsts))) != len) {
-
-    LOG(X_ERROR("sendto %s:%d for %d bytes failed with "ERRNO_FMT_STR),
-                inet_ntoa(pStream->pRtpMulti->pdests[idxDest].saDsts.sin_addr),
-                ntohs(pStream->pRtpMulti->pdests[idxDest].saDsts.sin_port),
-                len, ERRNO_FMT_ARGS);
+                  pData, len, NULL)) != len) {
     return -1;
   }
 

@@ -315,6 +315,7 @@ static CAPTURE_STREAM_T *capture_rtp_lookup(CAPTURE_STATE_T *pState,
 static void init_stream(CAPTURE_STATE_T *pState, CAPTURE_STREAM_T *pStream, 
                         const COLLECT_STREAM_PKT_T *pPkt, int isvid) {
 
+  char tmp[128];
   int sz;
 
   memcpy(&pStream->hdr, &pPkt->hdr, sizeof(COLLECT_STREAM_HDR_T));
@@ -354,12 +355,18 @@ static void init_stream(CAPTURE_STATE_T *pState, CAPTURE_STREAM_T *pStream,
    pStream->pFilter = NULL;
 
   pStream->strSrcDst[0] = '\0';
-  if(pPkt->hdr.key.lenIp == ADDR_LEN_IPV4) {
-    if((sz = snprintf(pStream->strSrcDst, sizeof(pStream->strSrcDst), "%s:%d",
-             inet_ntoa(pPkt->hdr.key.pair_srcipv4), pPkt->hdr.key.srcPort)) > 0) {
-      snprintf(&pStream->strSrcDst[sz], sizeof(pStream->strSrcDst) - sz, " -> %s:%d",
-             inet_ntoa(pPkt->hdr.key.pair_dstipv4), pPkt->hdr.key.dstPort);
-    }
+
+  if((sz = snprintf(pStream->strSrcDst, sizeof(pStream->strSrcDst), "%s%s%s:%d",
+       pPkt->hdr.key.lenIp == ADDR_LEN_IPV6 ? "[" : "",
+       inet_ntop(pPkt->hdr.key.lenIp == ADDR_LEN_IPV6 ? AF_INET6 : AF_INET, (pPkt->hdr.key.lenIp == ADDR_LEN_IPV6 ? 
+         (const void *) &pPkt->hdr.key.pair_srcipv6 : (const void *) &pPkt->hdr.key.pair_srcipv4), tmp, sizeof(tmp)), 
+       pPkt->hdr.key.lenIp == ADDR_LEN_IPV6 ? "]" : "", pPkt->hdr.key.srcPort)) > 0) {
+      snprintf(&pStream->strSrcDst[sz], sizeof(pStream->strSrcDst) - sz, " -> %s%s%s:%d",
+       pPkt->hdr.key.lenIp == ADDR_LEN_IPV6 ? "[" : "",
+       inet_ntop(pPkt->hdr.key.lenIp == ADDR_LEN_IPV6 ? AF_INET6 : AF_INET, pPkt->hdr.key.lenIp == ADDR_LEN_IPV6 ? 
+                   (const void *) &pPkt->hdr.key.pair_dstipv6 : (const void *) &pPkt->hdr.key.pair_dstipv4,
+                   tmp, sizeof(tmp)), 
+       pPkt->hdr.key.lenIp == ADDR_LEN_IPV6 ? "]" : "", pPkt->hdr.key.dstPort);
   }
 
 }
@@ -1318,19 +1325,20 @@ int capture_decodeRtp(const struct ether_header *peth,
   pkt->hdr.key.dstPort = pudp->dest;
 
   if(pkt->hdr.key.dstPort < RTP_MIN_PORT || pkt->hdr.key.srcPort < RTP_MIN_PORT) {
-    //LOG(X_ERROR("Bad RTP srcport:%d, dstport:%d"), pkt->hdr.key.srcPort, pkt->hdr.key.dstPort);
+    VSX_DEBUG_RTP( LOG(X_ERROR("Bad RTP srcport:%d, dstport:%d"), pkt->hdr.key.srcPort, pkt->hdr.key.dstPort) );
     return -1;
   } 
 
   rtp_hdr = ntohl(rtp->header);
   if(((rtp_hdr & RTPHDR32_VERSION_MASK) >> 30) != RTP_VERSION) {
-    //LOG(X_ERROR("Bad RTP Version 0x%x"), rtp_hdr >> 24);
+    VSX_DEBUG_RTP( LOG(X_ERROR("Bad RTP Version 0x%x"), rtp_hdr >> 24) );
     return -1;
   }
 
   if(rtp_hdr & RTPHDR32_CSRC_MASK) {
     rtpHdrLen += (uint16_t) (4 * ntohl(rtp_hdr & RTPHDR32_CSRC_MASK));
     if(rtpCapLen < rtpHdrLen) {
+      VSX_DEBUG_RTP( LOG(X_ERROR("Bad RTP capture length:%d %d < RTP header length: %d"), rtpCapLen, rtpHdrLen) );
       return -1;
     }
   }
@@ -1370,6 +1378,7 @@ int capture_decodeRtp(const struct ether_header *peth,
       case RTP_PAYLOAD_TYPE_H263:
         break;
       default:
+        VSX_DEBUG_RTP(LOG(X_ERROR("Bad RTP payload type: %d"), pkt->hdr.payloadType) );
         return -1;
     }
   }

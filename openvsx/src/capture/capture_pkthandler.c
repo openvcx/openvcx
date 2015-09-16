@@ -181,12 +181,20 @@ static const CAPTURE_FILTER_T *get_filter_udpraw(const CAPTURE_STATE_T *pState,
 static const CAPTURE_FILTER_T *get_filter_udprtp(const CAPTURE_STATE_T *pState, 
                                                  const COLLECT_STREAM_PKT_T *pkt) {
   unsigned int idx;
-  struct ip pktIp;
+  struct ip pktIp4;
+  struct ip *p_pktIp4 = NULL;
+  struct ip6_hdr pktIp6;
+  struct ip6_hdr *p_pktIp6 = NULL;
   struct udphdr pktUdp;
 
-  pktIp.ip_v = (unsigned char) pkt->hdr.key.lenIp;
-  pktIp.ip_src = pkt->hdr.key.ipAddr.ip_un.ipv4.srcIp;
-  pktIp.ip_dst = pkt->hdr.key.ipAddr.ip_un.ipv4.dstIp;
+  if(pkt->hdr.key.lenIp == ADDR_LEN_IPV6) {
+    p_pktIp6 = &pktIp6;
+  } else {
+    pktIp4.ip_v = (unsigned char) pkt->hdr.key.lenIp;
+    pktIp4.ip_src = pkt->hdr.key.ipAddr.ip_un.ipv4.srcIp;
+    pktIp4.ip_dst = pkt->hdr.key.ipAddr.ip_un.ipv4.dstIp;
+    p_pktIp4 = &pktIp4;
+  }
 
   pktUdp.source = pkt->hdr.key.srcPort;
   pktUdp.dest = pkt->hdr.key.dstPort;
@@ -196,11 +204,9 @@ static const CAPTURE_FILTER_T *get_filter_udprtp(const CAPTURE_STATE_T *pState,
     if(!pass_filter_rtp(&pState->filt.filters[idx], pkt)) {
       continue;
     }
-
-    if(!pass_filter_udpraw(&pState->filt.filters[idx], &pktIp, NULL, &pktUdp)) {
+    if(!pass_filter_udpraw(&pState->filt.filters[idx], p_pktIp4, p_pktIp6, &pktUdp)) {
       continue;
     }
-
     return &pState->filt.filters[idx];
 
   }
@@ -241,7 +247,7 @@ static const CAPTURE_STREAM_T *capture_onRawPkt_int(unsigned char *pArg,
   const CAPTURE_FILTER_T *pFilter = NULL;
   CAPTURE_STATE_T *pState = (CAPTURE_STATE_T *) pArg;
 
-  char delme[2][64];
+  char delme[3][64];
 
   if(pState) {
     // maybe move this to inside of mutex lock
@@ -294,7 +300,7 @@ static const CAPTURE_STREAM_T *capture_onRawPkt_int(unsigned char *pArg,
 
   }
 
-  if(pkthdr->caplen < ethlen + 40) {  // (14eth) + 20ip + 20 min([udp + rtp |tcp]) 
+  if(pkthdr->caplen < ethlen + 40) {  // (14eth) + 20ipv4 + 20 min([udp + rtp |tcp]) 
     return NULL;
   }
 
@@ -326,13 +332,12 @@ static const CAPTURE_STREAM_T *capture_onRawPkt_int(unsigned char *pArg,
     //pip6 = pip6;
 
     if(pip6) {
-      sprintf(delme[0], "%s:%d", inet6_ntoa(pip6->ip6_src),ptcp->source);
-      sprintf(delme[1], "%s:%d", inet6_ntoa(pip6->ip6_dst),ptcp->dest);
+      sprintf(delme[0], "%s:%d", inet_ntop(AF_INET6, &pip6->ip6_src, delme[2], sizeof(delme[2])), ptcp->source);
+      sprintf(delme[1], "%s:%d", inet_ntop(AF_INET6, &pip6->ip6_dst, delme[2], sizeof(delme[2])), ptcp->dest);
     } else {
       sprintf(delme[0], "%s:%d", inet_ntoa(pip->ip_src),ptcp->source);
       sprintf(delme[1], "%s:%d", inet_ntoa(pip->ip_dst),ptcp->dest);
     }
-
 
     if(pState->filt.numFilters > 0 &&
        (pFilter = get_filter_tcpraw(pState, pip, pip6, ptcp)) == NULL) {
@@ -368,11 +373,16 @@ static const CAPTURE_STREAM_T *capture_onRawPkt_int(unsigned char *pArg,
     pudp = (struct udphdr *) ((unsigned char *)pip + iphl);
     pudp->source = ntohs(pudp->source);
     pudp->dest = ntohs(pudp->dest);
-
-//sprintf(delme[0], "%s:%d", inet_ntoa(pip->ip_src),pudp->source);
-//sprintf(delme[1], "%s:%d", inet_ntoa(pip->ip_dst),pudp->dest);
-//fprintf(stdout, "%s->%s\n", delme[0], delme[1]);
-
+/*
+    if(pip6) {
+      sprintf(delme[0], "%s:%d", inet_ntop(AF_INET6, &pip6->ip6_src, delme[2], sizeof(delme[2])), pudp->source);
+      sprintf(delme[1], "%s:%d", inet_ntop(AF_INET6, &pip6->ip6_dst, delme[2], sizeof(delme[2])), pudp->dest);
+    } else {
+      sprintf(delme[0], "%s:%d", inet_ntoa(pip->ip_src),pudp->source);
+      sprintf(delme[1], "%s:%d", inet_ntoa(pip->ip_dst),pudp->dest);
+    }
+    //fprintf(stdout, "%s->%s\n", delme[0], delme[1]);
+*/
     haveRtpFilter = have_filter_rtp(pState);
 
     //if(pState->filt.numFilters > 0 && !haveRtpFilter && 
@@ -382,12 +392,11 @@ static const CAPTURE_STREAM_T *capture_onRawPkt_int(unsigned char *pArg,
 
     if(pState->filt.numFilters > 0 && 
        (pFilter = get_filter_udpraw(pState, pip, pip6, pudp)) == NULL) {
-//fprintf(stdout, "discarded pkt %s->%s\n", delme[0], delme[1]);
+      //fprintf(stdout, "discarded pkt %s->%s\n", delme[0], delme[1]);
       return NULL;
     } 
                       
     if(pState->filt.numFilters == 0 || haveRtpFilter) {
-
 
       if((isRtp = !capture_decodeRtp((struct ether_header *) packet,
                          pip, 
@@ -451,34 +460,58 @@ const CAPTURE_STREAM_T *capture_onUdpSockPkt(CAPTURE_STATE_T *pState,
                                              unsigned char *pData, 
                                              unsigned int len, 
                                              unsigned int lenPrepend,
-                                             struct sockaddr_in *pSaSrc, 
-                                             struct sockaddr_in *pSaDst,
+                                             const struct sockaddr *pSaSrc, 
+                                             const struct sockaddr *pSaDst,
                                              struct timeval *ptv,
                                              const NETIO_SOCK_T *pnetsock) {
 
   struct udphdr *pudp = (struct udphdr *) (pData - 8);
-  struct ip *pip = (struct ip *) (((unsigned char *) pudp) - 20);
-  struct ether_header *peth = (struct ether_header *) (((unsigned char *) pip) - 14);
+  struct ip *pip4 = NULL;
+  struct ip6_hdr *pip6 = NULL;
+  struct ether_header *peth = NULL;
   struct pcap_pkthdr pkthdr;
+  unsigned int hdrslen = 14 + 8; // eth + udp;
+
+  if(pSaSrc->sa_family == AF_INET6) {
+
+    pip6 = (struct ip6_hdr *) (((unsigned char *) pudp) - IPV6_HDR_SIZE);
+    peth = (struct ether_header *) (((unsigned char *) pip6) - 14);
+    hdrslen += IPV6_HDR_SIZE;
+
+    pip6->ip6_ctlun.ip6_un1.ip6_un1_flow = htonl( 6 << 28 | 0 << 20 | 0xc9730 ); // version | traffic class | flow label
+    pip6->ip6_ctlun.ip6_un1.ip6_un1_plen = htons(8 + len);  // payload len
+    pip6->ip6_ctlun.ip6_un1.ip6_un1_nxt = IPPROTO_UDP;
+    pip6->ip6_ctlun.ip6_un1.ip6_un1_hlim = 64; // hop limit
+    memcpy(&pip6->ip6_src.s6_addr[0], &((const struct sockaddr_in6 *) pSaSrc)->sin6_addr.s6_addr[0], ADDR_LEN_IPV6);
+    memcpy(&pip6->ip6_dst.s6_addr[0], &((const struct sockaddr_in6 *) pSaDst)->sin6_addr.s6_addr[0], ADDR_LEN_IPV6);
+
+  } else {
+
+    pip4 = (struct ip *) (((unsigned char *) pudp) - IPV4_HDR_SIZE);
+    peth = (struct ether_header *) (((unsigned char *) pip4) - 14);
+    hdrslen += IPV4_HDR_SIZE;
+
+    // IPv4
+    pip4->ip_v = 4;
+    pip4->ip_hl = 5;
+    pip4->ip_off = 0;
+    pip4->ip_p = IPPROTO_UDP; 
+    pip4->ip_len = htons(28 + len);
+    pip4->ip_off = 0;
+    pip4->ip_src = ((const struct sockaddr_in *) pSaSrc)->sin_addr;
+    pip4->ip_dst = ((const struct sockaddr_in *) pSaDst)->sin_addr;
+
+  }
 
   // pre-pend assumed eth, ip, udp headers
   peth->ether_dhost[0] = 0x00;
   peth->ether_type = htons(0x0800);
 
-  pip->ip_v = 4;
-  pip->ip_hl = 5;
-  pip->ip_off = 0;
-  pip->ip_p = IPPROTO_UDP; // udp
-  pip->ip_len = 28 + len;
-  pip->ip_off = 0;
-  pip->ip_src = pSaSrc->sin_addr;
-  pip->ip_dst = pSaDst->sin_addr;
-
-  pudp->source = pSaSrc->sin_port;
-  pudp->dest = pSaDst->sin_port;
+  pudp->source = PINET_PORT(pSaSrc);
+  pudp->dest = PINET_PORT(pSaDst);
   pudp->len = 8 + len;
 
-  pkthdr.caplen = 42 + len;
+  pkthdr.caplen = hdrslen + len;
   pkthdr.len = pkthdr.caplen;
   pkthdr.ts.tv_sec = ptv->tv_sec;
   pkthdr.ts.tv_usec = ptv->tv_usec;
