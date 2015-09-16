@@ -127,7 +127,7 @@ int conf_parse_keyval(KEYVAL_PAIR_T *pKv, const char *buf,
 
   
   if((lenkey = (p2 - p)) > sizeof(pKv->key) - 1) {
-    LOG(X_WARNING("Key size truncated from %d -> %d"), lenval, sizeof(pKv->val) - 1);
+    LOG(X_WARNING("Key size truncated from %d -> %d"), lenkey, sizeof(pKv->val) - 1);
     lenkey = sizeof(pKv->key) - 1;
   }
   if(lenkey > 0) {

@@ -447,7 +447,7 @@ static int netio_ssl_recvnb(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned
                             unsigned int mstmt) {
   struct timeval tv, tv0;
   fd_set fdsetRd;
-  int rc;
+  int rc = 0;
   int rcerr;
   int tryread = 0;
   unsigned int mselapsed = 0;  
