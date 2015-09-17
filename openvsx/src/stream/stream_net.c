@@ -35,7 +35,7 @@ enum STREAM_NET_ADVFR_RC stream_net_check_time(TIME_VAL *ptvStart, uint64_t *pfr
 
   if(*pframeId == 0) {
     *ptvStart = tvNow;
-  } else if((tvElapsed = (double)(tvElapsed = (tvNow - *ptvStart))/1000) <
+  } else if((tvElapsed = (double)(tvNow - *ptvStart)/1000) <
             (tvEquiv = (double)1000 * *pframeId * frameDeltaHz / clockHz)) {
 
     us = (tvEquiv - tvElapsed) * 1000;

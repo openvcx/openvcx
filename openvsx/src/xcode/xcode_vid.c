@@ -1180,7 +1180,7 @@ static enum STREAM_NET_ADVFR_RC init_vidparams(STREAM_XCODE_DATA_T *pData) {
              pXcode->out[0].crop.padRight, pXcode->out[0].crop.padBottom);
   }
 
-  if(pXcode->out[outidx].cfgOutV == 0 || pXcode->out[outidx].cfgOutH == 0 || padstr[0] != '\0') {
+  if(pXcode->out[0].cfgOutV == 0 || pXcode->out[0].cfgOutH == 0 || padstr[0] != '\0') {
     LOG(X_DEBUG("Set output video resolution to %dx%d %s"), pXcode->out[0].resOutH, pXcode->out[0].resOutV, padstr);
   }
 

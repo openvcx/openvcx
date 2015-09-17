@@ -525,7 +525,7 @@ static int jtbuf_createNACKs(CAPTURE_STREAM_T *pStream, const struct timeval *pt
   plastRcvdTs = &pStream->pjtBuf->pPkts[pStream->pjtBuf->idxPkt].pktData.u.rtp.ts;
 
   //memset(pStream->rtcpRR.fbs_nack, 0, sizeof(pStream->rtcpRR.fbs_nack));
-  for(count = 0; count <= RTCP_NACK_PKTS_MAX; count++) {
+  for(count = 0; count < RTCP_NACK_PKTS_MAX; count++) {
     pStream->rtcpRR.fbs_nack[count].pid = 0;
     pStream->rtcpRR.fbs_nack[count].blp = 0;
   }

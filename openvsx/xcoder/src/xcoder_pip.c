@@ -120,7 +120,7 @@ static void blend_pixels_noalpha(unsigned char *dst_data[4],
   int slice_end_y;
   int end_y, start_y;
   int width, height;
-  int hsub, vsub;
+  int hsub = 0, vsub = 0;
   uint8_t *dp;
   const uint8_t *sp;
   int wp, hp;

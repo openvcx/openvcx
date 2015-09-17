@@ -68,7 +68,6 @@ typedef uint32_t in_addr_t;
 #include <netdb.h>
 #endif // __MINGW32__
 #include <pthread.h>
-#include <fcntl.h>
 #include <limits.h>
 //#include <ctype.h>
 #include "wincompat.h"
@@ -80,7 +79,6 @@ typedef uint32_t in_addr_t;
 
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 #include <time.h>
 #include <math.h>
 #include <errno.h>

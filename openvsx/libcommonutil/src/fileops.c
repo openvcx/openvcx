@@ -809,10 +809,20 @@ int fileops_setcwd(const char *buf) {
   return chdir(buf);
 }
 int fileops_stat(const char *path, struct stat *buf) {
+#if defined(__linux__)
+  return stat64(path, buf);
+#else
+  // __APPLE__
   return stat(path, buf);
+#endif // __linux
 }
 int fileops_lstat(const char *path, struct stat *buf) {
+#if defined(__linux__)
+  return lstat64(path, buf);
+#else
+  // __APPLE__
   return lstat(path, buf);
+#endif // __linux
 }
 char *fileops_fgets(char *s, int n, FILE_HANDLE fp) {
   return fgets(s, n, fp);

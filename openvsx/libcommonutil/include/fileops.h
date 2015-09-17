@@ -24,9 +24,10 @@
 #ifndef __FILEOPS_H__
 #define __FILEOPS_H__
 
-#include <fcntl.h>
 
 #if defined(WIN32)
+
+#include <fcntl.h>
 
 #define FILE_HANDLE                         HANDLE
 #define FILEOPS_INVALID_FP                  NULL
@@ -114,6 +115,8 @@ int fileops_Write(FILE_HANDLE fp, char *fmt, ...);
 
 #if defined(__linux__) 
 
+#include <stdio.h>
+
 #if !defined(__USE_LARGEFILE64)
 #define __USE_LARGEFILE64
 #endif // __USE_LARGEFILE64
@@ -121,6 +124,8 @@ int fileops_Write(FILE_HANDLE fp, char *fmt, ...);
 #if !defined(__USE_FILE_OFFSET64)
 #define __USE_FILE_OFFSET64
 #endif // __USE_FILE_OFFSET64
+
+#include <fcntl.h>
 
 #include <dirent.h>
 
@@ -130,9 +135,17 @@ int fileops_Write(FILE_HANDLE fp, char *fmt, ...);
 
 #endif // __linux__
 
+#if defined(__APPLE__)
+
+#include <stdio.h>
+#include <fcntl.h>
+
+#endif // (__APPLE__)
+
+
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <stdio.h>
+//#include <stdio.h>
 #include <dirent.h>
 
 #if !defined(__MINGW32__)

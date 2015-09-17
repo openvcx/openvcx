@@ -91,7 +91,7 @@ typedef struct EBML_DATA_VAL {
 typedef struct EBML_SYNTAX {
   uint32_t                   id;
   EBML_TYPE_T                type;
-  unsigned int               offset;
+  uint64_t                   offset;
   const struct EBML_SYNTAX  *pchild;
   EBML_DATA_VAL_T            dflt;
   unsigned int               dynsize;
