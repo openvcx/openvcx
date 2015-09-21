@@ -687,6 +687,7 @@ int capture_filterFromSdp(const char *sdppath,
 
   //avc_dumpHex(stderr, pFilters[0].u_seqhdrs.vid.u.mpg4v.seqHdrs.pHdrs, pFilters[0].u_seqhdrs.vid.u.mpg4v.seqHdrs.hdrsLen, 0);
   //fprintf(stderr, "codecType:%d pps_len:%d\n", pFilters[0].mediaType, pFilters[0].u_seqhdrs.vid.u.h264.spspps.pps_len);
+  //LOG(X_DEBUG("mt[0]:%d, port[0]:%d, mt[1]:%d, port[1]:%d, vid.common.port:%d, aud.common.port: %d"), pFilters[0].mediaType, pFilters[0].dstPort, pFilters[1].mediaType, pFilters[1].dstPort, pSdp->vid.common.port, pSdp->aud.common.port);
 
   return numports;
 }

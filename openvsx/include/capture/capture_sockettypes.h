@@ -61,6 +61,7 @@ typedef struct CAP_ASYNC_DESCR {
   int                           running;
   struct STREAMER_CFG          *pStreamerCfg;
   void                         *pUserData;
+  PKTQUEUE_T                   *pQExit;
   char                          tid_tag[LOGUTIL_TAG_LENGTH];
 } CAP_ASYNC_DESCR_T;
 

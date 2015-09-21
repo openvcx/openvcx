@@ -833,6 +833,10 @@ static CONNECT_RETRY_RC_T stream_rtsp_req_setupchannel(STREAMER_CFG_T *pStreamer
     pSdpProg = &pSession->sdp.aud.common;
   }
 
+  if(!INET_ADDR_VALID(pProg->dstAddr)) {
+    memcpy(&pProg->dstAddr, &pSession->sd.sa, sizeof(pProg->dstAddr));
+  }
+
   //
   // Add the trackId to the URI
   //

@@ -36,6 +36,7 @@ static int rtmp_parse_chunksz(RTMP_CTXT_T *pRtmp) {
   }
 
   chunksz = htonl(*((uint32_t *) &pRtmp->in.buf[pRtmp->in.idx]));
+
   if(chunksz <= 0 || chunksz > 0xffff) {
     LOG(X_WARNING("refusing to set rtmp chunk size to %u"), chunksz);
   } else if(chunksz != pRtmp->chunkSz) {
@@ -72,7 +73,6 @@ static int rtmp_parse_readpkt_chunkhdr(RTMP_CTXT_T *pRtmp) {
       return -1;
     }
     streamIdx -= RTMP_STREAM_IDX_CTRL;
-
 
     if(pRtmp->streamIdxPrev < RTMP_STREAM_INDEXES &&
        pRtmp->streamIdxPrev != streamIdx &&
@@ -141,7 +141,6 @@ static int rtmp_parse_readpkt_chunkhdr(RTMP_CTXT_T *pRtmp) {
 #endif // DEBUG_RTMP_DUMP
  
   }
-
 
   // Read the rest of the chunk header
   if(pRtmp->pkt[pRtmp->streamIdx].idxInHdr > 0 &&
@@ -289,6 +288,8 @@ int rtmp_parse_readpkt(RTMP_CTXT_T *pRtmp) {
 #endif // DEBUG_RTMP_READ
 
   } while(pRtmp->pkt[pRtmp->streamIdx].idxInPkt < pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt);
+
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - parse_readpkt contentType: 0x%x"), pRtmp->pkt[pRtmp->streamIdx].hdr.contentType); );
 
   //
   // Handle any essential packets for properly decoding the rtmp stream

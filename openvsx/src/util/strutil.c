@@ -84,12 +84,16 @@ int strutil_parseAddress(const char *str, char host[], size_t szHost, char ports
       }
       memcpy(host, str, sz);
       host[sz] = '\0';
+
     } else {
       //
       // If no host part is specified (only port number given) then default to IPv4 INADDR_ANY
       //
       snprintf(host, szHost, "0.0.0.0");
       p = str;
+      if(*p == ':') {
+        p++;
+      }
     }
   }
 

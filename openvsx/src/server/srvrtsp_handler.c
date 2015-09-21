@@ -1318,12 +1318,14 @@ int rtsp_do_play(RTSP_REQ_CTXT_T *pRtsp, char *bufhdrs, unsigned int szbufhdrs) 
       destCfg.dstPortRtcp = RTCP_PORT_FROM_RTP(destCfg.dstPortRtcp);
 
     } else {
+
       destCfg.haveDstAddr = 1;
       memcpy(&destCfg.u.dstAddr, &pRtsp->pSession->vid.dstAddr, sizeof(destCfg.u.dstAddr));
       destCfg.dstPort = pRtsp->pSession->vid.ports[0];
       //destCfg.dstPortRtcp = RTCP_PORT_FROM_RTP(destCfg.dstPort);
       destCfg.dstPortRtcp  = pRtsp->pSession->vid.ports[1];
       destCfg.localPort = pRtsp->pSession->vid.localports[0];
+
     }
     if(pRtsp->pSession->refreshtimeoutviartcp > 0) {
       destCfg.ptvlastupdate = &pRtsp->pSession->tvlastupdate;
@@ -1346,6 +1348,7 @@ int rtsp_do_play(RTSP_REQ_CTXT_T *pRtsp, char *bufhdrs, unsigned int szbufhdrs) 
       if(bufhdrs) {
         snprintf(bufhdrs, szbufhdrs, "%s: Failed to create video\r\n", RTSP_HDR_SRVERROR);
       }
+      LOG(X_ERROR("Failed to add RTSP video destination")); 
       rc = -1;
 
     } else if(destCfg.pMonitor && pRtsp->pSession->vid.pDest->pstreamStats) {
@@ -1434,6 +1437,7 @@ int rtsp_do_play(RTSP_REQ_CTXT_T *pRtsp, char *bufhdrs, unsigned int szbufhdrs) 
       if(bufhdrs) {
         snprintf(bufhdrs, szbufhdrs, "%s: Failed to create audio\r\n", RTSP_HDR_SRVERROR);
       }
+      LOG(X_ERROR("Failed to add RTSP audio destination")); 
       rc = -1;
 
     } else if(destCfg.pMonitor && pRtsp->pSession->aud.pDest->pstreamStats) {

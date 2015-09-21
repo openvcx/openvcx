@@ -664,8 +664,8 @@ int rtmp_send_chunkdata(RTMP_CTXT_T *pRtmp, const uint8_t rtmpStreamIdx,
 
   while(idxData < lenData) {
 
-    //fprintf(stderr, "rtmp data chunk hdr len:%d\n", pRtmp->out.idx);
-    //avc_dumpHex(stderr, pRtmp->out.buf, pRtmp->out.idx, 1);
+    VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_send_chunkdata [%d]/%d, len:%d"), idxData, lenData, pRtmp->out.idx);
+                    LOGHEXT_DEBUG(pRtmp->out.buf, pRtmp->out.idx); );
 
     if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, pRtmp->out.buf,
                         pRtmp->out.idx)) < 0) {
@@ -674,16 +674,15 @@ int rtmp_send_chunkdata(RTMP_CTXT_T *pRtmp, const uint8_t rtmpStreamIdx,
     pRtmp->out.buf[0] = 0xc0 | (rtmpStreamIdx & 0x3f);
     pRtmp->out.idx = 1;
 
-    //if(lenData - idxData + chunkStartIdx < RTMP_CHUNK_SZ_OUT) {
     if(lenData - idxData + chunkStartIdx < pRtmp->chunkSz) {
       lenXmit = lenData - idxData; 
     } else {
-      //lenXmit = RTMP_CHUNK_SZ_OUT - chunkStartIdx;
       lenXmit = pRtmp->chunkSz - chunkStartIdx;
     }
 
-    //fprintf(stderr, "rtmp data chunk [%d] len:%d chunkSz:%d\n", idxData, lenXmit, pRtmp->chunkSz);
-    //avc_dumpHex(stderr, &pData[idxData], lenXmit, 1);
+    VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_send_chunkdata [%d]/%d, chunksz: %d, len:%d"), 
+                        idxData, lenData, pRtmp->chunkSz, lenXmit);
+                    LOGHEXT_DEBUG(&pData[idxData], lenXmit); );
 
     if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, 
                         &pData[idxData], lenXmit)) < 0) {
@@ -710,6 +709,9 @@ int rtmp_cbReadDataNet(void *pArg, unsigned char *pData, unsigned int len) {
     }
     return -1;
   }
+
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_read len:%d/%d"), rc, len);
+                  LOGHEXT_DEBUG(pData, rc); );
 
   pRtmp->bytesRead += len;
 
@@ -738,13 +740,17 @@ int rtmp_parse_readpkt_full(RTMP_CTXT_T *pRtmp, int needpacket) {
     }
   }  
 
-  //fprintf(stderr, "rtmp full pkt sz:%d ct:%d, id:%d, ts:%d(%d), dest:0x%x, hdr:%d\n", pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt, pRtmp->pkt[pRtmp->streamIdx].hdr.contentType, pRtmp->pkt[pRtmp->streamIdx].hdr.id, pRtmp->pkt[pRtmp->streamIdx].hdr.ts, pRtmp->pkt[pRtmp->streamIdx].tsAbsolute, pRtmp->pkt[pRtmp->streamIdx].hdr.dest, pRtmp->pkt[pRtmp->streamIdx].szHdr0);
+  VSX_DEBUG_RTMP( 
+    LOG(X_DEBUG("RTMP - parse_readpkt_full pkt szPkt:%d, contentType:0x%x, id:%d, ts:%d(%d), dest:0x%x, hdr:%d"), 
+       pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt, pRtmp->pkt[pRtmp->streamIdx].hdr.contentType, 
+       pRtmp->pkt[pRtmp->streamIdx].hdr.id, pRtmp->pkt[pRtmp->streamIdx].hdr.ts, pRtmp->pkt[pRtmp->streamIdx].tsAbsolute, 
+       pRtmp->pkt[pRtmp->streamIdx].hdr.dest, pRtmp->pkt[pRtmp->streamIdx].szHdr0); );
 
   switch(pRtmp->pkt[pRtmp->streamIdx].hdr.contentType) {
     case RTMP_CONTENT_TYPE_INVOKE:
     case RTMP_CONTENT_TYPE_MSG:
     case RTMP_CONTENT_TYPE_NOTIFY:
-      //avc_dumpHex(stderr, pRtmp->in.buf, pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt, 1);
+      VSX_DEBUG_RTMP( LOGHEXT_DEBUG(pRtmp->in.buf, pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt) );
       rtmp_parse_invoke(pRtmp, NULL);
       rc = 1;
       break;
@@ -764,13 +770,11 @@ int rtmp_parse_readpkt_full(RTMP_CTXT_T *pRtmp, int needpacket) {
       pRtmp->methodParsed = RTMP_METHOD_CHUNKSZ;
       break;
     default:
-      //avc_dumpHex(stderr, pRtmp->in.buf, pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt, 1);
-
+      VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - contentType: 0x%x"), pRtmp->pkt[pRtmp->streamIdx].hdr.contentType);
+                      LOGHEXT_DEBUG(pRtmp->in.buf, pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt) );
       break;
   }
 
   return 0;
 }
-
-
 

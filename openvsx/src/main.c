@@ -1042,6 +1042,7 @@ enum CMD_OPT {
   CMD_OPT_DEBUG_RTP,
   CMD_OPT_DEBUG_RTCP,
   CMD_OPT_DEBUG_RTSP,
+  CMD_OPT_DEBUG_RTMP,
   CMD_OPT_DEBUG_STREAMAV,
   CMD_OPT_DEBUG_SSL,
   CMD_OPT_DEBUG_SRTP,
@@ -1130,6 +1131,7 @@ int main(int argc, char *argv[]) {
                  { "debug-rtsp ", optional_argument,       NULL, CMD_OPT_DEBUG_RTSP },
                  { "debug-rtp ",  optional_argument,       NULL, CMD_OPT_DEBUG_RTP },
                  { "debug-rtcp ", optional_argument,       NULL, CMD_OPT_DEBUG_RTCP },
+                 { "debug-rtmp ", optional_argument,       NULL, CMD_OPT_DEBUG_RTMP },
                  { "debug-streamav", optional_argument,    NULL, CMD_OPT_DEBUG_STREAMAV },
                  { "debug-ssl",   optional_argument,       NULL, CMD_OPT_DEBUG_SSL },
                  { "debug-srtp",  optional_argument,       NULL, CMD_OPT_DEBUG_SRTP },
@@ -2534,6 +2536,9 @@ int main(int argc, char *argv[]) {
       case CMD_OPT_DEBUG_RTSP:
         g_debug_flags |= VSX_DEBUG_FLAG_RTSP;
         g_debug_flags |= VSX_DEBUG_FLAG_HTTP;
+        break;
+      case CMD_OPT_DEBUG_RTMP:
+        g_debug_flags |= VSX_DEBUG_FLAG_RTMP;
         break;
       case CMD_OPT_DEBUG_NET:
         g_debug_flags |= VSX_DEBUG_FLAG_NET;

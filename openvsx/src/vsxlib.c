@@ -1403,7 +1403,8 @@ static int vsxlib_set_output_int(STREAMER_CFG_T *pStreamerCfg,
       strncpy(pStreamerCfg->pdestsCfg[0].dstHost, outputs[0], sizeof(pStreamerCfg->pdestsCfg[0].dstHost) -1);
       pStreamerCfg->numDests = 1;
 
-    } else if(IS_CAPTURE_FILTER_TRANSPORT_RTP(outTransType)) {
+    } else if(IS_CAPTURE_FILTER_TRANSPORT_RTP(outTransType) ||
+              outTransType == CAPTURE_FILTER_TRANSPORT_UDPRAW) {
 
       pStreamerCfg->numDests = 1;
       if(parse_output_dest(pStreamerCfg, 

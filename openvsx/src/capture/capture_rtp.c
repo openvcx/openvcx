@@ -670,10 +670,17 @@ static int capture_reorderPkt(CAPTURE_STATE_T *pState,
   int seqTmp;
   int seqRoll;
   int rc;
-  unsigned int idxPkt = pStream->pjtBuf->idxPkt;
+  unsigned int idxPkt;
   unsigned int idxPktStore;
-  CAPTURE_JTBUF_PKT_T *pJtBufPkt = &pStream->pjtBuf->pPkts[idxPkt];
+  CAPTURE_JTBUF_PKT_T *pJtBufPkt = NULL;
+
+  if(!pStream->pjtBuf) {
+    return -1;
+  }
   
+  idxPkt = pStream->pjtBuf->idxPkt;
+  pJtBufPkt = &pStream->pjtBuf->pPkts[idxPkt];
+
   pStream->numBytesPayload += PKTWIRELEN(pPkt->data.payload);
   pStream->numBytes += (pPkt->data.u.rtp.marksz & PKTDATA_RTP_MASK_SZ);
 
@@ -1116,6 +1123,15 @@ const CAPTURE_STREAM_T *capture_processRtp(CAPTURE_STATE_T *pState,
     }
 
     //fprintf(stderr, "new rtp stream %s filter:0x%x, ssrc:0x%x\n", pStream->strSrcDst, pFilter, pPkt->hdr.key.ssrc);
+  } else { 
+    if(!pStream->pjtBuf || !pStream->pjtBuf->pPkts) {
+      // We may get here in case of RTSP TCP interleaved mode if the client's RTP ssrc changes, 
+      // but the channelId does not
+      pthread_mutex_unlock(&pState->mutexStreams);
+      LOG(X_ERROR("No jitter buffer set for RTP stream pt:%d, ssrc:0x%x"),
+                  pPkt->hdr.payloadType, pPkt->hdr.key.ssrc);
+      return NULL;
+    }
   }
 
   pthread_mutex_unlock(&pState->mutexStreams);

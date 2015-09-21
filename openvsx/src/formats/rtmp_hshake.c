@@ -350,8 +350,8 @@ static int verifydigest(const unsigned char *pIn, RTMP_OFFSET_TYPES_T *pTypes,
     memset(digest, 0, sizeof(digest));
   } else {
 
-    //fprintf(stderr, "client signature offset:%d\n", offset);
-    //avc_dumpHex(stderr, &pIn[offset], 30, 1);
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - verifydigest client signature offset: %d"), offset);
+                  LOGHEXT_DEBUG(&pIn[offset], 30) );
 
     if((rc = rtmp_sign(offset, pIn, key, lenKey, digest)) < 0) {
       return rc;
@@ -372,8 +372,8 @@ static int verifydigest(const unsigned char *pIn, RTMP_OFFSET_TYPES_T *pTypes,
       return -1;
     }
 
-    //fprintf(stderr, "client signature offset:%d\n", offset);
-    //avc_dumpHex(stderr, &pIn[offset], 30, 1);
+    VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - verifydigest client secondary signature offset: %d"), offset);
+                    LOGHEXT_DEBUG(&pIn[offset], 30) );
 
     if((rtmp_sign(offset, pIn, key, lenKey, digest)) < 0) {
       return rc;
@@ -580,6 +580,9 @@ int rtmp_handshake_srv(RTMP_CTXT_T *pRtmp) {
     return rc;
   }
 
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - handshake_srv recv: %d/%d"), rc, RTMP_HANDSHAKE_SZ + 1);
+                  LOGHEXT_DEBUG(buf, RTMP_HANDSHAKE_SZ + 1) );
+
   if(buf[0] != RTMP_HANDSHAKE_HDR) {
     LOG(X_ERROR("Invalid rtmp handshake header 0x%x"), buf[0]);
     return -1;
@@ -594,6 +597,8 @@ int rtmp_handshake_srv(RTMP_CTXT_T *pRtmp) {
   //fprintf(stderr, "server handshake:\n");
   //avc_dumpHex(stderr, pRtmp->in.buf, 17, 1);
   //avc_dumpHex(stderr, &pRtmp->in.buf[1537], 16, 1);
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - handshake_srv send: %d"), RTMP_HANDSHAKE_SZ * 2 + 1);
+                  LOGHEXT_DEBUG(pRtmp->in.buf, RTMP_HANDSHAKE_SZ * 2 + 1) );
 
   if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, pRtmp->in.buf,
                       RTMP_HANDSHAKE_SZ * 2 + 1)) < 0) {
@@ -606,6 +611,9 @@ int rtmp_handshake_srv(RTMP_CTXT_T *pRtmp) {
     LOG(X_ERROR("Failed to receive %d rtmp handshake bytes"), RTMP_HANDSHAKE_SZ);
     return rc;
   }
+
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - handshake_srv recv: %d/%d"), rc, RTMP_HANDSHAKE_SZ);
+                  LOGHEXT_DEBUG(buf, RTMP_HANDSHAKE_SZ) );
 
   //TODO: verify client handshake
   // memcmp(&buf[1], &pRtmp->in.buf[1], RTMP_HANDSHAKE_SZ);
@@ -674,6 +682,9 @@ int rtmp_handshake_cli(RTMP_CTXT_T *pRtmp, int fp9) {
 
 #endif // VSX_HAVE_RTMP_HMAC
 
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - handshake_cli send: %d"), RTMP_HANDSHAKE_SZ + 1);
+                  LOGHEXT_DEBUG(pRtmp->out.buf, RTMP_HANDSHAKE_SZ + 1) );
+
   if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, pRtmp->out.buf,
                       RTMP_HANDSHAKE_SZ + 1)) < 0) {
     return rc;
@@ -685,6 +696,9 @@ int rtmp_handshake_cli(RTMP_CTXT_T *pRtmp, int fp9) {
     LOG(X_ERROR("Failed to receive %d rtmp handshake bytes"), RTMP_HANDSHAKE_SZ);
     return rc;
   }
+
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - handshake_cli recv: %d/%d"), rc, RTMP_HANDSHAKE_SZ * 2 + 1);
+                  LOGHEXT_DEBUG(pRtmp->in.buf, rc) );
 
   if(pRtmp->in.buf[0] != RTMP_HANDSHAKE_HDR) {
     LOG(X_ERROR("RTMP Invalid server handshake header byte 0x%x"), pRtmp->in.buf[0]);
@@ -733,6 +747,9 @@ int rtmp_handshake_cli(RTMP_CTXT_T *pRtmp, int fp9) {
 
   }
 #endif // VSX_HAVE_RTMP_HMAC
+
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - handshake_cli send: %d"), RTMP_HANDSHAKE_SZ);
+                  LOGHEXT_DEBUG(bufout, RTMP_HANDSHAKE_SZ) );
 
   if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa,
                       bufout, RTMP_HANDSHAKE_SZ)) < 0) {

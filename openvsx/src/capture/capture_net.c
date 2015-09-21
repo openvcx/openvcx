@@ -133,7 +133,9 @@ int cbstream_getpkt_pktqueue(void *p, unsigned char *pBuf,
     //fprintf(stderr, "cbstream_getpkt_pktqueue::pktqueue_readpkt\n");
 
     if((rc = pktqueue_readpkt(pQueue, pBuf, len, pXtra, pNumLost)) < 0) {
-      LOG(X_ERROR("Error cb reading %d from packet queue"), len);
+      if(!pQueue->quitRequested) {
+        LOG(X_ERROR("Error cb reading %d from packet queue"), len);
+      }
       return rc;
     } else if(rc == 0) {
       pktqueue_waitforunreaddata(pQueue); 
@@ -209,7 +211,9 @@ static void capture_pktqueue_rdproc(void *parg) {
       pCap->pSockList->netsockets[0].flags |= NETIO_FLAG_SSL_TLS; 
     }
 
-    pCap->pStreamerCfg->sharedCtxt.state = STREAMER_SHARED_STATE_UNKNOWN;
+    if(pCap->pStreamerCfg) {
+      pCap->pStreamerCfg->sharedCtxt.state = STREAMER_SHARED_STATE_UNKNOWN;
+    }
 
     rc = capture_httpget(pCap);
 
@@ -220,7 +224,9 @@ static void capture_pktqueue_rdproc(void *parg) {
       pCap->pSockList->netsockets[0].flags |= NETIO_FLAG_SSL_TLS; 
     }
 
-    pCap->pStreamerCfg->sharedCtxt.state = STREAMER_SHARED_STATE_UNKNOWN;
+    if(pCap->pStreamerCfg) {
+      pCap->pStreamerCfg->sharedCtxt.state = STREAMER_SHARED_STATE_UNKNOWN;
+    }
 
     if(pCap->pcommon->addrsExt[0] == NULL || pCap->pcommon->addrsExt[0] == '\0') {
       LOG(X_DEBUG("RTMP capture server mode"));
@@ -231,7 +237,9 @@ static void capture_pktqueue_rdproc(void *parg) {
     }
 
   } else if(pCap->pcommon->filt.filters[0].transType == CAPTURE_FILTER_TRANSPORT_DEV) {
-    pCap->pStreamerCfg->sharedCtxt.state = STREAMER_SHARED_STATE_UNKNOWN;
+    if(pCap->pStreamerCfg) {
+      pCap->pStreamerCfg->sharedCtxt.state = STREAMER_SHARED_STATE_UNKNOWN;
+    }
     rc = capture_devStart(pCap);
   } else { 
 
@@ -241,7 +249,10 @@ static void capture_pktqueue_rdproc(void *parg) {
     //
     rc = capture_socketStart(pCap);
 
-    pCap->pStreamerCfg->sharedCtxt.state = STREAMER_SHARED_STATE_UNKNOWN;
+    if(pCap->pStreamerCfg) {
+      pCap->pStreamerCfg->sharedCtxt.state = STREAMER_SHARED_STATE_UNKNOWN;
+    }
+    // interrupt 
 
   }
 
@@ -256,6 +267,12 @@ static void capture_pktqueue_rdproc(void *parg) {
 #endif // VSX_HAVE_STREAMER
 
   capture_setstate(pCap, STREAMER_STATE_FINISHED, 1);
+
+  if(pCap->pQExit) {
+    // pStreamerCfg not set, likely we're run from async file recorder context, so signal the queue reader thread
+    pCap->pQExit->quitRequested = 1;
+    pktqueue_wakeup(pCap->pQExit); 
+  }
 
   LOG(X_DEBUG("Exiting capture thread with code: %d"), rc);
 
@@ -1176,6 +1193,7 @@ static int record_async(SOCKET_LIST_T *pSockList,
 
 
   init_cap_async(&capAsyncArg, &pLocalCfg->common, pSockList, NULL);
+  capAsyncArg.pQExit = pLocalCfg->capActions[0].pQueue;
 
   memset(&pkt, 0, sizeof(pkt));
   memset(&stream, 0, sizeof(stream));

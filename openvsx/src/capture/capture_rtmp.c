@@ -1213,12 +1213,19 @@ static int cap_rtmp_handle_conn(RTMP_CTXT_CLIENT_T *pRtmp) {
   pRtmp->ctxt.state = RTMP_STATE_CLI_HANDSHAKEDONE;
   LOG(X_DEBUG("rtmp handshake completed"));
 
-  //
-  // Read connect packet
-  //
-  if((rc = rtmp_parse_readpkt_full(&pRtmp->ctxt, 1)) < 0 ||
-    pRtmp->ctxt.state != RTMP_STATE_CLI_CONNECT) {
-    LOG(X_ERROR("Failed to read rtmp connect request"));
+  do {
+
+    //
+    // Read connect packet
+    //
+    if((rc = rtmp_parse_readpkt_full(&pRtmp->ctxt, 1)) < 0) {
+      break;
+    }
+
+  } while(pRtmp->ctxt.state != RTMP_STATE_CLI_CONNECT);
+
+  if(rc < 0) {
+    LOG(X_ERROR("Failed to read rtmp connect request.  State: %d"), pRtmp->ctxt.state);
     return rc;
   }
 
@@ -1231,6 +1238,10 @@ static int cap_rtmp_handle_conn(RTMP_CTXT_CLIENT_T *pRtmp) {
   rtmp_create_ping(&pRtmp->ctxt, 0, 0);
   rtmp_create_chunksz(&pRtmp->ctxt, RTMP_CHUNK_SZ_OUT);
   rtmp_create_result_invoke(&pRtmp->ctxt);
+
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - cap_rtmp_handle_conn send: %d"), pRtmp->ctxt.out.idx);
+                  LOGHEXT_DEBUG(pRtmp->ctxt.out.buf, pRtmp->ctxt.out.idx); );
+
   if((rc = netio_send(&pRtmp->ctxt.pSd->netsocket, (const struct sockaddr *) &pRtmp->ctxt.pSd->sa, 
                       pRtmp->ctxt.out.buf, pRtmp->ctxt.out.idx)) < 0) {
     return -1;
@@ -1400,6 +1411,7 @@ int capture_rtmp_server(CAP_ASYNC_DESCR_T *pCfg) {
   listenCfg.pnetsockSrv = &pCfg->pSockList->netsockets[0];
   listenCfg.pConnPool = &pool;
   listenCfg.urlCapabilities = URL_CAP_RTMPLIVE;
+  memcpy(&listenCfg.sa, &pCfg->pSockList->salist[0], sizeof(listenCfg.sa));
 
   //
   // Service any client connections on the live listening port

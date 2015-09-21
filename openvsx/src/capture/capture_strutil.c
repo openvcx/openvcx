@@ -420,8 +420,10 @@ int capture_getdestFromStr(const char *str,
 
   char buf[CAPTURE_HTTP_HOSTBUF_MAXLEN];
   unsigned int sz = 0;
+  unsigned int idx;
   const char *p;
   const char *p2 = NULL;
+  int have_onlyport = 1;
   int rc = 0;
 
   if(!str) {
@@ -438,13 +440,23 @@ int capture_getdestFromStr(const char *str,
     sz = p2 - p;
   } else {
     sz = strlen(str);
+    for(idx = 0; idx < sz; idx++) {
+      if(p[idx] < '0' || p[idx] > '9') {
+        have_onlyport = 0;
+        break;
+      }
+    }
+    if(have_onlyport) {
+      sz = 0;
+      p2 = p;
+    }
   }
 
   if(hostbuf) {
     hostbuf[0] = '\0';
   }
 
-  if(psa) {
+  if(psa && sz > 0) {
 
     if(sz >= sizeof(buf)) {
       sz = sizeof(buf) - 1;
@@ -469,12 +481,16 @@ int capture_getdestFromStr(const char *str,
 
   }
 
-  if(p2 && *p2 == ':') {
-    p = ++p2;
+  if(p2 && (*p2 == ':' || have_onlyport)) {
+
+    if(*p2 == ':') {
+      p2++;
+    }
+    p = p2;
     if((p2 = strstr(p, "/"))) {
-      sz= p2 - p;
+      sz = p2 - p;
     } else {
-      sz= strlen(p);
+      sz = strlen(p);
     }
 
     if(psa) {
@@ -483,6 +499,7 @@ int capture_getdestFromStr(const char *str,
       }
       memcpy(buf, p, sz);
       buf[sz] = '\0';
+
       if((PINET_PORT(psa)= htons(atoi(buf))) == 0) {
         LOG(X_ERROR("Invalid destination port '%s' in '%s'"), buf, str);
         return -1;
@@ -496,7 +513,7 @@ int capture_getdestFromStr(const char *str,
     *ppuri = p2;
   }
 
-  //LOG(X_DEBUG("GETDESTFROMSTR: '%s', '%s', hostbuf:'%s', ppuri: '%s'"), str, p, buf, *ppuri);
+  //LOG(X_DEBUG("GETDESTFROMSTR str: '%s', have_onlyport: %d, hostbuf: '%s', uri: '%s', inet_ntop: '%s', port: %d"), str, have_onlyport, hostbuf, ppuri ? *ppuri : "", psa ? INET_NTOP(*psa, buf, sizeof(buf)) : "", psa ? htons(PINET_PORT(psa)) : -1);
   return 0;
 }
 

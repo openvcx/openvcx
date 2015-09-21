@@ -310,16 +310,11 @@ static void srvlisten_rtmplive_proc(void *pArg) {
   struct sockaddr_storage  sa;
   int rc = 0;
   char tmp[128];
-  //char buf[SAFE_INET_NTOA_LEN_MAX];
 
   logutil_tid_add(pthread_self(), pListenCfg->tid_tag);
 
-  memset(&sa, 0, sizeof(sa));
   memset(&netsocksrv, 0, sizeof(netsocksrv));
   memcpy(&sa, &pListenCfg->sa, sizeof(sa));
-  //sa.sin_family = PF_INET;
-  //sa.sin_addr = pListenCfg->sain.sin_addr;
-  //sa.sin_port = pListenCfg->sain.sin_port;
   netsocksrv.flags = pListenCfg->netflags;
 
   if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, 5)) == INVALID_SOCKET) {

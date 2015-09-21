@@ -503,7 +503,7 @@ static in_addr_t net_resolvehost4(const char *host) {
   struct hostent *pHost;
   struct in_addr addr;
 
-  if(!host) {
+  if(!host || host[0] == '\0') {
     return INADDR_NONE;
   } else if((addr.s_addr = inet_addr(host)) == INADDR_NONE) {
     LOG(X_DEBUG("Resolving '%s'"), host);

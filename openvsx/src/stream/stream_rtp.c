@@ -273,6 +273,8 @@ int stream_rtp_updatedest(STREAM_RTP_DEST_T *pDest, const STREAM_DEST_CFG_T *pDe
     return 0;
   }
 
+  LOG(X_DEBUG("RTP update destination %s:%d"), INET_NTOP(dstAddr, tmp, sizeof(tmp)), htons(INET_PORT(dstAddr)));
+
   //
   // Update output RTP destination and port if it has changed
   //
@@ -677,6 +679,11 @@ STREAM_RTP_DEST_T *stream_rtp_adddest(STREAM_RTP_MULTI_T *pRtp, const STREAM_DES
 
   } else if(!pDestCfg->noxmit) { // haveRaw
 
+    if(rc == 0 && !INET_ADDR_VALID(dstAddr)) {
+      LOG(X_ERROR("Invalid destination address: %s:%d"), INET_NTOP(dstAddr, tmp, sizeof(tmp)),  pDestCfg->dstPort);
+      rc = -1;
+    }
+
     if(rc == 0) {
 
       memset(&pDest->saDsts, 0, sizeof(pDest->saDsts));
@@ -701,7 +708,6 @@ STREAM_RTP_DEST_T *stream_rtp_adddest(STREAM_RTP_MULTI_T *pRtp, const STREAM_DES
         LOG(X_DEBUG("RTP destination %s:%d is using audio video multiplexing"), 
                     FORMAT_NETADDR(pDest->saDsts, tmp, sizeof(tmp)), htons(INET_PORT(pDest->saDsts)));
       }
-
 
       psa = NULL;
       if(!pDestCfg->useSockFromCapture && pDestCfg->localPort > 0) {

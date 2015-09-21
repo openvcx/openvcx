@@ -98,7 +98,7 @@ static int sendRtcpSr(STREAM_XMIT_NODE_T *pStream, unsigned int idxDest) {
       //
       // In the case of RTSP interleaved, the port is actually the chnanel id
       //
-      frameData.channelId = INET_PORT(pdest->saDstsRtcp);
+      frameData.channelId = ntohs(INET_PORT(pdest->saDstsRtcp));
       liveq_addpkt(pStream->pLiveQ2, *pdest->outCb.pliveQIdx, &frameData);
     }
     pthread_mutex_unlock(&pStream->pRtpMulti->mtx);
@@ -261,7 +261,7 @@ static int sendPktUdpRtp(STREAM_XMIT_NODE_T *pStream, unsigned int idxDest,
       //
       // In the case of RTSP interleaved, the port is actually the channel id
       //
-      frameData.channelId = INET_PORT(pStream->pRtpMulti->pdests[idxDest].saDsts);
+      frameData.channelId = ntohs(INET_PORT(pStream->pRtpMulti->pdests[idxDest].saDsts));
       liveq_addpkt(pStream->pLiveQ2, 
                    *pStream->pRtpMulti->pdests[idxDest].outCb.pliveQIdx,
                    &frameData);
