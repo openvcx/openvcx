@@ -436,20 +436,21 @@ int capture_getdestFromStr(const char *str,
 
   p = str;
 
- if((p2 = strstr(p, ":")) || (p2 = strstr(p, "/"))) {
+  if((p2 = strstr(p, ":")) || (p2 = strstr(p, "/"))) {
     sz = p2 - p;
   } else {
     sz = strlen(str);
-    for(idx = 0; idx < sz; idx++) {
-      if(p[idx] < '0' || p[idx] > '9') {
-        have_onlyport = 0;
-        break;
-      }
+  }
+
+  for(idx = 0; idx < sz; idx++) {
+    if(p[idx] < '0' || p[idx] > '9') {
+      have_onlyport = 0;
+      break;
     }
-    if(have_onlyport) {
-      sz = 0;
-      p2 = p;
-    }
+  }
+  if(have_onlyport) {
+    sz = 0;
+    p2 = p;
   }
 
   if(hostbuf) {

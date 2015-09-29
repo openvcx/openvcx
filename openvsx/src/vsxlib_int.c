@@ -102,11 +102,14 @@ int vsxlib_initlog(int verbosity, const char *logfile, const char *homedir,
     flags |= LOG_OUTPUT_PRINT_TID;
   }
 
-flags |= LOG_OUTPUT_PRINT_TID;
+  flags |= LOG_OUTPUT_PRINT_TID;
 
   if(logfile) {
     flags |= LOG_OUTPUT_DEFAULT | LOG_FLAG_USELOCKING | LOG_OUTPUT_PRINT_TID | LOG_OUTPUT_PRINT_TAG;
     logger_SetFile(plogdir, logfile, logrollmax, logmaxsz, flags);
+    //
+    // Be advised when logging to file at debug, stderr is always info
+    //
     logger_AddStderr(S_INFO, 0);
   } else {
     flags |= LOG_FLAG_USESTDERR | LOG_FLAG_FLUSHOUTPUT | LOG_OUTPUT_PRINT_SEV_ERROR | LOG_FLAG_USELOCKING;
@@ -1231,6 +1234,12 @@ int vsxlib_stream_setupcap_dtls(const VSXLIB_STREAM_PARAMS_T *pParams,
 #endif // (VSX_HAVE_SSL_DTLS)
 }
 
+void vsxlib_stream_setup_rtmpclient(RTMP_CLIENT_CFG_T *pRtmpCfg, const VSXLIB_STREAM_PARAMS_T *pParams) {
+  pRtmpCfg->rtmpfp9 = pParams->rtmpfp9;
+  pRtmpCfg->prtmppageurl = pParams->rtmppageurl;
+  pRtmpCfg->prtmpswfurl = pParams->rtmpswfurl;
+}
+
 int vsxlib_stream_setupcap_params(const VSXLIB_STREAM_PARAMS_T *pParams, 
                                    CAPTURE_LOCAL_DESCR_T *pCapCfg) {
 
@@ -1256,9 +1265,7 @@ int vsxlib_stream_setupcap_params(const VSXLIB_STREAM_PARAMS_T *pParams,
   }
   pCapCfg->common.rtcp_reply_from_mcast = pParams->rtcp_reply_from_mcast;
   pCapCfg->common.caprealtime = pParams->caprealtime;
-  pCapCfg->common.rtmpfp9 = pParams->rtmpfp9;
-  pCapCfg->common.rtmppageurl = pParams->rtmppageurl;
-  pCapCfg->common.rtmpswfurl = pParams->rtmpswfurl;
+  vsxlib_stream_setup_rtmpclient(&pCapCfg->common.rtmpcfg, pParams);
   pCapCfg->common.novid = pParams->novid;
   pCapCfg->common.noaud = pParams->noaud;
 
@@ -1314,8 +1321,7 @@ int vsxlib_stream_setupcap(const VSXLIB_STREAM_PARAMS_T *pParams, CAPTURE_LOCAL_
     return -1;
   }
 
-  if(inTransType == CAPTURE_FILTER_TRANSPORT_RTSP ||
-     inTransType == CAPTURE_FILTER_TRANSPORT_RTSPS) {
+  if(IS_CAPTURE_FILTER_TRANSPORT_RTSP(inTransType)) {
 
     // Defaut to 2 (vid, aud) input filters
     pFilt->numFilters = 2;
@@ -2293,7 +2299,7 @@ int vsxlib_setupMkvRecord(MKVSRV_CTXT_T *pMkvCtxts,
     }
 
     //
-    // Create output index specific named .flv files
+    // Create output index specific named .mkv files
     //
     alter_filename = 0;
     if(outidx > 0 && buf[0] != '\0') {
@@ -2344,3 +2350,30 @@ int vsxlib_setupMkvRecord(MKVSRV_CTXT_T *pMkvCtxts,
   return -1;
 #endif // (ENABLE_RECORDING)
 }
+
+int vsxlib_setupRtmpPublish(STREAMER_CFG_T *pStreamerCfg,
+                            const VSXLIB_STREAM_PARAMS_T *pParams) {
+  int rc = 0;
+  STREAMER_OUTFMT_T *pLiveFmt;
+  unsigned int maxRtmpPublish = 1;
+
+  //
+  // Setup RTMP PUBLISH parameters
+  //
+  pLiveFmt = &pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_RTMPPUBLISH];
+
+  if((*((unsigned int *) &pLiveFmt->max) = maxRtmpPublish) > 0 &&
+    !(pLiveFmt->poutFmts = (OUTFMT_CFG_T *) avc_calloc(maxRtmpPublish, sizeof(OUTFMT_CFG_T)))) {
+    return -1;
+  }
+  pthread_mutex_init(&pLiveFmt->mtx, NULL);
+  pLiveFmt->qCfg.id = STREAMER_QID_RTMP_PUBLISH;
+
+  pLiveFmt->qCfg.maxPkts = pStreamerCfg->action.outfmtQCfg.cfgRtmp.maxPkts;
+  pLiveFmt->qCfg.maxPktLen = pStreamerCfg->action.outfmtQCfg.cfgRtmp.maxPktLen;
+  pLiveFmt->qCfg.growMaxPktLen = pStreamerCfg->action.outfmtQCfg.cfgRtmp.growMaxPktLen;
+  pLiveFmt->do_outfmt = 1;
+
+  return rc;
+}
+

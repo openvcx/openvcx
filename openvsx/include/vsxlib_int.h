@@ -168,6 +168,7 @@ int vsxlib_stream_setupcap(const VSXLIB_STREAM_PARAMS_T *pParams, CAPTURE_LOCAL_
                             STREAMER_CFG_T *pStreamerCfg, SDP_DESCR_T *pSdp);
 int vsxlib_stream_setupcap_params(const VSXLIB_STREAM_PARAMS_T *pParams, CAPTURE_LOCAL_DESCR_T *pCapCfg);
 int vsxlib_stream_setupcap_dtls(const VSXLIB_STREAM_PARAMS_T *pParams, CAPTURE_LOCAL_DESCR_T *pCapCfg);
+void vsxlib_stream_setup_rtmpclient(RTMP_CLIENT_CFG_T *pRtmpCfg, const VSXLIB_STREAM_PARAMS_T *pParams);
 
 void vsxlib_setup_rtpout(STREAMER_CFG_T *pStreamerCfg, const VSXLIB_STREAM_PARAMS_T *pParams);
 
@@ -200,6 +201,8 @@ int vsxlib_setupMkvRecord(MKVSRV_CTXT_T *pMkvCtxts,
 int vsxlib_setupFlvRecord(FLVSRV_CTXT_T *pFlvCtxts, 
                           STREAMER_CFG_T *pStreamerCfg,
                           const VSXLIB_STREAM_PARAMS_T *pParams);
+int vsxlib_setupRtmpPublish(STREAMER_CFG_T *pStreamerCfg,
+                            const VSXLIB_STREAM_PARAMS_T *pParams);
 
 #if defined(VSX_DUMP_CONTAINER)
 

@@ -298,7 +298,7 @@ static int srv_cmd_handler_playfile(CLIENT_CONN_T *pConn, const KEYVAL_PAIR_T *p
       if((nextCfg.streamerCfg.pdestsCfg[idxDest].numPorts = 
          strutil_convertDstStr(pargdst, nextCfg.streamerCfg.pdestsCfg[idxDest].dstHost,
              sizeof(nextCfg.streamerCfg.pdestsCfg[idxDest].dstHost), 
-             nextCfg.streamerCfg.pdestsCfg[idxDest].ports, 2, NULL, 0)) <= 0) {
+             nextCfg.streamerCfg.pdestsCfg[idxDest].ports, 2, -1, NULL, 0)) <= 0) {
 
         LOG(X_ERROR("Invalid '%s' value '%s' in request"), tmpstr, pargdst);
         *plenout = snprintf((char *) *ppout, *plenout, "invalid %s argument", tmpstr);
@@ -828,7 +828,7 @@ static int srv_cmd_handler_playlive(CLIENT_CONN_T *pConn, const KEYVAL_PAIR_T *p
       if((nextCfg.streamerCfg.pdestsCfg[idxDest].numPorts =
             strutil_convertDstStr(parg, nextCfg.streamerCfg.pdestsCfg[idxDest].dstHost,
              sizeof(nextCfg.streamerCfg.pdestsCfg[idxDest].dstHost),
-             nextCfg.streamerCfg.pdestsCfg[idxDest].ports, 2, NULL, 0)) <= 0) {
+             nextCfg.streamerCfg.pdestsCfg[idxDest].ports, 2, -1, NULL, 0)) <= 0) {
 
         LOG(X_ERROR("Invalid '%s' value '%s' in request"), tmpstr, parg);
         *plenout = snprintf((char *) *ppout, *plenout, "invalid %s argument", tmpstr);

@@ -456,6 +456,7 @@ OUTFMT_CFG_T *outfmt_setCb(STREAMER_OUTFMT_T *pLiveFmt,
   unsigned int idx;
 
   if(!pLiveFmt || !pLiveFmt->poutFmts || !pQCfg) {
+    LOG(X_ERROR("outfmt not initialized!"));
     return NULL;
   }
 

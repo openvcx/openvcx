@@ -1035,7 +1035,6 @@ CONNECT_RETRY_RC_T stream_rtsp_cbonannouncestream(void *pArg) {
   return rtsp_announcestream(pCtxt->pReqCtxt, pCtxt->pSession, pCtxt->purl);
 }
 
-
 static int stream_rtsp_announce(STREAMER_CFG_T *pStreamerCfg) {
   int rc = 0;
   unsigned int outidx = 0;

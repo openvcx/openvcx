@@ -222,7 +222,7 @@ int rtsp_handle_options(RTSP_REQ_CTXT_T *pRtsp, const RTSP_REQ_T *pReq) {
 
   return rc;
 }
-
+/*
 int rtsp_handle_describe_announced(RTSP_REQ_CTXT_T *pRtsp, const RTSP_REQ_T *pReq) {
   int rc = 0;
   char bufhdrs[1024];
@@ -255,6 +255,7 @@ int rtsp_handle_describe_announced(RTSP_REQ_CTXT_T *pRtsp, const RTSP_REQ_T *pRe
 
   return rc;
 }
+*/
 
 int rtsp_wait_for_sdp(STREAMER_CFG_T *pStreamerCfg, unsigned int outidx, int sec) {
                      
@@ -1677,7 +1678,7 @@ int rtsp_handle_announce(RTSP_REQ_CTXT_T *pRtsp, const RTSP_REQ_T *pReq) {
     statusCode = RTSP_STATUS_SERVERERROR;
     LOG(X_ERROR("RTSP ANNOUNCE error %s"), bufhdrs);
   } else {
-    LOG(X_DEBUG("RTSP - ANOUNCE have SDP %s %s"), 
+    LOG(X_DEBUG("RTSP ANOUNCE have SDP %s %s"), 
          pRtsp->pClientSession->sdp.vid.common.available ? " with video" : "",
          pRtsp->pClientSession->sdp.aud.common.available ? "with audio" : "");
   }

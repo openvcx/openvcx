@@ -27,7 +27,7 @@
 
 static int rtmp_parse_chunksz(RTMP_CTXT_T *pRtmp) {
   int rc = 0;
-  unsigned int chunksz = 0;
+  unsigned int chunkSzIn = 0;
 
   if(pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt - pRtmp->in.idx < 4) {
     LOG(X_ERROR("Failed to parse rtmp packet chunk size (body len:%u)"), 
@@ -35,13 +35,13 @@ static int rtmp_parse_chunksz(RTMP_CTXT_T *pRtmp) {
     return -1;
   }
 
-  chunksz = htonl(*((uint32_t *) &pRtmp->in.buf[pRtmp->in.idx]));
+  chunkSzIn = htonl(*((uint32_t *) &pRtmp->in.buf[pRtmp->in.idx]));
 
-  if(chunksz <= 0 || chunksz > 0xffff) {
-    LOG(X_WARNING("refusing to set rtmp chunk size to %u"), chunksz);
-  } else if(chunksz != pRtmp->chunkSz) {
-    pRtmp->chunkSz = chunksz;
-    LOG(X_DEBUG("set rtmp chunk size to %u"), pRtmp->chunkSz);
+  if(chunkSzIn <= 0 || chunkSzIn > 0xffff) {
+    LOG(X_WARNING("refusing to set rtmp chunk size to %u"), chunkSzIn);
+  } else if(chunkSzIn != pRtmp->chunkSzIn) {
+    LOG(X_DEBUG("set rtmp chunk size %u -> %u"), pRtmp->chunkSzIn, chunkSzIn);
+    pRtmp->chunkSzIn = chunkSzIn;
   }  
 
   return rc;
@@ -87,7 +87,7 @@ static int rtmp_parse_readpkt_chunkhdr(RTMP_CTXT_T *pRtmp) {
     if(streamIdx != pRtmp->streamIdx) {
 
 #ifdef DEBUG_RTMP_READ
-    fprintf(stderr, "rtmp_parse_readpkt_chunkhdr resetting... streamIdx:%d, pRtmp->streamidx:%d, pRtmp->streamIdxPrev:%d, hdrsz:%d/%d id:%d chunk[%d/%d], pkt[%d/%d]\n", streamIdx, pRtmp->streamIdx, pRtmp->streamIdxPrev, pRtmp->pkt[pRtmp->streamIdxPrev].idxInHdr, pRtmp->pkt[pRtmp->streamIdxPrev].hdr.szHdr, pRtmp->pkt[pRtmp->streamIdxPrev].hdr.id, pRtmp->pkt[pRtmp->streamIdxPrev].idxInChunk, pRtmp->chunkSz, pRtmp->pkt[pRtmp->streamIdxPrev].idxInPkt, pRtmp->pkt[pRtmp->streamIdxPrev].hdr.szPkt);
+    fprintf(stderr, "rtmp_parse_readpkt_chunkhdr resetting... streamIdx:%d, pRtmp->streamidx:%d, pRtmp->streamIdxPrev:%d, hdrsz:%d/%d id:%d chunk[%d/%d], pkt[%d/%d]\n", streamIdx, pRtmp->streamIdx, pRtmp->streamIdxPrev, pRtmp->pkt[pRtmp->streamIdxPrev].idxInHdr, pRtmp->pkt[pRtmp->streamIdxPrev].hdr.szHdr, pRtmp->pkt[pRtmp->streamIdxPrev].hdr.id, pRtmp->pkt[pRtmp->streamIdxPrev].idxInChunk, pRtmp->chunkSzIn, pRtmp->pkt[pRtmp->streamIdxPrev].idxInPkt, pRtmp->pkt[pRtmp->streamIdxPrev].hdr.szPkt);
 #endif // DEBUG_RTMP_READ
 
       //Reset the previously used stream
@@ -137,7 +137,7 @@ static int rtmp_parse_readpkt_chunkhdr(RTMP_CTXT_T *pRtmp) {
     }
 
 #ifdef DEBUG_RTMP_READ
-    fprintf(stderr, "rtmp_parse_readpkt_chunkhdr hdrsz:%d/%d id:%d chunk[%d/%d], pkt[%d/%d]\n", pRtmp->pkt[streamIdx].idxInHdr, pRtmp->pkt[streamIdx].hdr.szHdr, pRtmp->pkt[streamIdx].hdr.id, pRtmp->pkt[streamIdx].idxInChunk, pRtmp->chunkSz, pRtmp->pkt[streamIdx].idxInPkt, pRtmp->pkt[streamIdx].hdr.szPkt);
+    fprintf(stderr, "rtmp_parse_readpkt_chunkhdr hdrsz:%d/%d id:%d chunk[%d/%d], pkt[%d/%d]\n", pRtmp->pkt[streamIdx].idxInHdr, pRtmp->pkt[streamIdx].hdr.szHdr, pRtmp->pkt[streamIdx].hdr.id, pRtmp->pkt[streamIdx].idxInChunk, pRtmp->chunkSzIn, pRtmp->pkt[streamIdx].idxInPkt, pRtmp->pkt[streamIdx].hdr.szPkt);
 #endif // DEBUG_RTMP_DUMP
  
   }
@@ -193,7 +193,7 @@ static int rtmp_parse_readpkt_chunkhdr(RTMP_CTXT_T *pRtmp) {
     }
 
 #ifdef DEBUG_RTMP_READ
-    fprintf(stderr, "rtmp_parse_readpkt_chunkhdr ct:%d id:%d ts:%u(abs:%u) chunk[%d/%d], pkt[%d/%d]\n", pRtmp->pkt[streamIdx].hdr.contentType, pRtmp->pkt[streamIdx].hdr.id, pRtmp->pkt[streamIdx].hdr.ts, pRtmp->pkt[streamIdx].tsAbsolute, pRtmp->pkt[streamIdx].idxInChunk, pRtmp->chunkSz, pRtmp->pkt[streamIdx].idxInPkt, pRtmp->pkt[streamIdx].hdr.szPkt);
+    fprintf(stderr, "rtmp_parse_readpkt_chunkhdr ct:%d id:%d ts:%u(abs:%u) chunk[%d/%d], pkt[%d/%d]\n", pRtmp->pkt[streamIdx].hdr.contentType, pRtmp->pkt[streamIdx].hdr.id, pRtmp->pkt[streamIdx].hdr.ts, pRtmp->pkt[streamIdx].tsAbsolute, pRtmp->pkt[streamIdx].idxInChunk, pRtmp->chunkSzIn, pRtmp->pkt[streamIdx].idxInPkt, pRtmp->pkt[streamIdx].hdr.szPkt);
 #endif // DEBUG_RTMP_READ
 
   } else if(pRtmp->pkt[pRtmp->streamIdx].hdr.szHdr == 1 && pRtmp->pkt[pRtmp->streamIdx].idxInPkt == 0 && pRtmp->pkt[pRtmp->streamIdx].hdr.ts > 0) {
@@ -214,13 +214,13 @@ static int rtmp_parse_readpkt_chunk(RTMP_CTXT_T *pRtmp) {
     return readszhdr;
   }
 
-  if((readsz = pRtmp->chunkSz - pRtmp->pkt[pRtmp->streamIdx].idxInChunk) > 
+  if((readsz = pRtmp->chunkSzIn - pRtmp->pkt[pRtmp->streamIdx].idxInChunk) > 
      pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt - pRtmp->pkt[pRtmp->streamIdx].idxInPkt) {
     readsz = pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt - pRtmp->pkt[pRtmp->streamIdx].idxInPkt;
   }
 
 #ifdef DEBUG_RTMP_READ
-  fprintf(stderr, "rtmp_parse_readpkt_chunk readsz:%u chunkSz:%u into idxInPkt[%d] idxInChunk:%d\n", readsz, pRtmp->chunkSz, pRtmp->pkt[pRtmp->streamIdx].idxInPkt, pRtmp->pkt[pRtmp->streamIdx].idxInChunk);
+  fprintf(stderr, "rtmp_parse_readpkt_chunk readsz:%u chunkSzIn:%u into idxInPkt[%d] idxInChunk:%d\n", readsz, pRtmp->chunkSzIn, pRtmp->pkt[pRtmp->streamIdx].idxInPkt, pRtmp->pkt[pRtmp->streamIdx].idxInChunk);
 #endif // DEBUG_RTMP_READ
 
   if(pRtmp->pkt[pRtmp->streamIdx].idxInPkt + readsz > pRtmp->in.sz) {
@@ -230,7 +230,8 @@ static int rtmp_parse_readpkt_chunk(RTMP_CTXT_T *pRtmp) {
 
     rc = readsz;
 
-  } else if(readsz > 0 && (rc = pRtmp->cbRead(pRtmp->pCbData, &pRtmp->in.buf[pRtmp->pkt[pRtmp->streamIdx].idxInPkt], readsz)) < 0) {
+  } else if(readsz > 0 && 
+          (rc = pRtmp->cbRead(pRtmp->pCbData, &pRtmp->in.buf[pRtmp->pkt[pRtmp->streamIdx].idxInPkt], readsz)) < 0) {
     return rc; 
   } else if(readsz == 0) {
     rc = 0;
@@ -240,7 +241,7 @@ static int rtmp_parse_readpkt_chunk(RTMP_CTXT_T *pRtmp) {
   pRtmp->pkt[pRtmp->streamIdx].idxInPkt += rc;
 
   // reset stream idxInHdr to prepare for next stream chunk
-  if(pRtmp->pkt[pRtmp->streamIdx].idxInChunk >= pRtmp->chunkSz ||
+  if(pRtmp->pkt[pRtmp->streamIdx].idxInChunk >= pRtmp->chunkSzIn ||
      pRtmp->pkt[pRtmp->streamIdx].idxInChunk >= pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt ||
      pRtmp->pkt[pRtmp->streamIdx].idxInPkt >= pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt) {
     pRtmp->pkt[pRtmp->streamIdx].idxInHdr = 0;
@@ -260,6 +261,8 @@ int rtmp_parse_readpkt(RTMP_CTXT_T *pRtmp) {
   if(!pRtmp || !pRtmp->cbRead || !pRtmp->pCbData) {
     return -1;
   }
+
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - parse_readpkt called... chunkSzIn: %d"), pRtmp->chunkSzIn) );
 
   do {
 
@@ -284,12 +287,18 @@ int rtmp_parse_readpkt(RTMP_CTXT_T *pRtmp) {
     numread += rc;
 
 #ifdef DEBUG_RTMP_READ
-  fprintf(stderr, "rtmp_parse_readpkt readsz:%u chunkSz:%u into idxInPkt[%d] idxInChunk:%d\n", numread, pRtmp->chunkSz, pRtmp->pkt[pRtmp->streamIdx].idxInPkt, pRtmp->pkt[pRtmp->streamIdx].idxInChunk);
+  fprintf(stderr, "rtmp_parse_readpkt readsz:%u chunkSz:%u into idxInPkt[%d] idxInChunk:%d\n", numread, pRtmp->chunkSzIn, pRtmp->pkt[pRtmp->streamIdx].idxInPkt, pRtmp->pkt[pRtmp->streamIdx].idxInChunk);
 #endif // DEBUG_RTMP_READ
 
   } while(pRtmp->pkt[pRtmp->streamIdx].idxInPkt < pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt);
 
-  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - parse_readpkt contentType: 0x%x"), pRtmp->pkt[pRtmp->streamIdx].hdr.contentType); );
+  VSX_DEBUG_RTMP(
+    LOG(X_DEBUG("RTMP - parse_readpkt have body sz:%d ct:0x%x, id:%d, ts:%d(%d), dest:0x%x, hdr:%d"),
+       pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt, pRtmp->pkt[pRtmp->streamIdx].hdr.contentType,
+       pRtmp->pkt[pRtmp->streamIdx].hdr.id, pRtmp->pkt[pRtmp->streamIdx].hdr.ts,
+       pRtmp->pkt[pRtmp->streamIdx].tsAbsolute, pRtmp->pkt[pRtmp->streamIdx].hdr.dest, pRtmp->pkt[pRtmp->streamIdx].szHdr0);
+    LOGHEXT_DEBUGV(pRtmp->in.buf, pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt > 16 ? 16 : pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt);
+  );
 
   //
   // Handle any essential packets for properly decoding the rtmp stream
@@ -685,7 +694,9 @@ int rtmp_parse_invoke(RTMP_CTXT_T *pRtmp, FLV_AMF_T *pAmf) {
       continue;
     }
 
-    //fprintf(stderr, "rtmp_parse_invoke str:\n");avc_dumpHex(stderr, pAmf->key.p, 16, 1);
+    VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - parse_invoke contentType: 0x%x, method: %c%c%c%c%c%c..."), 
+                pRtmp->contentTypeLastInvoke, pAmf->key.p[0], pAmf->key.p[1], pAmf->key.p[2], pAmf->key.p[3], 
+                pAmf->key.p[4], pAmf->key.p[5]) );
 
     if(pAmf->key.len == 4 && !memcmp(pAmf->key.p, "play", 4)) {
       pRtmp->methodParsed = RTMP_METHOD_PLAY;
@@ -735,6 +746,12 @@ int rtmp_parse_invoke(RTMP_CTXT_T *pRtmp, FLV_AMF_T *pAmf) {
     } else if((pAmf->key.len >= 9 && !memcmp(pAmf->key.p, "FCPublish", 9))) {
       pRtmp->methodParsed = RTMP_METHOD_FCPUBLISH;
       return rtmp_parse_invoke_fcpublish(pRtmp, &bs, pAmf);
+    } else if((pAmf->key.len >= 11 && !memcmp(pAmf->key.p, "FCUnpublish", 11))) {
+      pRtmp->methodParsed = RTMP_METHOD_FCUNPUBLISH;
+      return rtmp_parse_invoke_generic(pRtmp, &bs, pAmf);
+    } else if((pAmf->key.len >= 11 && !memcmp(pAmf->key.p, "onFCPublish", 11))) {
+      pRtmp->methodParsed = RTMP_METHOD_ONFCPUBLISH;
+      return rtmp_parse_invoke_generic(pRtmp, &bs, pAmf);
     } else if((pAmf->key.len >= 7 && !memcmp(pAmf->key.p, "publish", 7))) {
       pRtmp->methodParsed = RTMP_METHOD_PUBLISH;
       return rtmp_parse_invoke_publish(pRtmp, &bs, pAmf);
@@ -767,7 +784,6 @@ int rtmp_parse_init(RTMP_CTXT_T *pRtmp, unsigned int insz, unsigned int outsz) {
   pRtmp->streamIdx = RTMP_STREAM_INDEXES;
   pRtmp->streamIdxPrev = RTMP_STREAM_INDEXES;
   pRtmp->rcvTmtMs = RTMP_RCV_TMT_MS;
-  //pRtmp->rcvTmtMs = 6000;
 
   pRtmp->in.sz = insz;
   if(pRtmp->in.sz > 0 &&
@@ -782,7 +798,8 @@ int rtmp_parse_init(RTMP_CTXT_T *pRtmp, unsigned int insz, unsigned int outsz) {
     return -1;
   }
 
-  pRtmp->chunkSz = RTMP_CHUNK_SZ_DEFAULT;
+  pRtmp->chunkSzIn = RTMP_CHUNK_SZ_DEFAULT;
+  pRtmp->chunkSzOut = pRtmp->chunkSzIn;
 
   // Default values
   pRtmp->contentTypeLastInvoke = RTMP_CONTENT_TYPE_INVOKE;

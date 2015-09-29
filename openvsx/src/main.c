@@ -2495,7 +2495,7 @@ int main(int argc, char *argv[]) {
           } else if(!strcasecmp("rtsp", optarg)) {  
             g_debug_flags |= VSX_DEBUG_FLAG_RTSP;
             g_debug_flags |= VSX_DEBUG_FLAG_HTTP;
-          } else if(!strcasecmp("stream", optarg)) {  
+          } else if(!strcasecmp("streamav", optarg)) {  
             g_debug_flags |= VSX_DEBUG_FLAG_STREAMAV;
           } else if(!strcasecmp("ssl", optarg)) {  
             g_debug_flags |= VSX_DEBUG_FLAG_SSL;

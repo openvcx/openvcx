@@ -233,35 +233,35 @@ static int rtmp_send_audframe(RTMP_CTXT_T *pRtmp, const OUTFMT_FRAME_DATA_T *pFr
 //static struct timeval tv_connectdone;
 //static struct timeval tv_connect;
 
-static int rtmp_create_playresponse(RTMP_CTXT_T *pRtmp) {
+static int rtmp_create_publishstart(RTMP_CTXT_T *pRtmp) {
   int rc = 0;
 
-  //LOG(X_DEBUG("rtmp sending onstatus"));
+  rtmp_create_onstatus(pRtmp, RTMP_ONSTATUS_TYPE_DATASTART);
 
+  LOG(X_DEBUG("rtmp state is published (out sz:%d)"), pRtmp->out.idx);
+
+  return rc;
+}
+
+static int rtmp_create_playresponse(RTMP_CTXT_T *pRtmp) {
+  int rc = 0;
 
   //rtmp_create_onstatus(pRtmp, RTMP_ONSTATUS_TYPE_PUBNOTIFY);
   rtmp_create_onstatus(pRtmp, RTMP_ONSTATUS_TYPE_RESET);
   rtmp_create_ping(pRtmp, 0x04, 1);
   rtmp_create_ping(pRtmp, 0, 1);      // stream begin
-  rtmp_create_onstatus(pRtmp, RTMP_ONSTATUS_TYPE_START);
+  rtmp_create_onstatus(pRtmp, RTMP_ONSTATUS_TYPE_PLAYSTART);
   rtmp_create_notify(pRtmp);
   rtmp_create_notify_netstart(pRtmp);
   //rtmp_create_ping(pRtmp, 0x20, 1); // buffer ready
 
-/*
-  if((rc = netio_send(&pRtmp->pSd->netsocket, &pRtmp->pSd->sain, pRtmp->out.buf,
-                      pRtmp->out.idx)) < 0) {
-    return -1;
-  }
-*/
   //
   // Change the state to connected - ready to process vid/aud frames
   //
-  //pRtmp->out.idx = 0;
   pRtmp->state = RTMP_STATE_CLI_DONE;
 
   //gettimeofday(&tv_connectdone, NULL);
-  LOG(X_DEBUG("rtmp state is connected (out sz:%d)"), pRtmp->out.idx);
+  LOG(X_DEBUG("rtmp state is playing"));
 
   return rc;
 }
@@ -299,7 +299,9 @@ int rtmp_addFrame(void *pArg, const OUTFMT_FRAME_DATA_T *pFrame) {
   //if(pFrame->isvid) avc_dumpHex(stderr, pFrame->pData, 48, 1);
   //if(pFrame->isvid && pFrame->keyframe) fprintf(stderr, "KEYFRAME sps:%d pps:%d\n", OUTFMT_VSEQHDR(pFrame).h264.sps_len, OUTFMT_VSEQHDR(pFrame).h264.pps_len);
 
-  if(pRtmp->state < RTMP_STATE_CLI_PLAY) {
+  if((pRtmp->isclient && pRtmp->state < RTMP_STATE_CLI_PUBLISH) || 
+     (!pRtmp->isclient && pRtmp->state < RTMP_STATE_CLI_PLAY)) {
+
     //
     // Most likely rtmp_handle_conn is still processing RTMP connection setup
     //
@@ -308,7 +310,6 @@ int rtmp_addFrame(void *pArg, const OUTFMT_FRAME_DATA_T *pFrame) {
     return rc;
   }
 
-  
   if(pFrame->isvid) {
 
     //
@@ -323,14 +324,15 @@ int rtmp_addFrame(void *pArg, const OUTFMT_FRAME_DATA_T *pFrame) {
 
   }
 
-
   if(OUTFMT_DATA(pFrame) == NULL) {
     LOG(X_ERROR("RTMP Frame output[%d] data not set"), pFrame->xout.outidx);
     pRtmp->state = RTMP_STATE_ERROR;
     return -1;
   }
 
-  //fprintf(stderr, "rtmp_addFrame %s outidx[%d] len:%d pts:%.3f dts:%.3f key:%d\n", pFrame->isvid ? "vid" : (pFrame->isaud ? "aud" : "?"), pFrame->xout.outidx, OUTFMT_LEN(pFrame), PTSF(OUTFMT_PTS(pFrame)), PTSF(OUTFMT_DTS(pFrame)), OUTFMT_KEYFRAME(pFrame));
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_addFrame %s outidx[%d] len:%d pts:%.3f dts:%.3f key:%d, state: %d"), 
+                pFrame->isvid ? "vid" : (pFrame->isaud ? "aud" : "?"), pFrame->xout.outidx, OUTFMT_LEN(pFrame), 
+                PTSF(OUTFMT_PTS(pFrame)), PTSF(OUTFMT_DTS(pFrame)), OUTFMT_KEYFRAME(pFrame), pRtmp->state) );;
 
   if(pFrame->isvid && !pRtmp->av.vid.haveSeqHdr) {
 
@@ -360,12 +362,26 @@ int rtmp_addFrame(void *pArg, const OUTFMT_FRAME_DATA_T *pFrame) {
 
     pRtmp->out.idx = 0;
 
-    if((rc = rtmp_create_playresponse(pRtmp)) < 0) {
-      return rc;
-    }
+    VSX_DEBUG_RTMP( 
+        LOG(X_DEBUG("RTMP - rtmp_addFrame creating %s"), pRtmp->isclient ? "data start" : "play response") );
 
-    if((rc = rtmp_create_onmeta(pRtmp)) < 0) {
-      return rc;
+    if(pRtmp->isclient) {
+
+      if((rc = rtmp_create_publishstart(pRtmp)) < 0) {
+        return rc;
+      }
+      if((rc = rtmp_create_setDataFrame(pRtmp)) < 0) {
+        return rc;
+      }
+
+    } else {
+      if((rc = rtmp_create_playresponse(pRtmp)) < 0) {
+        return rc;
+      }
+
+      if((rc = rtmp_create_onmeta(pRtmp)) < 0) {
+        return rc;
+      }
     }
 
     if(rc >= 0 && !pRtmp->novid) {
@@ -379,8 +395,7 @@ int rtmp_addFrame(void *pArg, const OUTFMT_FRAME_DATA_T *pFrame) {
       }
     }
 
-    if(rc >= 0 && (rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, 
-                                   pRtmp->out.buf, pRtmp->out.idx)) < 0) {
+    if(rc >= 0 && (rc = rtmp_send(pRtmp, "addFrame")) < 0) {
       return -1;
     }
 
@@ -461,19 +476,20 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
     return rc;
   }
 
-  pRtmp->state = RTMP_STATE_CLI_HANDSHAKEDONE;
-  LOG(X_DEBUG("rtmp handshake completed"));
-
   //
   // Read connect packet
   // 
-  if((rc = rtmp_parse_readpkt_full(pRtmp, 1)) < 0 || 
-    pRtmp->state != RTMP_STATE_CLI_CONNECT) {
-    LOG(X_ERROR("Failed to read rtmp connect request")); 
-    return rc;
-  }
+  do {
+    if((rc = rtmp_parse_readpkt_full(pRtmp, 1, NULL)) < 0 || 
+      (pRtmp->state != RTMP_STATE_CLI_CONNECT && 
+       pRtmp->pkt[pRtmp->streamIdx].hdr.contentType != RTMP_CONTENT_TYPE_CHUNKSZ)) {
+      LOG(X_ERROR("Failed to read rtmp connect request.  State: %d"), pRtmp->state); 
+      return rc;
+    }
+  } while(pRtmp->state != RTMP_STATE_CLI_CONNECT);
 
-  //LOG(X_DEBUG("rtmp sending connect response"));
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - sending connect response ct: %d, methodParsed: %d, state: %d"), 
+         pRtmp->contentTypeLastInvoke, pRtmp->methodParsed, pRtmp->state) );
 
   //
   // Create server response
@@ -482,38 +498,39 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
   rtmp_create_serverbw(pRtmp, 2500000);
   rtmp_create_clientbw(pRtmp, 2500000);
   rtmp_create_ping(pRtmp, 0, 0);
-  pRtmp->chunkSz = RTMP_CHUNK_SZ_OUT;
-  rtmp_create_chunksz(pRtmp, pRtmp->chunkSz);
+  pRtmp->chunkSzOut = RTMP_CHUNK_SZ_OUT;
+  rtmp_create_chunksz(pRtmp);
   rtmp_create_result_invoke(pRtmp);
-  if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, 
-                      pRtmp->out.buf, pRtmp->out.idx)) < 0) {
+  if((rc = rtmp_send(pRtmp, "rtmp_handle_conn server initial response")) < 0) {
     return -1;
   }
 
-  //
-  // server bw packet 
-  //
-  if(rtmp_parse_readpkt_full(pRtmp, 1) < 0 || pRtmp->methodParsed != RTMP_METHOD_SERVERBW) {
-    LOG(X_ERROR("Failed to read rtmp server bandwidth.  method:%d"), pRtmp->methodParsed); 
-  }
-  
-
   do {
+
+    VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - waiting for createStream ct: %d, methodParsed: %d, state: %d"), 
+           pRtmp->contentTypeLastInvoke, pRtmp->methodParsed, pRtmp->state) );
 
     //
     // Createstream
     //
-    if((rc = rtmp_parse_readpkt_full(pRtmp, 1)) < 0) {
+    if((rc = rtmp_parse_readpkt_full(pRtmp, 1, NULL)) < 0) {
       LOG(X_ERROR("Failed to read rtmp packet.  method:%d"), pRtmp->methodParsed); 
       return rc;
     }
 
-    //fprintf(stderr, "LOOP OK METHOD:%d\n", pRtmp->methodParsed);
-
     if(pRtmp->methodParsed == RTMP_METHOD_PING ||
-       pRtmp->methodParsed == RTMP_METHOD_RELEASESTREAM) {
+       pRtmp->methodParsed == RTMP_METHOD_SERVERBW) {
+      VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - method received was: 0x%x")); );
+      continue;
+    } else if(pRtmp->methodParsed == RTMP_METHOD_RELEASESTREAM ||
+              pRtmp->methodParsed == RTMP_METHOD_FCPUBLISH) {
+      //
+      // No server response for releaseStream or FCPublish
+      //
+      VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - method received was: 0x%x")); );
       continue;
     } else if(pRtmp->methodParsed == RTMP_METHOD_CREATESTREAM) {
+      VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - method received was: 0x%x (createStream)")); );
       break;
     } else {
       LOG(X_ERROR("RTMP did not receive expected createStream packet.  method:%d"), pRtmp->methodParsed); 
@@ -527,23 +544,44 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
     return -1;
   }
 
-  //fprintf(stderr, "FOUR state:0x%x method:%d\n", pRtmp->state, pRtmp->methodParsed);
-  //LOG(X_DEBUG("rtmp sending createstream result"));
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - sending createStream response ct: %d, methodParsed: %d, state: %d"), 
+           pRtmp->contentTypeLastInvoke, pRtmp->methodParsed, pRtmp->state) );
 
   //
   // Create createstream result
   // 
   pRtmp->out.idx = 0;
   rtmp_create_result(pRtmp);
-  if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, 
-                      pRtmp->out.buf, pRtmp->out.idx)) < 0) {
+  if((rc = rtmp_send(pRtmp, "rtmp_handle_conn createstream response")) < 0) {
     return -1;
   }
 
-  // play or publish
-  if(rtmp_parse_readpkt_full(pRtmp, 1) < 0) {
-    LOG(X_ERROR("Failed to read rtmp packet header")); 
-  }
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - waiting for play/publish ct: %d, methodParsed: %d, state: %d"), 
+           pRtmp->contentTypeLastInvoke, pRtmp->methodParsed, pRtmp->state) );
+
+  //
+  // Get RTMP play
+  //
+  do {
+    if(rtmp_parse_readpkt_full(pRtmp, 1, NULL) < 0) {
+      LOG(X_ERROR("Failed to read rtmp packet header")); 
+      return -1;
+    } else if(pRtmp->state != RTMP_STATE_CLI_PLAY && 
+      pRtmp->pkt[pRtmp->streamIdx].hdr.contentType == RTMP_CONTENT_TYPE_INVOKE) {
+
+      LOG(X_ERROR("Did not receive rtmp play request.  State: %d, method: %d"), pRtmp->state, pRtmp->methodParsed);
+
+      if(pRtmp->methodParsed == RTMP_METHOD_PUBLISH) {
+        pRtmp->out.idx = 0;
+        rtmp_create_error(pRtmp, "publish not available when in server mode");
+        if((rc = rtmp_send(pRtmp, "rtmp_handle_conn play error response")) < 0) {
+          return rc;
+        }
+      }
+      return -1;
+    }
+
+  } while(pRtmp->state != RTMP_STATE_CLI_PLAY);
 
   //
   // Obtain the requested xcode output outidx 
@@ -558,16 +596,6 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
   }
 
   //fprintf(stderr, "PLAY RESP TO: '%s', APP:'%s' outfmt idx;%d\n", pRtmp->connect.play, pRtmp->connect.app, pRtmp->requestOutIdx);
-
-
-  // ping
-  if(rtmp_parse_readpkt_full(pRtmp, 1) < 0) {
-    LOG(X_ERROR("Failed to read rtmp packet header")); 
-  }
-  if(pRtmp->state != RTMP_STATE_CLI_PLAY) {
-    LOG(X_ERROR("Did not receive rtmp play request"));
-    return -1;
-  }
 
   //pRtmp->out.idx = 0;
   //rtmp_create_onstatus(pRtmp, RTMP_ONSTATUS_TYPE_PUBNOTIFY);
@@ -588,7 +616,7 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
   //
   while(pRtmp->state >= RTMP_STATE_CLI_PLAY) {
 
-    if((rc = rtmp_parse_readpkt_full(pRtmp, 0)) < 0) {
+    if((rc = rtmp_parse_readpkt_full(pRtmp, 0, NULL)) < 0) {
       LOG(X_ERROR("Failed to read rtmp packet from client"));
       break;
     } 

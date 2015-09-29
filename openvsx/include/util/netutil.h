@@ -129,7 +129,6 @@ int net_connect(SOCKET sock, const struct sockaddr *psa);
 int net_getlocalmediaport(int numpairs);
 //int net_setqos4(SOCKET sock, const struct sockaddr *psa, uint8_t dscp);
 int net_setqos(SOCKET sock, const struct sockaddr *psa , uint8_t dscp);
-//in_addr_t net_resolvehost4(const char *host);
 int net_resolvehost(const char *host, struct sockaddr_storage *pstorage);
 int net_getaddress(const char *address, struct sockaddr_storage *pstorage);
 in_addr_t net_getlocalip4();
@@ -142,6 +141,7 @@ int net_setlocaliphost(const char *ipstr);
 //char *net_inet_ntoa(struct in_addr in, char *buf);
 //char *net_inet_ntop(const struct sockaddr *psa, char *buf);
 int net_isipv6(const char *str);
+int net_isipv4(const char *str);
 
 
 

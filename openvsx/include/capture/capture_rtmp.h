@@ -35,14 +35,20 @@
 #define RTMP_TMPFRAME_VID_SZ    IXCODE_SZFRAME_MAX
 #define RTMP_TMPFRAME_AUD_SZ    0x4000
 
+
 typedef struct RTMP_CTXT_CLIENT {
   RTMP_CTXT_T              ctxt;
   RTMP_CLIENT_PARAMS_T     client;
-  int                      fp9;
+
+  const char              *purl;
+  const char              *puri;
+  const char              *puridocname;
 
   PKTQUEUE_T              *pQVid;
   PKTQUEUE_T              *pQAud;
   PKTQUEUE_T              *pQTmpVid;
+  struct STREAM_STATS     *pStreamStats;
+  struct OUTFMT_CFG       *pOutFmt;
 } RTMP_CTXT_CLIENT_T;
 
 int capture_rtmp_client(CAP_ASYNC_DESCR_T *pCapCfg);

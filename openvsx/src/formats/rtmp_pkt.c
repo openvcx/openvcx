@@ -82,8 +82,9 @@ int rtmp_create_hdr(unsigned char *buf, uint8_t streamIdx,
 int rtmp_create_vidstart(RTMP_CTXT_T *pRtmp) {
   BYTE_STREAM_T bs;
   int rc;
+  const unsigned int hdrlen = 12;
 
-  bs.idx = 12;
+  bs.idx = hdrlen;
   bs.buf = &pRtmp->out.buf[pRtmp->out.idx];
   bs.sz = pRtmp->out.sz - pRtmp->out.idx; 
 
@@ -93,7 +94,7 @@ int rtmp_create_vidstart(RTMP_CTXT_T *pRtmp) {
   }
 
   if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx], 
-        RTMP_STREAM_IDX_7, 0, bs.idx - 12, RTMP_CONTENT_TYPE_VIDDATA, htonl(0x01), 12)) < 0) {
+        RTMP_STREAM_IDX_7, 0, bs.idx - hdrlen, RTMP_CONTENT_TYPE_VIDDATA, htonl(0x01), hdrlen)) < 0) {
     return rc;
   }
 
@@ -105,8 +106,9 @@ int rtmp_create_vidstart(RTMP_CTXT_T *pRtmp) {
 int rtmp_create_audstart(RTMP_CTXT_T *pRtmp) {
   int rc;
   BYTE_STREAM_T bs;
+  const unsigned int hdrlen = 12;
 
-  bs.idx = 12;
+  bs.idx = hdrlen;
   bs.buf = &pRtmp->out.buf[pRtmp->out.idx];
   bs.sz = pRtmp->out.sz - pRtmp->out.idx; 
 
@@ -115,7 +117,7 @@ int rtmp_create_audstart(RTMP_CTXT_T *pRtmp) {
   }
 
   if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx], 
-        RTMP_STREAM_IDX_6, 0, bs.idx - 12, RTMP_CONTENT_TYPE_AUDDATA, htonl(0x01), 12)) < 0) {
+        RTMP_STREAM_IDX_6, 0, bs.idx - hdrlen, RTMP_CONTENT_TYPE_AUDDATA, htonl(0x01), hdrlen)) < 0) {
     return rc;
   }
 
@@ -128,9 +130,10 @@ int rtmp_create_audstart(RTMP_CTXT_T *pRtmp) {
 
 int rtmp_create_serverbw(RTMP_CTXT_T *pRtmp, unsigned int bw) {
   int rc;
+  const unsigned int hdrlen = 12;
 
   if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx], 
-         RTMP_STREAM_IDX_CTRL, 0, 4, RTMP_CONTENT_TYPE_SERVERBW, 0, 12)) < 0) {
+         RTMP_STREAM_IDX_CTRL, 0, 4, RTMP_CONTENT_TYPE_SERVERBW, 0, hdrlen)) < 0) {
     return rc;
   }
   *((uint32_t *) &pRtmp->out.buf[pRtmp->out.idx + rc]) = htonl(bw);
@@ -141,13 +144,14 @@ int rtmp_create_serverbw(RTMP_CTXT_T *pRtmp, unsigned int bw) {
 
 int rtmp_create_clientbw(RTMP_CTXT_T *pRtmp, unsigned int bw) {
   int rc;
+  const unsigned int hdrlen = 12;
 
   if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx], 
-         RTMP_STREAM_IDX_CTRL, 0, 5, RTMP_CONTENT_TYPE_CLIENTBW, 0, 12)) < 0) {
+         RTMP_STREAM_IDX_CTRL, 0, 5, RTMP_CONTENT_TYPE_CLIENTBW, 0, hdrlen)) < 0) {
     return rc;
   }
   *((uint32_t *) &pRtmp->out.buf[pRtmp->out.idx + rc]) = htonl(bw);
-  pRtmp->out.buf[pRtmp->out.idx + rc + 4] = 0x02;  // ??
+  pRtmp->out.buf[pRtmp->out.idx + rc + 4] = RTMP_CLIENTBW_LIMIT_TYPE_DYNAMIC;
   pRtmp->out.idx += (rc + 5); 
 
   return rc + 5; 
@@ -155,9 +159,10 @@ int rtmp_create_clientbw(RTMP_CTXT_T *pRtmp, unsigned int bw) {
 
 int rtmp_create_ping(RTMP_CTXT_T *pRtmp, uint16_t type, uint32_t arg) {
   int rc;
+  const unsigned int hdrlen = 12;
 
   if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx], 
-            RTMP_STREAM_IDX_CTRL, 0, 6, RTMP_CONTENT_TYPE_PING, 0, 12)) < 0) {
+            RTMP_STREAM_IDX_CTRL, 0, 6, RTMP_CONTENT_TYPE_PING, 0, hdrlen)) < 0) {
     return rc;
   }
   memset(&pRtmp->out.buf[pRtmp->out.idx + rc], 0, 6);
@@ -170,15 +175,16 @@ int rtmp_create_ping(RTMP_CTXT_T *pRtmp, uint16_t type, uint32_t arg) {
   return rc + 6; 
 }
 
-int rtmp_create_chunksz(RTMP_CTXT_T *pRtmp, unsigned int sz) {
+int rtmp_create_chunksz(RTMP_CTXT_T *pRtmp) {
   int rc;
+  const unsigned int hdrlen = 12;
 
   if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx], 
-            RTMP_STREAM_IDX_CTRL, 0, 4, RTMP_CONTENT_TYPE_CHUNKSZ, 0, 12)) < 0) {
+            RTMP_STREAM_IDX_CTRL, 0, 4, RTMP_CONTENT_TYPE_CHUNKSZ, 0, hdrlen)) < 0) {
     return rc;
   }
 
-  *((uint32_t *) &pRtmp->out.buf[pRtmp->out.idx + rc]) = htonl(sz);
+  *((uint32_t *) &pRtmp->out.buf[pRtmp->out.idx + rc]) = htonl(pRtmp->chunkSzOut);
   pRtmp->out.idx += (rc + 4);
 
   return rc + 4; 
@@ -187,6 +193,7 @@ int rtmp_create_chunksz(RTMP_CTXT_T *pRtmp, unsigned int sz) {
 int rtmp_create_result_invoke(RTMP_CTXT_T *pRtmp) {
   int rc;
   BYTE_STREAM_T bs;
+  const unsigned int hdrlen = 12;
   unsigned int objEncoding = pRtmp->advObjEncoding;
 
   if(pRtmp->connect.objEncoding != objEncoding) {
@@ -194,7 +201,7 @@ int rtmp_create_result_invoke(RTMP_CTXT_T *pRtmp) {
     LOG(X_DEBUG("Echoing client objectEncoding: %d"), objEncoding);
   }
 
-  bs.idx = 12;
+  bs.idx = hdrlen;
   bs.buf = &pRtmp->out.buf[pRtmp->out.idx];
   bs.sz = pRtmp->out.sz - pRtmp->out.idx; 
 
@@ -230,7 +237,7 @@ int rtmp_create_result_invoke(RTMP_CTXT_T *pRtmp) {
   flv_write_objend(&bs);
 
   if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx], 
-      RTMP_STREAM_IDX_INVOKE, 0, bs.idx - 12, pRtmp->contentTypeLastInvoke, 0, 12)) < 0) {
+      RTMP_STREAM_IDX_INVOKE, 0, bs.idx - hdrlen, pRtmp->contentTypeLastInvoke, 0, hdrlen)) < 0) {
     return rc;
   }
 
@@ -243,8 +250,9 @@ int rtmp_create_result(RTMP_CTXT_T *pRtmp) {
   int rc;
   BYTE_STREAM_T bs;
   double code;
+  const unsigned int hdrlen = 12;
 
-  bs.idx = 12;
+  bs.idx = hdrlen;
   bs.buf = &pRtmp->out.buf[pRtmp->out.idx];
   bs.sz = pRtmp->out.sz - pRtmp->out.idx; 
 
@@ -263,7 +271,61 @@ int rtmp_create_result(RTMP_CTXT_T *pRtmp) {
   flv_write_val_number(&bs, 1.0);
 
   if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx], 
-        RTMP_STREAM_IDX_INVOKE, 0, bs.idx - 12, pRtmp->contentTypeLastInvoke, 0, 12)) < 0) {
+        RTMP_STREAM_IDX_INVOKE, 0, bs.idx - hdrlen, pRtmp->contentTypeLastInvoke, 0, hdrlen)) < 0) {
+    return rc;
+  }
+
+  pRtmp->out.idx += bs.idx;
+
+  return pRtmp->out.idx - bs.idx; 
+}
+
+int rtmp_create_error(RTMP_CTXT_T *pRtmp, const char *msg) {
+  int rc;
+  BYTE_STREAM_T bs;
+  const unsigned int hdrlen = 12;
+
+  bs.idx = hdrlen;
+  bs.buf = &pRtmp->out.buf[pRtmp->out.idx];
+  bs.sz = pRtmp->out.sz - pRtmp->out.idx; 
+
+   // RTMP_CONTENT_TYPE_MSG appears to have extra header byte 0x00
+  if(pRtmp->contentTypeLastInvoke == RTMP_CONTENT_TYPE_MSG) {
+    bs.buf[bs.idx++] = 0x00;  
+  }
+
+  bs.buf[bs.idx++] = FLV_AMF_TYPE_STRING;
+  //TODO: should this match client's createStream value
+  flv_write_key_val(&bs, "_error", 0, FLV_AMF_TYPE_NUMBER);
+  if(msg != NULL) {
+    flv_write_key_val_string(&bs, "description", msg);
+  }
+
+  if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx], 
+        RTMP_STREAM_IDX_INVOKE, 0, bs.idx - hdrlen, pRtmp->contentTypeLastInvoke, 0, hdrlen)) < 0) {
+    return rc;
+  }
+
+  pRtmp->out.idx += bs.idx;
+
+  return pRtmp->out.idx - bs.idx; 
+}
+
+int rtmp_create_close(RTMP_CTXT_T *pRtmp) {
+  int rc;
+  BYTE_STREAM_T bs;
+  double code;
+  const unsigned int hdrlen = 12;
+
+  bs.idx = hdrlen;
+  bs.buf = &pRtmp->out.buf[pRtmp->out.idx];
+  bs.sz = pRtmp->out.sz - pRtmp->out.idx; 
+
+  bs.buf[bs.idx++] = FLV_AMF_TYPE_STRING;
+  flv_write_key_val(&bs, "close", 0.0, FLV_AMF_TYPE_NUMBER);
+
+  if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx], 
+        RTMP_STREAM_IDX_INVOKE, 0, bs.idx - hdrlen, pRtmp->contentTypeLastInvoke, htonl(0x01), hdrlen)) < 0) {
     return rc;
   }
 
@@ -277,17 +339,27 @@ int rtmp_create_onstatus(RTMP_CTXT_T *pRtmp, enum RTMP_ONSTATUS_TYPE type) {
   BYTE_STREAM_T bs;
   char buf[128];
   char descr[128];
+  int write_clientid = 1;
   unsigned int streamIdx = RTMP_STREAM_IDX_5;
+  unsigned int contentType =  RTMP_CONTENT_TYPE_INVOKE;
+  const unsigned int hdrlen = 12;
 
-  bs.idx = 12;
+  buf[0] = '\0';
+  descr[0] = '\0';
+  bs.idx = hdrlen;
   bs.buf = &pRtmp->out.buf[pRtmp->out.idx];
   bs.sz = pRtmp->out.sz - pRtmp->out.idx; 
 
   bs.buf[bs.idx++] = FLV_AMF_TYPE_STRING;
-  flv_write_key_val(&bs, "onStatus", 0.0, FLV_AMF_TYPE_NUMBER);
-  bs.buf[bs.idx++] = FLV_AMF_TYPE_NULL;
-  bs.buf[bs.idx++] = FLV_AMF_TYPE_OBJECT;
-  flv_write_key_val_string(&bs, "level", "status");
+  if(type == RTMP_ONSTATUS_TYPE_DATASTART) {
+    flv_write_string(&bs, "onStatus");
+    bs.buf[bs.idx++] = FLV_AMF_TYPE_OBJECT;
+  } else {
+    flv_write_key_val(&bs, "onStatus", 0.0, FLV_AMF_TYPE_NUMBER);
+    bs.buf[bs.idx++] = FLV_AMF_TYPE_NULL;
+    bs.buf[bs.idx++] = FLV_AMF_TYPE_OBJECT;
+    flv_write_key_val_string(&bs, "level", "status");
+  }
 
   switch(type) {
     case RTMP_ONSTATUS_TYPE_PUBNOTIFY: 
@@ -298,9 +370,15 @@ int rtmp_create_onstatus(RTMP_CTXT_T *pRtmp, enum RTMP_ONSTATUS_TYPE type) {
       snprintf(buf, sizeof(buf), "NetStream.Play.%s", RTMP_PLAY_RESET); 
       snprintf(descr, sizeof(descr), "Playing and resetting %s.", pRtmp->connect.play); 
       break;
-    case RTMP_ONSTATUS_TYPE_START: 
+    case RTMP_ONSTATUS_TYPE_PLAYSTART: 
       snprintf(buf, sizeof(buf), "NetStream.Play.%s", RTMP_PLAY_START); 
       snprintf(descr, sizeof(descr), "Started playing %s.", pRtmp->connect.play); 
+      break;
+    case RTMP_ONSTATUS_TYPE_DATASTART: 
+      streamIdx = RTMP_STREAM_IDX_INVOKE;
+      contentType =  RTMP_CONTENT_TYPE_NOTIFY;
+      write_clientid = 0;
+      snprintf(buf, sizeof(buf), "NetStream.Data.%s", RTMP_PLAY_START); 
       break;
     case RTMP_ONSTATUS_TYPE_PUBLISH: 
       streamIdx = RTMP_STREAM_IDX_INVOKE;
@@ -312,10 +390,16 @@ int rtmp_create_onstatus(RTMP_CTXT_T *pRtmp, enum RTMP_ONSTATUS_TYPE type) {
      return -1;
   }
 
-  flv_write_key_val_string(&bs, "code", buf);
-  flv_write_key_val_string(&bs, "description", descr);
-  flv_write_key_val(&bs, "clientid", RTMP_CLIENTID, FLV_AMF_TYPE_NUMBER);
-  if(type == 2) {
+  if(buf[0] != '\0') {
+    flv_write_key_val_string(&bs, "code", buf);
+  }
+  if(descr[0] != '\0') {
+    flv_write_key_val_string(&bs, "description", descr);
+  }
+  if(write_clientid) {
+    flv_write_key_val(&bs, "clientid", RTMP_CLIENTID, FLV_AMF_TYPE_NUMBER);
+  }
+  if(type ==  RTMP_ONSTATUS_TYPE_PLAYSTART) {
     flv_write_key_val(&bs, "isFastPlay", 0, FLV_AMF_TYPE_BOOL);
     //flv_write_key_val_string(&bs, "timecodeOffset", RTMP_TIMECODEOFFSET);
   }
@@ -323,7 +407,7 @@ int rtmp_create_onstatus(RTMP_CTXT_T *pRtmp, enum RTMP_ONSTATUS_TYPE type) {
   flv_write_objend(&bs);
 
   if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx], 
-       streamIdx, 0, bs.idx - 12, RTMP_CONTENT_TYPE_INVOKE, htonl(0x01), 12)) < 0) {
+       streamIdx, 0, bs.idx - hdrlen, contentType, htonl(0x01), hdrlen)) < 0) {
     return rc;
   }
 
@@ -335,8 +419,9 @@ int rtmp_create_onstatus(RTMP_CTXT_T *pRtmp, enum RTMP_ONSTATUS_TYPE type) {
 int rtmp_create_notify(RTMP_CTXT_T *pRtmp) {
   int rc;
   BYTE_STREAM_T bs;
+  const unsigned int hdrlen = 8;
 
-  bs.idx = 8;
+  bs.idx = hdrlen;
   bs.buf = &pRtmp->out.buf[pRtmp->out.idx];
   bs.sz = pRtmp->out.sz - pRtmp->out.idx; 
 
@@ -346,7 +431,7 @@ int rtmp_create_notify(RTMP_CTXT_T *pRtmp) {
   bs.buf[bs.idx++] = 0;
 
   if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx], 
-        RTMP_STREAM_IDX_5, 0, bs.idx - 8, RTMP_CONTENT_TYPE_NOTIFY, 0, 8)) < 0) {
+        RTMP_STREAM_IDX_5, 0, bs.idx - hdrlen, RTMP_CONTENT_TYPE_NOTIFY, 0, hdrlen)) < 0) {
     return rc;
   }
 
@@ -358,8 +443,9 @@ int rtmp_create_notify(RTMP_CTXT_T *pRtmp) {
 int rtmp_create_notify_netstart(RTMP_CTXT_T *pRtmp) {
   int rc;
   BYTE_STREAM_T bs;
+  const unsigned int hdrlen = 12;
 
-  bs.idx = 12;
+  bs.idx = hdrlen;
   bs.buf = &pRtmp->out.buf[pRtmp->out.idx];
   bs.sz = pRtmp->out.sz - pRtmp->out.idx; 
 
@@ -370,7 +456,7 @@ int rtmp_create_notify_netstart(RTMP_CTXT_T *pRtmp) {
   flv_write_objend(&bs);
 
   if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx], 
-        RTMP_STREAM_IDX_5, 0, bs.idx - 12, RTMP_CONTENT_TYPE_NOTIFY, htonl(0x01), 12)) < 0) {
+        RTMP_STREAM_IDX_5, 0, bs.idx - hdrlen, RTMP_CONTENT_TYPE_NOTIFY, htonl(0x01), hdrlen)) < 0) {
     return rc;
   }
 
@@ -378,12 +464,106 @@ int rtmp_create_notify_netstart(RTMP_CTXT_T *pRtmp) {
 
   return pRtmp->out.idx - bs.idx; 
 }
+int rtmp_create_setDataFrame(RTMP_CTXT_T *pRtmp) {
+  int rc;
+  BYTE_STREAM_T bs;
+  char profileLevelId[32];
+  //char sps[AVCC_SPS_MAX_LEN * 4 / 3];
+  //char pps[AVCC_PPS_MAX_LEN * 4 / 3];
+  unsigned numArrElements = 0;
+  double d;
+  const unsigned int hdrlen = 12;
+
+  if(pRtmp->av.vid.haveSeqHdr) {
+    numArrElements++;
+  }
+
+  if(pRtmp->av.aud.haveSeqHdr) {
+    numArrElements++;
+  }
+
+  bs.idx = hdrlen;
+  bs.buf = &pRtmp->out.buf[pRtmp->out.idx];
+  bs.sz = pRtmp->out.sz - pRtmp->out.idx; 
+
+  bs.buf[bs.idx++] = FLV_AMF_TYPE_STRING;
+  flv_write_string(&bs, "@setDataFrame");
+
+  bs.buf[bs.idx++] = FLV_AMF_TYPE_STRING;
+  flv_write_string(&bs, "onMetaData");
+
+  bs.buf[bs.idx++] = FLV_AMF_TYPE_OBJECT;
+
+  if(pRtmp->av.vid.haveSeqHdr) {
+    flv_write_key_val_string(&bs, "videocodecid", "avc1");
+    if(pRtmp->av.vid.ctxt.width > 0) {
+      flv_write_key_val(&bs, "width", pRtmp->av.vid.ctxt.width, FLV_AMF_TYPE_NUMBER);
+    }
+    if(pRtmp->av.vid.ctxt.height > 0) {
+      flv_write_key_val(&bs, "height", pRtmp->av.vid.ctxt.height, FLV_AMF_TYPE_NUMBER);
+    }
+    if(pRtmp->av.vid.ctxt.clockHz > 0 && pRtmp->av.vid.ctxt.frameDeltaHz > 0) {
+      d = (float) pRtmp->av.vid.ctxt.clockHz / pRtmp->av.vid.ctxt.frameDeltaHz;
+      flv_write_key_val(&bs, "framerate", d, FLV_AMF_TYPE_NUMBER);
+    }
+  }
+  if(pRtmp->av.aud.haveSeqHdr) {
+    flv_write_key_val_string(&bs, "audiocodecid", "mp4a");
+    if(pRtmp->av.aud.ctxt.channels > 0) {
+      flv_write_key_val(&bs, "audiochannels", pRtmp->av.aud.ctxt.channels, FLV_AMF_TYPE_NUMBER);
+    }
+    if(pRtmp->av.aud.ctxt.clockHz > 0) {
+      flv_write_key_val(&bs, "audiosamplerate", pRtmp->av.aud.ctxt.clockHz, FLV_AMF_TYPE_NUMBER);
+    }
+  }
+
+  flv_write_string(&bs, "trackinfo");
+  bs.buf[bs.idx++] = FLV_AMF_TYPE_STRICTARR;
+  *((uint32_t *) &bs.buf[bs.idx]) = htonl(numArrElements);
+  bs.idx += 4;
+
+  if(pRtmp->av.vid.haveSeqHdr) {
+    bs.buf[bs.idx++] = FLV_AMF_TYPE_OBJECT;
+
+    if(pRtmp->av.vid.ctxt.clockHz > 0) {
+      flv_write_key_val(&bs, "timescale", pRtmp->av.vid.ctxt.clockHz, FLV_AMF_TYPE_NUMBER);
+    }
+    flv_write_key_val_string(&bs, "type", "video");
+    flv_write_key_val_string(&bs, "language", "eng");
+
+    snprintf(profileLevelId, sizeof(profileLevelId), "%2.2x%2.2x%2.2x", pRtmp->av.vid.codecCtxt.h264.profile, 
+                                  0xc0, pRtmp->av.vid.codecCtxt.h264.level);
+    flv_write_key_val_string(&bs, "profileLevelId", profileLevelId);
+    //flv_write_key_val_string(&bs, "spropParameterSets", spropParameterSets);
+    flv_write_objend(&bs);
+  }
+
+  if(pRtmp->av.aud.haveSeqHdr) {
+    bs.buf[bs.idx++] = FLV_AMF_TYPE_OBJECT;
+    flv_write_key_val_string(&bs, "type", "audio");
+    flv_write_key_val_string(&bs, "language", "eng");
+
+    flv_write_objend(&bs);
+  }
+
+  flv_write_objend(&bs);
+
+  if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx],
+        RTMP_STREAM_IDX_5, 0, bs.idx - hdrlen, RTMP_CONTENT_TYPE_NOTIFY, htonl(0x01), hdrlen)) < 0) {
+    return rc;
+  }
+
+  pRtmp->out.idx += bs.idx;
+
+  return pRtmp->out.idx - bs.idx;
+}
 
 int rtmp_create_onmeta(RTMP_CTXT_T *pRtmp) {
   int rc;
   BYTE_STREAM_T bs;
   unsigned numArrElements = 0;
   double d;
+  const unsigned int hdrlen = 8;
 
   if(pRtmp->av.vid.haveSeqHdr) {
     numArrElements++;
@@ -399,7 +579,7 @@ int rtmp_create_onmeta(RTMP_CTXT_T *pRtmp) {
      pRtmp->av.vid.ctxt.clockHz, pRtmp->av.vid.ctxt.frameDeltaHz, 
      pRtmp->av.aud.ctxt.clockHz, pRtmp->av.aud.ctxt.channels);
 
-  bs.idx = 8;
+  bs.idx = hdrlen;
   bs.buf = &pRtmp->out.buf[pRtmp->out.idx];
   bs.sz = pRtmp->out.sz - pRtmp->out.idx; 
 
@@ -493,7 +673,7 @@ int rtmp_create_onmeta(RTMP_CTXT_T *pRtmp) {
   flv_write_objend(&bs);
 
   if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx], 
-        RTMP_STREAM_IDX_5, 0, bs.idx - 8, RTMP_CONTENT_TYPE_NOTIFY, 0, 8)) < 0) {
+        RTMP_STREAM_IDX_5, 0, bs.idx - hdrlen, RTMP_CONTENT_TYPE_NOTIFY, 0, hdrlen)) < 0) {
     return rc;
   }
 
@@ -502,15 +682,16 @@ int rtmp_create_onmeta(RTMP_CTXT_T *pRtmp) {
   return pRtmp->out.idx - bs.idx; 
 }
 
-int rtmp_create_connect(RTMP_CTXT_T *pRtmp, RTMP_CLIENT_PARAMS_T *pClient) {
+int rtmp_create_connect(RTMP_CTXT_T *pRtmp, const RTMP_CLIENT_PARAMS_T *pClient) {
   int rc;
   BYTE_STREAM_T bs;
+  const unsigned int hdrlen = 12;
 
   if(!pRtmp || !pClient) {
     return -1;
   }
 
-  bs.idx = 12;
+  bs.idx = hdrlen;
   bs.buf = &pRtmp->out.buf[pRtmp->out.idx];
   bs.sz = pRtmp->out.sz - pRtmp->out.idx; 
 
@@ -523,26 +704,29 @@ int rtmp_create_connect(RTMP_CTXT_T *pRtmp, RTMP_CLIENT_PARAMS_T *pClient) {
   if(pClient->flashVer && pClient->flashVer[0] != '\0') {
     flv_write_key_val_string(&bs, "flashVer", pClient->flashVer);
   }
-  if(pClient->swfUrl && pClient->swfUrl[0] != '\0') {
-    flv_write_key_val_string(&bs, "swfUrl", pClient->swfUrl);
+  if(pClient->cfg.prtmpswfurl && pClient->cfg.prtmpswfurl[0] != '\0') {
+    flv_write_key_val_string(&bs, "swfUrl", pClient->cfg.prtmpswfurl);
   }
   if(pClient->tcUrl && pClient->tcUrl[0] != '\0') {
     flv_write_key_val_string(&bs, "tcUrl", pClient->tcUrl);
   }
+
+  //flv_write_key_val_string(&bs, "type", "nonprivate");
   flv_write_key_val(&bs, "fpad", 0, FLV_AMF_TYPE_BOOL);
   flv_write_key_val(&bs, "capabilities", pRtmp->connect.capabilities, FLV_AMF_TYPE_NUMBER);
   flv_write_key_val(&bs, "audioCodecs", 3191, FLV_AMF_TYPE_NUMBER);
   flv_write_key_val(&bs, "videoCodecs", 252, FLV_AMF_TYPE_NUMBER);
   flv_write_key_val(&bs, "videoFunction", 1.0, FLV_AMF_TYPE_NUMBER);
-  if(pClient->pageUrl && pClient->pageUrl[0] != '\0') {
-    flv_write_key_val_string(&bs, "pageUrl", pClient->pageUrl);
+  if(pClient->cfg.prtmppageurl && pClient->cfg.prtmppageurl[0] != '\0') {
+    flv_write_key_val_string(&bs, "pageUrl", pClient->cfg.prtmppageurl);
   }
-  flv_write_key_val(&bs, "objectEncoding", pRtmp->connect.objEncoding, FLV_AMF_TYPE_NUMBER);
+  //flv_write_key_val(&bs, "objectEncoding", pRtmp->connect.objEncoding, FLV_AMF_TYPE_NUMBER);
+  //flv_write_key_val(&bs, "sendChunkSize", pRtmp->chunkSzOut, FLV_AMF_TYPE_NUMBER);
 
   flv_write_objend(&bs);
 
   if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx],
-        RTMP_STREAM_IDX_INVOKE, 0, bs.idx - 12, RTMP_CONTENT_TYPE_INVOKE, 0, 12)) < 0) {
+        RTMP_STREAM_IDX_INVOKE, 0, bs.idx - hdrlen, RTMP_CONTENT_TYPE_INVOKE, 0, hdrlen)) < 0) {
     return rc;
   }
 
@@ -551,28 +735,61 @@ int rtmp_create_connect(RTMP_CTXT_T *pRtmp, RTMP_CLIENT_PARAMS_T *pClient) {
   return pRtmp->out.idx - bs.idx; 
 }
 
-int rtmp_create_createStream(RTMP_CTXT_T *pRtmp) {
+int rtmp_create_releaseStream(RTMP_CTXT_T *pRtmp, const RTMP_CLIENT_PARAMS_T *pClient) {
   int rc;
   BYTE_STREAM_T bs;
+  const unsigned int hdrlen = 12;
 
   if(!pRtmp) {
     return -1;
   }
 
-  bs.idx = 8;
+  bs.idx = hdrlen;
   bs.buf = &pRtmp->out.buf[pRtmp->out.idx];
   bs.sz = pRtmp->out.sz - pRtmp->out.idx; 
 
+  bs.buf[bs.idx++] = FLV_AMF_TYPE_STRING;
+  flv_write_key_val(&bs, "releaseStream", 2.0, FLV_AMF_TYPE_NUMBER);
+  bs.buf[bs.idx++] = FLV_AMF_TYPE_NULL;
+  if(pClient && pClient->playElem[0] != '\0') {
+    bs.buf[bs.idx++] = FLV_AMF_TYPE_STRING;
+    flv_write_string(&bs, pClient->playElem);
+  }
 
-  // RTMP_CONTENT_TYPE_MSG appears to have extra header byte 0x00
-  bs.buf[bs.idx++] = 0;
+  if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx],
+        RTMP_STREAM_IDX_INVOKE, 0, bs.idx - hdrlen, RTMP_CONTENT_TYPE_INVOKE, 0, hdrlen)) < 0) {
+    return rc;
+  }
+
+  pRtmp->out.idx += bs.idx;
+
+  return pRtmp->out.idx - bs.idx; 
+}
+
+int rtmp_create_createStream(RTMP_CTXT_T *pRtmp, int contentType) {
+  int rc;
+  BYTE_STREAM_T bs;
+  const unsigned int hdrlen = 12;
+
+  if(!pRtmp || (contentType != RTMP_CONTENT_TYPE_MSG && contentType != RTMP_CONTENT_TYPE_INVOKE)) {
+    return -1;
+  }
+
+  bs.idx = hdrlen;
+  bs.buf = &pRtmp->out.buf[pRtmp->out.idx];
+  bs.sz = pRtmp->out.sz - pRtmp->out.idx; 
+
+  if(contentType == RTMP_CONTENT_TYPE_MSG) {
+    // RTMP_CONTENT_TYPE_MSG appears to have extra header byte 0x00
+    bs.buf[bs.idx++] = 0;
+  }
 
   bs.buf[bs.idx++] = FLV_AMF_TYPE_STRING;
   flv_write_key_val(&bs, "createStream", 2.0, FLV_AMF_TYPE_NUMBER);
   bs.buf[bs.idx++] = FLV_AMF_TYPE_NULL;
 
   if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx],
-        RTMP_STREAM_IDX_INVOKE, 0, bs.idx - 8, RTMP_CONTENT_TYPE_MSG, 0, 8)) < 0) {
+        RTMP_STREAM_IDX_INVOKE, 0, bs.idx - hdrlen, contentType, 0, hdrlen)) < 0) {
     return rc;
   }
 
@@ -584,15 +801,15 @@ int rtmp_create_createStream(RTMP_CTXT_T *pRtmp) {
 int rtmp_create_play(RTMP_CTXT_T *pRtmp, RTMP_CLIENT_PARAMS_T *pClient) {
   int rc;
   BYTE_STREAM_T bs;
+  const unsigned int hdrlen = 12;
 
   if(!pRtmp || !pClient || !pClient->playElem) {
     return -1;
   }
 
-  bs.idx = 12;
+  bs.idx = hdrlen;
   bs.buf = &pRtmp->out.buf[pRtmp->out.idx];
   bs.sz = pRtmp->out.sz - pRtmp->out.idx; 
-
 
   // RTMP_CONTENT_TYPE_MSG appears to have extra header byte 0x00
   bs.buf[bs.idx++] = 0;
@@ -604,7 +821,75 @@ int rtmp_create_play(RTMP_CTXT_T *pRtmp, RTMP_CLIENT_PARAMS_T *pClient) {
   flv_write_string(&bs, pClient->playElem);
 
   if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx],
-        RTMP_STREAM_IDX_8, 0, bs.idx - 12, RTMP_CONTENT_TYPE_MSG, htonl(0x01), 12)) < 0) {
+        RTMP_STREAM_IDX_8, 0, bs.idx - hdrlen, RTMP_CONTENT_TYPE_MSG, htonl(0x01), hdrlen)) < 0) {
+    return rc;
+  }
+
+  pRtmp->out.idx += bs.idx;
+
+  return pRtmp->out.idx - bs.idx; 
+}
+
+int rtmp_create_publish(RTMP_CTXT_T *pRtmp, const RTMP_CLIENT_PARAMS_T *pClient) {
+  int rc;
+  BYTE_STREAM_T bs;
+  const unsigned int hdrlen = 12;
+
+  if(!pRtmp || !pClient || !pClient->playElem || !pClient->app) {
+    LOG(X_ERROR("rtmp_create_publish invalid arguments '%s' '%s'"), 
+         pClient ? pClient->playElem : "", pClient ? pClient->app : "");
+    return -1;
+  }
+
+  bs.idx = hdrlen;
+  bs.buf = &pRtmp->out.buf[pRtmp->out.idx];
+  bs.sz = pRtmp->out.sz - pRtmp->out.idx; 
+
+  bs.buf[bs.idx++] = FLV_AMF_TYPE_STRING;
+  flv_write_key_val(&bs, "publish", 0.0, FLV_AMF_TYPE_NUMBER);
+  bs.buf[bs.idx++] = FLV_AMF_TYPE_NULL;
+  bs.buf[bs.idx++] = FLV_AMF_TYPE_STRING;
+  flv_write_string(&bs, pClient->playElem);
+
+  //
+  // "record", "append", "live"
+  //
+  bs.buf[bs.idx++] = FLV_AMF_TYPE_STRING;
+  flv_write_string(&bs, "live");  
+
+  if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx],
+        RTMP_STREAM_IDX_INVOKE, 0, bs.idx - hdrlen, RTMP_CONTENT_TYPE_INVOKE, htonl(0x01), hdrlen)) < 0) {
+        //RTMP_STREAM_IDX_INVOKE, 0, bs.idx - hdrlen, RTMP_CONTENT_TYPE_INVOKE, htonl(0x01), hdrlen)) < 0) {
+    return rc;
+  }
+
+  pRtmp->out.idx += bs.idx;
+
+  return pRtmp->out.idx - bs.idx; 
+}
+
+int rtmp_create_fcpublish(RTMP_CTXT_T *pRtmp, const RTMP_CLIENT_PARAMS_T *pClient) {
+  int rc;
+  BYTE_STREAM_T bs;
+  const unsigned int hdrlen = 12;
+
+  if(!pRtmp || !pClient || !pClient->playElem) {
+    LOG(X_ERROR("Unable to crate RTMP fcpublish request"));
+    return -1;
+  }
+
+  bs.idx = hdrlen;
+  bs.buf = &pRtmp->out.buf[pRtmp->out.idx];
+  bs.sz = pRtmp->out.sz - pRtmp->out.idx; 
+
+  bs.buf[bs.idx++] = FLV_AMF_TYPE_STRING;
+  flv_write_key_val(&bs, "FCPublish", 0.0, FLV_AMF_TYPE_NUMBER);
+  bs.buf[bs.idx++] = FLV_AMF_TYPE_NULL;
+  bs.buf[bs.idx++] = FLV_AMF_TYPE_STRING;
+  flv_write_string(&bs, pClient->playElem);
+
+  if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx],
+        RTMP_STREAM_IDX_INVOKE, 0, bs.idx - hdrlen, RTMP_CONTENT_TYPE_INVOKE, 0, hdrlen)) < 0) {
     return rc;
   }
 
@@ -617,12 +902,13 @@ int rtmp_create_onfcpublish(RTMP_CTXT_T *pRtmp) {
   int rc;
   BYTE_STREAM_T bs;
   char buf[512];
+  const unsigned int hdrlen = 12;
 
   if(!pRtmp) {
     return -1;
   }
 
-  bs.idx = 12;
+  bs.idx = hdrlen;
   bs.buf = &pRtmp->out.buf[pRtmp->out.idx];
   bs.sz = pRtmp->out.sz - pRtmp->out.idx; 
 
@@ -639,7 +925,7 @@ int rtmp_create_onfcpublish(RTMP_CTXT_T *pRtmp) {
   flv_write_objend(&bs);
 
   if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx],
-        RTMP_STREAM_IDX_INVOKE, 0, bs.idx - 12, RTMP_CONTENT_TYPE_INVOKE, htonl(0), 12)) < 0) {
+        RTMP_STREAM_IDX_INVOKE, 0, bs.idx - hdrlen, RTMP_CONTENT_TYPE_INVOKE, htonl(0), hdrlen)) < 0) {
     return rc;
   }
 
@@ -657,36 +943,31 @@ int rtmp_send_chunkdata(RTMP_CTXT_T *pRtmp, const uint8_t rtmpStreamIdx,
   unsigned int lenXmit;
   unsigned int idxData = 0; 
 
-  if(chunkStartIdx > pRtmp->chunkSz) {
-    LOG(X_ERROR("rtmp chunk start idx %d > chunk size %d"), chunkStartIdx, pRtmp->chunkSz);
+  if(chunkStartIdx > pRtmp->chunkSzOut) {
+    LOG(X_ERROR("rtmp chunk start idx %d > chunk size %d"), chunkStartIdx, pRtmp->chunkSzOut);
     return -1;
   }
 
   while(idxData < lenData) {
 
-    VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_send_chunkdata [%d]/%d, len:%d"), idxData, lenData, pRtmp->out.idx);
-                    LOGHEXT_DEBUG(pRtmp->out.buf, pRtmp->out.idx); );
-
-    if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, pRtmp->out.buf,
-                        pRtmp->out.idx)) < 0) {
-      return -1;
+    if((rc = rtmp_send(pRtmp, "rtmp_send_chunkdata")) < 0) {
+      return rc;
     }
     pRtmp->out.buf[0] = 0xc0 | (rtmpStreamIdx & 0x3f);
     pRtmp->out.idx = 1;
 
-    if(lenData - idxData + chunkStartIdx < pRtmp->chunkSz) {
+    if(lenData - idxData + chunkStartIdx < pRtmp->chunkSzOut) {
       lenXmit = lenData - idxData; 
     } else {
-      lenXmit = pRtmp->chunkSz - chunkStartIdx;
+      lenXmit = pRtmp->chunkSzOut - chunkStartIdx;
     }
 
-    VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_send_chunkdata [%d]/%d, chunksz: %d, len:%d"), 
-                        idxData, lenData, pRtmp->chunkSz, lenXmit);
-                    LOGHEXT_DEBUG(&pData[idxData], lenXmit); );
+    VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_send_chunkdata [%d]/%d, chunksz: %d, send len:%d"), 
+                        idxData, lenData, pRtmp->chunkSzOut, lenXmit);
+                    LOGHEXT_DEBUGV(&pData[idxData], lenXmit); );
 
-    if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, 
-                        &pData[idxData], lenXmit)) < 0) {
-      return -1;
+    if((rc = rtmp_sendbuf(pRtmp, &pData[idxData], lenXmit, "rtmp_send_chunkdata")) < 0) {
+      return rc;
     }
 
     idxData += lenXmit;
@@ -718,11 +999,13 @@ int rtmp_cbReadDataNet(void *pArg, unsigned char *pData, unsigned int len) {
   return rc;
 }
 
-int rtmp_parse_readpkt_full(RTMP_CTXT_T *pRtmp, int needpacket) {
+int rtmp_parse_readpkt_full(RTMP_CTXT_T *pRtmp, int needpacket, FLV_AMF_T *pAmfList) {
   int rc = 0;
 
   pRtmp->in.idx = 0;
   pRtmp->methodParsed = RTMP_METHOD_UNKNOWN;
+
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - parse_readpkt_full called")) );
 
   if((rc = rtmp_parse_readpkt(pRtmp)) < 0) {
     return -1;
@@ -741,7 +1024,7 @@ int rtmp_parse_readpkt_full(RTMP_CTXT_T *pRtmp, int needpacket) {
   }  
 
   VSX_DEBUG_RTMP( 
-    LOG(X_DEBUG("RTMP - parse_readpkt_full pkt szPkt:%d, contentType:0x%x, id:%d, ts:%d(%d), dest:0x%x, hdr:%d"), 
+    LOG(X_DEBUG("RTMP - parse_readpkt_full body sz:%d, ct:0x%x, id:%d, ts:%d(%d), dest:0x%x, hdr:%d"), 
        pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt, pRtmp->pkt[pRtmp->streamIdx].hdr.contentType, 
        pRtmp->pkt[pRtmp->streamIdx].hdr.id, pRtmp->pkt[pRtmp->streamIdx].hdr.ts, pRtmp->pkt[pRtmp->streamIdx].tsAbsolute, 
        pRtmp->pkt[pRtmp->streamIdx].hdr.dest, pRtmp->pkt[pRtmp->streamIdx].szHdr0); );
@@ -750,8 +1033,8 @@ int rtmp_parse_readpkt_full(RTMP_CTXT_T *pRtmp, int needpacket) {
     case RTMP_CONTENT_TYPE_INVOKE:
     case RTMP_CONTENT_TYPE_MSG:
     case RTMP_CONTENT_TYPE_NOTIFY:
-      VSX_DEBUG_RTMP( LOGHEXT_DEBUG(pRtmp->in.buf, pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt) );
-      rtmp_parse_invoke(pRtmp, NULL);
+      //VSX_DEBUG_RTMP( LOGHEXT_DEBUG(pRtmp->in.buf, pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt) );
+      rtmp_parse_invoke(pRtmp, pAmfList);
       rc = 1;
       break;
     case RTMP_CONTENT_TYPE_PING:
@@ -778,3 +1061,23 @@ int rtmp_parse_readpkt_full(RTMP_CTXT_T *pRtmp, int needpacket) {
   return 0;
 }
 
+int rtmp_send(RTMP_CTXT_T *pRtmp, const char *descr) {
+  return rtmp_sendbuf(pRtmp, pRtmp->out.buf, pRtmp->out.idx, descr);
+}
+
+int rtmp_sendbuf(RTMP_CTXT_T *pRtmp, const unsigned char *buf, unsigned int sz, const char *descr) {
+
+  int rc = 0;
+  if(!pRtmp) {
+    return -1;
+  }
+
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - %s send: %d"), descr ? descr : "", sz);
+                  LOGHEXT_DEBUG(buf, sz); );
+
+  if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, buf, sz)) < 0) {
+    return -1;
+  }
+
+  return rc;
+}

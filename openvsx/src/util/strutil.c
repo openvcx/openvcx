@@ -125,7 +125,7 @@ int strutil_parseAddress(const char *str, char host[], size_t szHost, char ports
 
 
 static int getHostAndPorts(const char *str, char host[], size_t szHost,
-                           uint16_t ports[], size_t numPorts, int nodupPorts, 
+                           uint16_t ports[], size_t numPorts, int defaultPort, int nodupPorts, 
                            char uri[], size_t szuri) {
 
   int rc = 0;
@@ -135,6 +135,10 @@ static int getHostAndPorts(const char *str, char host[], size_t szHost,
 
   if((rc = strutil_parseAddress(str, host, szHost, portstr, sizeof(portstr), uri, szuri)) < 0) {
     return rc;
+  }
+
+  if(portstr[0] == '\0' && defaultPort > 0) {
+    snprintf(portstr, sizeof(portstr), "%d", defaultPort);
   }
 
   if(portstr[0] != '\0') {
@@ -161,15 +165,17 @@ STREAM_PROTO_T strutil_convertProtoStr(const char *protoStr) {
   }
 }
 
-int strutil_convertDstStr(const char *dstArg, char dstHost[], size_t szHost,
-                         uint16_t dstPorts[], size_t numDstPorts, 
-                         char dstUri[], size_t szUri) {
+int strutil_convertDstStr(const char *dstArg, 
+                          char dstHost[], size_t szHost,
+                          uint16_t dstPorts[], size_t numDstPorts, int defaultPort,
+                          char dstUri[], size_t szUri) {
   int numPorts = 0;
 
   if(!dstArg) {
     LOG(X_ERROR("No destination host specified"));
     return -1;
-  } else if((numPorts = getHostAndPorts(dstArg, dstHost, szHost, dstPorts, numDstPorts, 0, dstUri, szUri)) < 0) {
+  } else if((numPorts = getHostAndPorts(dstArg, dstHost, szHost, dstPorts, numDstPorts, defaultPort, 0, 
+                                        dstUri, szUri)) < 0) {
     return -1;
   } else  if((numPorts == 0 || dstPorts[0] == 0) && inet_addr(dstHost) != INADDR_NONE) {
     LOG(X_ERROR("No destination port given"));
@@ -177,6 +183,24 @@ int strutil_convertDstStr(const char *dstArg, char dstHost[], size_t szHost,
   }
 
   return numPorts;
+}
+
+int strutil_getDefaultPort(CAPTURE_FILTER_TRANSPORT_T transType) {
+
+  switch(transType) {
+
+    case CAPTURE_FILTER_TRANSPORT_RTMP:
+    case CAPTURE_FILTER_TRANSPORT_RTMPS:
+      return RTMP_LISTEN_PORT;
+
+    case CAPTURE_FILTER_TRANSPORT_RTSP:
+    case CAPTURE_FILTER_TRANSPORT_RTSPS:
+      return RTSP_LISTEN_PORT;
+    default:
+      break;
+
+  }
+  return -1;
 }
 
 int path_getLenNonPrefixPart(const char *path) {

@@ -1499,6 +1499,7 @@ static int stream_av(CODEC_PAIR_T *pCodecs, STREAMER_CFG_T *pCfg) {
     pktzInitFrbufV.ppPktzFrBufOut = &pCfg->pRawOutCfg->pVidFrBuf;
     stream_tofrbuf = 1;
   }
+
   if(!pCfg->xcode.vid.pip.active && pCfg->xcode.aud.common.cfgDo_xcode &&
       IS_XC_CODEC_TYPE_AUD_RAW(pCfg->xcode.aud.common.cfgFileTypeOut) &&
       (!pCfg->pip.pMixerCfg || !pCfg->pip.pMixerCfg->conferenceInputDriver)) {
@@ -1534,7 +1535,8 @@ static int stream_av(CODEC_PAIR_T *pCodecs, STREAMER_CFG_T *pCfg) {
   //
   // Return if no adequate stream output is set
   //
-  if((pCfg->action.do_output && (pCfg->numDests < 1 && !pCfg->action.do_rtspannounce)) || 
+  if((pCfg->action.do_output && (pCfg->numDests < 1 && 
+      !pCfg->action.do_rtspannounce && !pCfg->action.do_rtmppublish)) || 
      pCfg->numDests > *pCfg->pmaxRtp ||
      (pCfg->xcode.vid.common.cfgFileTypeIn != XC_CODEC_TYPE_VID_CONFERENCE &&
       pCfg->xcode.aud.common.cfgFileTypeIn != XC_CODEC_TYPE_AUD_CONFERENCE &&
@@ -2716,7 +2718,7 @@ static int stream_av(CODEC_PAIR_T *pCodecs, STREAMER_CFG_T *pCfg) {
   //
   // Associate any liveFmt frame receivers
   //
-  if(pCfg->action.do_rtmplive || pCfg->action.do_flvlive ||
+  if(pCfg->action.do_rtmplive || pCfg->action.do_rtmppublish || pCfg->action.do_flvlive ||
      pCfg->action.do_flvliverecord || pCfg->action.do_moofliverecord || 
      pCfg->action.do_mkvlive || pCfg->action.do_mkvliverecord) {
 
@@ -3005,6 +3007,16 @@ static int stream_av(CODEC_PAIR_T *pCodecs, STREAMER_CFG_T *pCfg) {
     }
   }
 
+  //
+  // Wait until succesfully PUBLISH / CONNECT to a remote RTMP server
+  //
+  if(pCfg->action.do_rtmppublish) {
+    if((rc = stream_rtmp_publish_start(pCfg, 1)) < 0) {
+      LOG(X_ERROR("Failed to do RTMP PUBLISH"));
+      return stream_av_onexit(pCfg, pCodecs, -1);
+    }
+  }
+
   do {
 
     pthread_mutex_lock(&pCfg->mtxStrmr);
@@ -3207,6 +3219,9 @@ static int stream_av(CODEC_PAIR_T *pCodecs, STREAMER_CFG_T *pCfg) {
 
   if(pCfg->action.do_rtspannounce) {
     stream_rtsp_close(pCfg);
+  }
+  if(pCfg->action.do_rtmppublish) {
+    stream_rtmp_close(pCfg);
   }
 
   stream_av_onexit(pCfg, pCodecs, 0);
@@ -4675,7 +4690,6 @@ static int stream_av_xcode(CODEC_PAIR_T *pCodecs,
 
   }
 
-
 #ifdef XCODE_IPC
   if(rc == 0 && (pCfg->xcode.vid.common.cfgDo_xcode || pCfg->xcode.aud.common.cfgDo_xcode)) {
     if(!(pCfg->xcode.vid.common.pIpc = xcode_ipc_open(XCODE_IPC_MEM_SZ, XCODE_IPC_SHMKEY))) {
@@ -4685,7 +4699,6 @@ static int stream_av_xcode(CODEC_PAIR_T *pCodecs,
     }
   }
 #endif // XCODE_IPC
-
 
   if(rc == 0) {
 

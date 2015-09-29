@@ -1094,8 +1094,8 @@ int vsxlib_streamFileCfg(const char *filePath, double fps,
                   checkEnablePesExtract((pStreamerCfg->proto & STREAM_PROTO_RTP),
                          ((pStreamerCfg->xcode.vid.common.cfgDo_xcode ||
                          pStreamerCfg->xcode.aud.common.cfgDo_xcode) ? 1 : 0),  
-                         (pStreamerCfg->action.do_rtsplive || pStreamerCfg->action.do_rtspannounce ? 1 : 0),
-                         (pStreamerCfg->action.do_rtmplive ? 1 : 0),
+                         ((pStreamerCfg->action.do_rtsplive || pStreamerCfg->action.do_rtspannounce) ? 1 : 0),
+                         ((pStreamerCfg->action.do_rtmplive || pStreamerCfg->action.do_rtmppublish) ? 1 : 0),
                          ((pStreamerCfg->action.do_flvlive || pStreamerCfg->action.do_flvliverecord) ? 1 : 0),
                          ((pStreamerCfg->action.do_mkvlive || pStreamerCfg->action.do_mkvliverecord) ? 1 : 0),
                          (pStreamerCfg->action.do_httplive? 1 : 0),
@@ -1203,7 +1203,8 @@ static int parse_output_dest(STREAMER_CFG_T *pStreamerCfg,
   char buftmp[64];
 
   if((*pnumChannels = strutil_convertDstStr(output, pdestsCfg->dstHost, sizeof(pdestsCfg->dstHost), 
-                                 pdestsCfg->ports, 2, pdestsCfg->dstUri, sizeof(pdestsCfg->dstUri))) < 0) {
+                                 pdestsCfg->ports, 2, strutil_getDefaultPort(outTransType),
+                                 pdestsCfg->dstUri, sizeof(pdestsCfg->dstUri))) < 0) {
     return (int) VSX_RC_ERROR;
   }
 
@@ -1338,7 +1339,6 @@ static int vsxlib_set_output_int(STREAMER_CFG_T *pStreamerCfg,
                       const TURN_CFG_T *pTurnCfg) {
   unsigned int idx;
   size_t sz;
-  //CAPTURE_FILTER_TRANSPORT_T outTransType = CAPTURE_FILTER_TRANSPORT_UDPRTP;
   CAPTURE_FILTER_TRANSPORT_T outTransType = CAPTURE_FILTER_TRANSPORT_UNKNOWN;
   CAPTURE_FILTER_TRANSPORT_T outTransTypeTmp;
   int numChannels = 0;
@@ -1357,15 +1357,19 @@ static int vsxlib_set_output_int(STREAMER_CFG_T *pStreamerCfg,
       return (int) VSX_RC_ERROR;
     }
 
-    if(outTransType == CAPTURE_FILTER_TRANSPORT_RTSP || outTransType == CAPTURE_FILTER_TRANSPORT_RTSPS) {
+    if(IS_CAPTURE_FILTER_TRANSPORT_RTSP(outTransType)) {
       pStreamerCfg->action.do_rtspannounce = 1;
+    } else if(IS_CAPTURE_FILTER_TRANSPORT_RTMP(outTransType)) {
+      pStreamerCfg->action.do_rtmppublish = 1;
+    }
 
+    if(pStreamerCfg->action.do_rtspannounce || pStreamerCfg->action.do_rtmppublish) {
       if(strutil_convertDstStr(outputs[0], pStreamerCfg->pdestsCfg[0].dstHost, 
-               sizeof(pStreamerCfg->pdestsCfg[0].dstHost), pStreamerCfg->pdestsCfg[0].ports, 1, 
+               sizeof(pStreamerCfg->pdestsCfg[0].dstHost), 
+               pStreamerCfg->pdestsCfg[0].ports, 1, strutil_getDefaultPort(outTransType), 
                pStreamerCfg->pdestsCfg[0].dstUri, sizeof(pStreamerCfg->pdestsCfg[0].dstUri)) < 0) {
         return (int) VSX_RC_ERROR;
       }
-
     }
   }
 
@@ -1863,6 +1867,7 @@ VSX_RC_T vsxlib_stream(VSXLIB_STREAM_PARAMS_T *pParams) {
   pS->streamerCfg.overwritefile = pParams->overwritefile;
   pS->streamerCfg.audsamplesbufdurationms = pParams->outaudbufdurationms;
   pS->streamerCfg.rtspannounce.connectretrycntminone = pParams->connectretrycntminone;
+  vsxlib_stream_setup_rtmpclient(&pS->streamerCfg.rtmppublish.cfg, pParams);
   //pS->streamerCfg.frtcp_sr_intervalsec = pParams->frtcp_sr_intervalsec;
   if(pParams->haveavoffsetrtcp) {
     pS->streamerCfg.status.favoffsetrtcp = pParams->favoffsetrtcp;
@@ -2165,7 +2170,7 @@ VSX_RC_T vsxlib_stream(VSXLIB_STREAM_PARAMS_T *pParams) {
 
   pthread_mutex_init(&pS->streamerCfg.mtxStrmr, NULL);
   if(rc == VSX_RC_OK && (do_server || do_flvrecord || do_mkvrecord || pParams->dash_moof_segments == 1 || 
-                         pS->streamerCfg.action.do_rtspannounce)) {
+                         pS->streamerCfg.action.do_rtspannounce || pS->streamerCfg.action.do_rtmppublish)) {
     vsxlib_setsrvconflimits(pParams, STREAMER_OUTFMT_MAX, STREAMER_LIVEQ_MAX, 
                              STREAMER_OUTFMT_MAX, STREAMER_OUTFMT_MAX, 0);
   }
@@ -2201,6 +2206,12 @@ VSX_RC_T vsxlib_stream(VSXLIB_STREAM_PARAMS_T *pParams) {
       rc = VSX_RC_ERROR;
     } else {
       pS->streamerCfg.action.do_mkvliverecord = 1;
+    }
+  }
+
+  if(rc == VSX_RC_OK && pS->streamerCfg.action.do_rtmppublish) {
+    if(vsxlib_setupRtmpPublish(&pS->streamerCfg, pParams) < 0) {
+      rc = VSX_RC_ERROR;
     }
   }
 
@@ -2518,7 +2529,7 @@ VSX_RC_T vsxlib_stream(VSXLIB_STREAM_PARAMS_T *pParams) {
 
     if(pS->streamerCfg.action.do_flvlive ||  pS->streamerCfg.action.do_rtmplive ||
       pS->streamerCfg.action.do_mkvlive || pS->streamerCfg.action.do_rtsplive || 
-      pS->streamerCfg.action.do_rtspannounce) {
+      pS->streamerCfg.action.do_rtspannounce || pS->streamerCfg.action.do_rtmppublish) {
       if(2 > sz) {
         sz = 2; 
         snprintf(buf, sizeof(buf), "http clients");
@@ -2559,6 +2570,11 @@ VSX_RC_T vsxlib_stream(VSXLIB_STREAM_PARAMS_T *pParams) {
   if(pS->streamerCfg.action.do_rtspannounce) {
     //TODO: RTSP is not available for PIP(s)
     vsxlib_closeRtspInterleaved(&pS->streamerCfg);
+  }
+  if(pS->streamerCfg.action.do_rtmppublish) {
+    //TODO: RTMP is not available for PIP(s)
+    vsxlib_closeOutFmt(&pS->streamerCfg.action.liveFmts.out[STREAMER_OUTFMT_IDX_RTMPPUBLISH]);
+    //vsxlib_closeRtmpPublish(&pS->streamerCfg);
   }
   if(pS->srvParam.isinit) {
     vsxlib_closeServer(&pS->srvParam);

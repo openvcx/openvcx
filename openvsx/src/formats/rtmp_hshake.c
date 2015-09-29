@@ -572,7 +572,6 @@ int rtmp_handshake_srv(RTMP_CTXT_T *pRtmp) {
   int rc;
   unsigned char buf[RTMP_HANDSHAKE_SZ + 1];
 
-
   // Ensure pRtmp->in.sz >= 2 * RTMP_HANDSHAKE_SZ 
   if((rc = netio_recvnb_exact(&pRtmp->pSd->netsocket, buf, 
                               RTMP_HANDSHAKE_SZ + 1, RTMP_HANDSHAKE_TMT_MS)) < 0) {
@@ -597,11 +596,8 @@ int rtmp_handshake_srv(RTMP_CTXT_T *pRtmp) {
   //fprintf(stderr, "server handshake:\n");
   //avc_dumpHex(stderr, pRtmp->in.buf, 17, 1);
   //avc_dumpHex(stderr, &pRtmp->in.buf[1537], 16, 1);
-  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - handshake_srv send: %d"), RTMP_HANDSHAKE_SZ * 2 + 1);
-                  LOGHEXT_DEBUG(pRtmp->in.buf, RTMP_HANDSHAKE_SZ * 2 + 1) );
 
-  if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, pRtmp->in.buf,
-                      RTMP_HANDSHAKE_SZ * 2 + 1)) < 0) {
+  if((rc = rtmp_sendbuf(pRtmp, pRtmp->in.buf, RTMP_HANDSHAKE_SZ * 2 + 1, "handshake_srv")) < 0) {
     return -1;
   }
 
@@ -617,6 +613,9 @@ int rtmp_handshake_srv(RTMP_CTXT_T *pRtmp) {
 
   //TODO: verify client handshake
   // memcmp(&buf[1], &pRtmp->in.buf[1], RTMP_HANDSHAKE_SZ);
+
+  pRtmp->state = RTMP_STATE_CLI_HANDSHAKEDONE;
+  LOG(X_DEBUG("rtmp handshake completed"));
 
   return rc;
 }
@@ -682,11 +681,7 @@ int rtmp_handshake_cli(RTMP_CTXT_T *pRtmp, int fp9) {
 
 #endif // VSX_HAVE_RTMP_HMAC
 
-  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - handshake_cli send: %d"), RTMP_HANDSHAKE_SZ + 1);
-                  LOGHEXT_DEBUG(pRtmp->out.buf, RTMP_HANDSHAKE_SZ + 1) );
-
-  if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, pRtmp->out.buf,
-                      RTMP_HANDSHAKE_SZ + 1)) < 0) {
+  if((rc = rtmp_sendbuf(pRtmp, pRtmp->out.buf, RTMP_HANDSHAKE_SZ + 1, "handshake_cli")) < 0) {
     return rc;
   }
 
@@ -748,15 +743,14 @@ int rtmp_handshake_cli(RTMP_CTXT_T *pRtmp, int fp9) {
   }
 #endif // VSX_HAVE_RTMP_HMAC
 
-  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - handshake_cli send: %d"), RTMP_HANDSHAKE_SZ);
-                  LOGHEXT_DEBUG(bufout, RTMP_HANDSHAKE_SZ) );
-
-  if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa,
-                      bufout, RTMP_HANDSHAKE_SZ)) < 0) {
+  if((rc = rtmp_sendbuf(pRtmp, bufout, RTMP_HANDSHAKE_SZ, "handshake_cli")) < 0) {
     return rc;
   }
 
   pRtmp->out.idx = 0;
+
+  pRtmp->state = RTMP_STATE_CLI_HANDSHAKEDONE;
+  LOG(X_DEBUG("rtmp handshake completed"));
 
   return rc;
 }

@@ -82,6 +82,7 @@
 #include "stream_av.h"
 #include "stream_rtp_mp2tsraw.h"
 #include "stream_rtsp.h"
+#include "stream_rtmp.h"
 #include "stream_pip.h"
 #include "stream_pipconf.h"
 #include "stream_piplayout.h"

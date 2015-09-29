@@ -40,7 +40,7 @@ static int set_output(const char *output, const char *rtcpPorts, STREAMER_CFG_T 
 
   if(output) {
     capture_parseTransportStr(&output);
-    if((numChannels = strutil_convertDstStr(output, host, sizeof(host), ports, 2, NULL, 0)) < 0) {
+    if((numChannels = strutil_convertDstStr(output, host, sizeof(host), ports, 2, -1, NULL, 0)) < 0) {
       return -1;
     } else if(numChannels == 0) {
       return -1;

@@ -611,6 +611,24 @@ int net_isipv6(const char *str) {
 
   return 0;
 }
+
+int net_isipv4(const char *str) {
+  const char *p = str;
+
+  if(p && *p != '\0') {
+    while(*p != '\0') {
+
+      if((*p < '0' || *p > '9') && *p != '.') {
+        return 0;
+      }
+  
+      p++;
+    }
+    return 1;
+  }
+
+  return 0;
+}
   
 int net_setsocknonblock(SOCKET sock, int on) {
 #ifdef WIN32

@@ -76,7 +76,7 @@ static int connect_remote(SOCKET_DESCR_T *pAddr) {
 
   if(!pAddr) {
     return -1;
-  } else if(!INET_ADDR_VALID(pAddr->sa) || htons(INET_PORT(pAddr->sa))) {
+  } else if(!INET_ADDR_VALID(pAddr->sa) || htons(INET_PORT(pAddr->sa)) <= 0) {
     LOG(X_ERROR("Remote destination not configured"));
     return -1;
   }
@@ -284,7 +284,7 @@ static int cbOnRcvDataRtmp(void *pArg, int idxSrc,
   if(idxSrc == 0 && NETIOSOCK_FD(pProxy->pAddrRemote->netsocket) <= 0) {
 
     if(!INET_ADDR_VALID(pProxy->pAddrRemote->sa) || htons(INET_PORT(pProxy->pAddrRemote->sa)) <= 0) {
-      LOG(X_ERROR("Remote destination not configured"));
+      LOG(X_ERROR("Remote RTMP destination not configured"));
       return -1;
     }
   }
@@ -418,6 +418,7 @@ static int get_remote_conn(const char *pvirtRsrc,
   MEDIA_DESCRIPTION_T mediaDescr;
   SYS_PROC_T proc;
   STREAM_DEVICE_T devtype;
+  char tmp[128];
   //char virtRsrc[VSX_MAX_PATH_LEN];
   int port;
   int startProc = 0;
@@ -496,6 +497,7 @@ static int get_remote_conn(const char *pvirtRsrc,
       //TODO: set the media action to live or not...
       if((rc = srvmgr_check_start_proc(pConn, &mediaRsrc, &mediaDescr,
                           &proc, &devtype, MEDIA_ACTION_UNKNOWN, STREAM_METHOD_UNKNOWN, &startProc)) < 0) {
+                          //&proc, &devtype, MEDIA_ACTION_UNKNOWN, streamMethod, &startProc)) < 0) {
         LOG(X_ERROR("Unable to %s process for '%s'"), 
             (startProc ? "start" : "find"), mediaRsrc.filepath);
         return -1;
@@ -530,11 +532,12 @@ static int get_remote_conn(const char *pvirtRsrc,
     return -1;
   }
 
-  LOG(X_DEBUG("Resource '%s' proxied to '%s'"), mediaRsrc.filepath, proxystr);
-
   if((rc = capture_getdestFromStr(proxystr, psaout, NULL, NULL, 0)) < 0) {
     return rc;
   }
+
+  LOG(X_DEBUG("Resource '%s' proxied to '%s' (%s:%d)"), mediaRsrc.filepath, proxystr, 
+           INET_NTOP(*psaout, tmp, sizeof(tmp)), htons(PINET_PORT(psaout)));
 
   return rc;
 }
@@ -653,7 +656,6 @@ static int mgr_rtmp_connect(RTMP_CTXT_CLIENT_T *pRtmp) {
   if((rc = rtmp_create_connect(&pRtmp->ctxt, &pRtmp->client)) < 0) {
     return rc;
   }
-
   //avc_dumpHex(stderr, pRtmp->ctxt.out.buf, pRtmp->ctxt.out.idx, 1);
 
   lenData = pRtmp->ctxt.out.idx - 12;
@@ -674,7 +676,7 @@ static int mgr_rtmp_handle_conn(RTMP_CTXT_T *pRtmp, SRV_MGR_CONN_T *pConn) {
   RTMP_CTXT_CLIENT_T rtmpCli;
   PROXY_CONNECTION_T proxyConn;
   char path[RTMP_PARAM_LEN_MAX];
-  size_t sz;
+  char tmp[128];
   int rc = 0;
 
   pRtmp->state = RTMP_STATE_CLI_START;
@@ -688,33 +690,42 @@ static int mgr_rtmp_handle_conn(RTMP_CTXT_T *pRtmp, SRV_MGR_CONN_T *pConn) {
     return rc;
   }
 
-  LOG(X_DEBUG("rtmp handshake with client completed."));
-
+ 
   //
   // Read connect packet
   //
-  if((rc = rtmp_parse_readpkt_full(pRtmp, 1)) < 0 ||
-    pRtmp->state != RTMP_STATE_CLI_CONNECT) {
-    LOG(X_ERROR("Failed to read rtmp connect request"));
-    return rc;
-  }
+  do {
+
+    if((rc = rtmp_parse_readpkt_full(pRtmp, 1, NULL)) < 0 ||
+      (pRtmp->state != RTMP_STATE_CLI_CONNECT && 
+       pRtmp->pkt[pRtmp->streamIdx].hdr.contentType != RTMP_CONTENT_TYPE_CHUNKSZ)) {
+      LOG(X_ERROR("Failed to read rtmp connect request.  State: %d"), pRtmp->state);
+      return rc;
+    }
+
+  } while(pRtmp->state != RTMP_STATE_CLI_CONNECT);
 
   memset(&sdSrv, 0, sizeof(sdSrv));
 
+  // Expecting app <dir>/<resource name>
+  strncpy(path, pRtmp->connect.app, sizeof(path));
   //
   // Strip RTMP filename from 'app' string only leaving the FMS connect param
   //
-  strncpy(path, pRtmp->connect.app, sizeof(path));
-  if((sz = mediadb_getdirlen(path)) > 0) {
-    path[sz - 1] = '\0';
-  }
+  //if((sz = mediadb_getdirlen(path)) > 0) {
+  //  path[sz - 1] = '\0';
+  //}
 
   //
   // Use the 'app' parameter as the unique resource name
   //
   if((rc = get_remote_conn(path, pConn, &sdSrv.sa, STREAM_METHOD_RTMP)) < 0) {
+    LOG(X_ERROR("Invalid RTMP media resource request path: '%s', app: '%s'"), path, pRtmp->connect.app);
     return rc;
   }
+
+  LOG(X_INFO("RTMP media resource request path: '%s', app: '%s' at %s:%d"), path, pRtmp->connect.app, 
+              INET_NTOP(sdSrv, tmp, sizeof(tmp)), htons(INET_PORT(sdSrv)));
 
   if(connect_remote(&sdSrv) < 0) {
     return -1;
@@ -727,6 +738,7 @@ static int mgr_rtmp_handle_conn(RTMP_CTXT_T *pRtmp, SRV_MGR_CONN_T *pConn) {
   rtmpCli.client.tcUrl = pRtmp->connect.tcurl;
   rtmpCli.ctxt.connect.objEncoding = pRtmp->connect.objEncoding;
   rtmpCli.ctxt.connect.capabilities = pRtmp->connect.capabilities;
+  rtmpCli.ctxt.chunkSzIn = pRtmp->chunkSzIn;
 
   if(rc >= 0 && (rc = rtmp_handshake_cli(&rtmpCli.ctxt, 1)) < 0) {
     LOG(X_ERROR("RTMP handshake with proxy failed for %s:%d"),

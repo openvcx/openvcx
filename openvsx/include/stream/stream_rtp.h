@@ -308,6 +308,7 @@ typedef struct STREAM_XMIT_ACTION {
   int                          do_httplive;         // set to enable HTTP live streaming
 
   int                          do_rtmplive;
+  int                          do_rtmppublish;
   int                          do_rtsplive;
   int                          do_rtspannounce;
   int                          do_flvlive;

@@ -64,12 +64,13 @@ int sdputil_init(SDP_DESCR_T *pSdp,
   }
 
   memset(&connectip, 0, sizeof(connectip));
-  if(pDstHost[0] == '\0') {
+  if(!net_isipv4(pDstHost) && !net_isipv6(pDstHost)) {
     //
     // INADDR_NONE
     //
     pDstHost = "0.0.0.0";
   }
+
   net_getaddress(pDstHost, &connectip);
   if(INET_ADDR_VALID(connectip) && INET_IS_MULTICAST(connectip)) {
     pSdp->c.ttl = 64;

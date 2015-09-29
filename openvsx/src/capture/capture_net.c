@@ -1292,17 +1292,6 @@ static int record_async(SOCKET_LIST_T *pSockList,
   return 0;
 }
 
-static void initUri(CAPTURE_DESCR_COMMON_T *pCommon) {
-  int rc; 
-  if((rc = mediadb_getdirlen(pCommon->localAddrs[0])) > 1) {
-    pCommon->addrsExtHost[0] = (char *) &((pCommon->localAddrs[0])[rc]);
-    if(*(pCommon->addrsExt[0]) == '/') {
-       pCommon->addrsExt[0]++;
-     }
-    ((char *) (pCommon->localAddrs[0]))[rc  - 1] = '\0';
-  }
-}
-
 int capture_net_async(CAPTURE_LOCAL_DESCR_T *pLocalCfg,
                       STREAMER_CFG_T *pStreamerCfg,
                       const CAPTURE_RECORD_DESCR_T *pRecordCfg) {
@@ -1340,8 +1329,7 @@ int capture_net_async(CAPTURE_LOCAL_DESCR_T *pLocalCfg,
       return -1;
     }
 
-  } else if(pLocalCfg->common.filt.filters[0].transType == CAPTURE_FILTER_TRANSPORT_RTMP ||
-            pLocalCfg->common.filt.filters[0].transType == CAPTURE_FILTER_TRANSPORT_RTMPS) {
+  } else if(IS_CAPTURE_FILTER_TRANSPORT_RTMP(pLocalCfg->common.filt.filters[0].transType)) {
 
     if(capture_getdestFromStr(pLocalCfg->common.localAddrs[0],
                               &sockList.salist[0],
@@ -1349,14 +1337,12 @@ int capture_net_async(CAPTURE_LOCAL_DESCR_T *pLocalCfg,
                               NULL, RTMP_PORT_DEFAULT) == 0) {
 
       sockList.numSockets = 1;
-      initUri(&pLocalCfg->common);
 
     } else {
       return -1;
     }
 
-  } else if(pLocalCfg->common.filt.filters[0].transType == CAPTURE_FILTER_TRANSPORT_RTSP ||
-            pLocalCfg->common.filt.filters[0].transType == CAPTURE_FILTER_TRANSPORT_RTSPS) {
+  } else if(IS_CAPTURE_FILTER_TRANSPORT_RTSP(pLocalCfg->common.filt.filters[0].transType)) {
 
     if(capture_getdestFromStr(pLocalCfg->common.localAddrs[0],
                               &sockList.salist[0],
@@ -1364,7 +1350,6 @@ int capture_net_async(CAPTURE_LOCAL_DESCR_T *pLocalCfg,
                               NULL, RTSP_PORT_DEFAULT) == 0) {
 
       //sockList.numSockets = 1;
-      initUri(&pLocalCfg->common);
 
     } else {
       return -1;
@@ -1378,10 +1363,12 @@ int capture_net_async(CAPTURE_LOCAL_DESCR_T *pLocalCfg,
   // For rtsp:// input , call capture_rtsp_setup, to connect to the rtsp server
   // and setup the listening port numbers
   // 
-  if((pLocalCfg->common.filt.filters[0].transType == CAPTURE_FILTER_TRANSPORT_RTSP ||
-      pLocalCfg->common.filt.filters[0].transType == CAPTURE_FILTER_TRANSPORT_RTSPS)) {
+  if(IS_CAPTURE_FILTER_TRANSPORT_RTSP(pLocalCfg->common.filt.filters[0].transType)) {
 
     if(pLocalCfg->common.addrsExt[0] == NULL || pLocalCfg->common.addrsExt[0] == '\0') {
+      //
+      // Handle RTSP server capture mode when the URL 'rtsp://[host]:port/uri' is missing any target uri designation
+      //
       //LOG(X_DEBUG("RTSP capture server mode"));
       memcpy(&pLocalCfg->common.rtsp.sd.sa, &sockList.salist[0], sizeof(pLocalCfg->common.rtsp.sd.sa));
 
@@ -1402,6 +1389,9 @@ int capture_net_async(CAPTURE_LOCAL_DESCR_T *pLocalCfg,
       }
 
     } else {
+      //
+      // Handle RTSP client capture mode when the URL 'rtsp://[host]:port/uri' is missing any target uri designation
+      //
 
       memset(&pLocalCfg->common.rtsp, 0, sizeof(pLocalCfg->common.rtsp)); 
       pLocalCfg->common.rtsp.rtsptranstype = pLocalCfg->common.rtsptranstype;
@@ -1412,10 +1402,9 @@ int capture_net_async(CAPTURE_LOCAL_DESCR_T *pLocalCfg,
       pLocalCfg->common.rtsp.authCliCtxt.pcreds = &pLocalCfg->common.creds[0];
       snprintf((char *) pLocalCfg->common.rtsp.authCliCtxt.uribuf, 
               sizeof(pLocalCfg->common.rtsp.authCliCtxt.uribuf), 
-              URL_RTSP_FMT2_STR"%s%s", 
+              URL_RTSP_FMT2_STR"", 
               URL_RTSP_FMT2_ARGS(IS_CAPTURE_FILTER_TRANSPORT_SSL(pLocalCfg->common.filt.filters[0].transType), 
-                           pLocalCfg->common.localAddrs[0]), 
-                           pLocalCfg->common.addrsExtHost[0] != '\0' ? "/" : "", pLocalCfg->common.addrsExtHost[0]);
+                           pLocalCfg->common.localAddrs[0]));
 
       pLocalCfg->common.rtsp.authCliCtxt.puri = pLocalCfg->common.rtsp.authCliCtxt.uribuf; 
       LOG(X_DEBUG("Trying to SETUP RTSP to %s"), pLocalCfg->common.rtsp.authCliCtxt.puri);
@@ -1554,13 +1543,8 @@ int capture_net_sync(CAPTURE_LOCAL_DESCR_T *pLocalCfg,
     }
 
     init_cap_async(&capAsyncCfg, &pLocalCfg->common, &sockList, NULL);
-    //memset(&capAsyncCfg, 0, sizeof(capAsyncCfg));
-    //capAsyncCfg.pcommon = &pLocalCfg->common;
-    //capAsyncCfg.pSockList = &sockList;
     capAsyncCfg.record.outDir = pRecordCfg->outDir;
     capAsyncCfg.record.overwriteOut = pRecordCfg->overwriteOut;
-    //capture_setstate(&capAsyncCfg, STREAMER_STATE_STARTING, 0);
-    //pthread_mutex_init(&capAsyncCfg.mtx, NULL);
 
    if(IS_CAPTURE_FILTER_TRANSPORT_HTTP(pLocalCfg->common.filt.filters[0].transType)) {
 
@@ -1579,7 +1563,13 @@ int capture_net_sync(CAPTURE_LOCAL_DESCR_T *pLocalCfg,
     }
 
     pthread_mutex_destroy(&capAsyncCfg.mtx);
-  } 
+  } else if(IS_CAPTURE_FILTER_TRANSPORT_RTSP(pLocalCfg->common.filt.filters[0].transType)) {
+    LOG(X_ERROR("RTSP synchronous capture not implemented.  Please specify a stream output."));
+    return -1;
+  } else if(IS_CAPTURE_FILTER_TRANSPORT_RTMP(pLocalCfg->common.filt.filters[0].transType)) {
+    LOG(X_ERROR("RTMP synchronous capture not implemented.  Please specify a stream output."));
+    return -1;
+  }
 #ifndef DISABLE_PCAP
 
   //

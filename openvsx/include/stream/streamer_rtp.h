@@ -31,6 +31,7 @@
 #include "capture/capture.h"
 #include "stream/stream_rtp.h"
 #include "stream/stream_rtsp.h"
+#include "stream/stream_rtmp.h"
 #include "stream/stream_av.h"
 #include "stream/stream_net_av.h"
 #include "stream/stream_pktz_frbuf.h"
@@ -269,6 +270,7 @@ typedef struct STREAMER_CFG {
   STREAMER_SHARED_CTXT_T        sharedCtxt;           // utulized when cfgrtp.rtp_useCaptureSrcPort is enabled
   STREAMER_AUTH_LIST_T          creds[STREAMER_AUTH_IDX_MAX];
   STREAM_RTSP_ANNOUNCE_T        rtspannounce;
+  STREAM_RTMP_PUBLISH_T         rtmppublish;
   unsigned int                  frvidqslots;
   unsigned int                  fraudqslots;
   float                         frtcp_sr_intervalsec;

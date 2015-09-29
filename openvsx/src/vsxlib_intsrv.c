@@ -121,7 +121,6 @@ int vsxlib_initRtspInterleaved(STREAMER_CFG_T *pStreamerCfg, unsigned int maxRts
 }
 
 void vsxlib_closeServer(SRV_PARAM_T *pSrv) {
-  //STREAMER_OUTFMT_T *pLiveFmt;
   unsigned int idx, outidx;
   CLIENT_CONN_T *pConn;
 
@@ -253,26 +252,8 @@ void vsxlib_closeServer(SRV_PARAM_T *pSrv) {
     pool_close(&pSrv->poolRtmp, 3000);
     pool_close(&pSrv->poolRtsp, 3000);
 
-
     vsxlib_closeOutFmt(&pSrv->pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_RTMP]);
-/*
-    pLiveFmt = &pSrv->pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_RTMP];
-    pLiveFmt->do_outfmt = 0;
-    if(pLiveFmt) {
-      avc_free((void **) &pLiveFmt->poutFmts);
-    }
-    pthread_mutex_destroy(&pLiveFmt->mtx);
-*/
-
     vsxlib_closeOutFmt(&pSrv->pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_FLV]);
-/*
-    pLiveFmt = &pSrv->pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_FLV];
-    pLiveFmt->do_outfmt = 0;
-    if(pLiveFmt) {
-      avc_free((void **) &pLiveFmt->poutFmts);
-    }
-    pthread_mutex_destroy(&pLiveFmt->mtx);
-*/
     vsxlib_closeOutFmt(&pSrv->pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_MKV]);
 
     for(outidx = 0; outidx < IXCODE_VIDEO_OUT_MAX; outidx++) {

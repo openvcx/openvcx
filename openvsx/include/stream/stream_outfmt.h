@@ -60,15 +60,16 @@
 #define STREAMER_QID_AUD_FRAMES              11
 #define STREAMER_QID_TSLIVE                  100
 #define STREAMER_QID_RTMP                    300
-#define STREAMER_QID_RTSP_INTERLEAVED        400
-#define STREAMER_QID_FLV                     500
-#define STREAMER_QID_FLV_RECORD              600
-#define STREAMER_QID_MKV                     700
-#define STREAMER_QID_MKV_RECORD              800
-#define STREAMER_QID_MOOF                    900
-#define STREAMER_QID_PIPVID                 1000
-#define STREAMER_QID_ORDERING               1100
-#define STREAMER_QID_NACK                   1200
+#define STREAMER_QID_RTMP_PUBLISH            400
+#define STREAMER_QID_RTSP_INTERLEAVED        500
+#define STREAMER_QID_FLV                     600
+#define STREAMER_QID_FLV_RECORD              700
+#define STREAMER_QID_MKV                     800
+#define STREAMER_QID_MKV_RECORD              900
+#define STREAMER_QID_MOOF                   1000
+#define STREAMER_QID_PIPVID                 1100
+#define STREAMER_QID_ORDERING               1200
+#define STREAMER_QID_NACK                   1300
 
 typedef union {
   SPSPPS_RAW_T            h264;       // H.264 specific sps/pps
@@ -174,13 +175,14 @@ typedef struct STREAMER_OUTFMT {
 
 
 typedef enum STREAMER_OUTFMT_IDX {
-  STREAMER_OUTFMT_IDX_RTMP      = 0,
-  STREAMER_OUTFMT_IDX_FLV       = 1,
-  STREAMER_OUTFMT_IDX_FLVRECORD = 2,
-  STREAMER_OUTFMT_IDX_MKV       = 3,
-  STREAMER_OUTFMT_IDX_MKVRECORD = 4,
-  STREAMER_OUTFMT_IDX_MOOF      = 5,
-  STREAMER_OUTFMT_IDX_MAX       = 6
+  STREAMER_OUTFMT_IDX_RTMP         = 0,
+  STREAMER_OUTFMT_IDX_RTMPPUBLISH  = 1,
+  STREAMER_OUTFMT_IDX_FLV          = 2,
+  STREAMER_OUTFMT_IDX_FLVRECORD    = 3,
+  STREAMER_OUTFMT_IDX_MKV          = 4,
+  STREAMER_OUTFMT_IDX_MKVRECORD    = 5,
+  STREAMER_OUTFMT_IDX_MOOF         = 6,
+  STREAMER_OUTFMT_IDX_MAX          = 7
 } STREAMER_OUTFMT_IDX_T;
 
 typedef struct STREAMER_OUTFMT_BUFFER {

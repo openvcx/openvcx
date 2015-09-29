@@ -33,6 +33,7 @@
 #include "stream/stream_rtsptypes.h"
 #include "formats/sdp.h"
 #include "formats/http_client.h"
+#include "formats/rtmp_pkt.h"
 #include "vsxlib.h"
 
 
@@ -80,6 +81,17 @@ typedef struct RTSP_CLIENT_SESSION {
   PKTQUEUE_COND_T               cond;    // conditional for server based capture setup completion
 } RTSP_CLIENT_SESSION_T;
 
+typedef struct RTMP_CLIENT_SESSION {
+  int                           isplaying;
+  STREAMER_STATE_T              runMonitor;
+  int                           runInterleaved;
+  pthread_mutex_t               mtx;
+  char                          localAddrBuf[VSX_MAX_PATH_LEN];
+  SOCKET_DESCR_T                sd;
+  int                           cseq;
+  PKTQUEUE_COND_T               cond;    // conditional for server based capture setup completion
+} RTMP_CLIENT_SESSION_T;
+
 typedef struct CAPTURE_DEVICE_CFG {
   void                         *pCapVidData;
   void                         *pCapAudData;
@@ -107,8 +119,8 @@ typedef struct CAPTURE_DESCR_COMMON {
   //
   // additional param, such as HTTP URI
   //
-  const char                    *addrsExt[CAPTURE_MAX_FILTERS];     
-  char                          *addrsExtHost[CAPTURE_MAX_FILTERS];     
+  const char                    *addrsExt[CAPTURE_MAX_FILTERS]; // usually pointer to localAddrs buffer space
+  char                          *addrsExtHost[CAPTURE_MAX_FILTERS]; // should be set to it's own unique buf space
   unsigned int                   idletmt_ms;
   unsigned int                   idletmt_1stpkt_ms;
 
@@ -134,9 +146,7 @@ typedef struct CAPTURE_DESCR_COMMON {
   int                            xmithighprio;
   int                            caprealtime;
 
-  int                            rtmpfp9;
-  const char                    *rtmppageurl;
-  const char                    *rtmpswfurl;
+  RTMP_CLIENT_CFG_T              rtmpcfg;
 
   int                            novid;
   int                            noaud;

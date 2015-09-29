@@ -139,6 +139,8 @@ enum CMD_OPT {
   CMD_OPT_DEBUG_METAFILE,
   CMD_OPT_DEBUG_MGR,
   CMD_OPT_DEBUG_SSL,
+  CMD_OPT_DEBUG_RTMP,
+  CMD_OPT_DEBUG_RTSP,
   CMD_OPT_HOME,
   CMD_OPT_DBDIR,
   CMD_OPT_LOGTIME,
@@ -174,6 +176,8 @@ int main(int argc, char *argv[]) {
                  { "debug-metafile", optional_argument,    NULL, CMD_OPT_DEBUG_METAFILE },
                  { "debug-mgr",   optional_argument,       NULL, CMD_OPT_DEBUG_MGR },
                  { "debug-ssl",   optional_argument,       NULL, CMD_OPT_DEBUG_SSL },
+                 { "debug-rtmp",  optional_argument,       NULL, CMD_OPT_DEBUG_RTMP },
+                 { "debug-rtsp",  optional_argument,       NULL, CMD_OPT_DEBUG_RTSP },
                  { "home",        required_argument,       NULL, CMD_OPT_HOME },
                  { "listen",      required_argument,       NULL, CMD_OPT_LISTEN},
                  //{ "logtime",     no_argument,             NULL, CMD_OPT_LOGTIME },
@@ -265,6 +269,12 @@ int main(int argc, char *argv[]) {
       case CMD_OPT_DEBUG_SSL:
         g_debug_flags |= VSX_DEBUG_FLAG_SSL;
         break;
+      case CMD_OPT_DEBUG_RTMP:
+        g_debug_flags |= VSX_DEBUG_FLAG_RTMP;
+        break;
+      case CMD_OPT_DEBUG_RTSP:
+        g_debug_flags |= VSX_DEBUG_FLAG_RTSP;
+        break;
       case CMD_OPT_HOME:
         params.homedir = optarg;
         break;
@@ -313,7 +323,6 @@ int main(int argc, char *argv[]) {
 
   g_proc_exit = 0;
   srandom((unsigned int) time(NULL));
-
 
   if(g_verbosity > VSX_VERBOSITY_NORMAL) {
     logger_SetLevel(S_DEBUG);

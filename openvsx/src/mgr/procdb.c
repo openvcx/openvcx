@@ -52,7 +52,7 @@ int http_getpage(const char *addr, uint16_t port, const char *uri,
     uri = "/";
   }
 
-
+  //TODO: does not resolve host!
   memset(&sa, 0, sizeof(sa));
   if((rc = net_getaddress(addr, &sa)) < 0) {
     return rc;
@@ -676,8 +676,8 @@ static char *get_methods_str(int methodBits,
                  (1 << STREAM_METHOD_FLVLIVE) |
                  (1 << STREAM_METHOD_MKVLIVE) |
                  (1 << STREAM_METHOD_TSLIVE) |
-                 (1 << STREAM_METHOD_RTSP);
-                 //(1 << STREAM_METHOD_RTMP);
+                 (1 << STREAM_METHOD_RTSP) |
+                 (1 << STREAM_METHOD_RTMP);
   }
 
   buf[0] = '\0';

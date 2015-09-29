@@ -1742,6 +1742,7 @@ int stream_av_preparepkt(void *pArg) {
   //  pAv->startHz = pAv->lastHz;
   //  pAv->haveStartHzIn = 1;
   //}
+  VSX_DEBUG_STREAMAV( LOG(X_DEBUGV("stream_av_preparepkt isvid: %d, frameId: %llu, len: %d, pts: %.3f (%lluHz) "), pProg->frameData.isvid, pProg->frameId, OUTFMT_LEN(&pProg->frameData), PTSF(pProg->lastHzOut), pProg->lastHzOut) );
 
   if(OUTFMT_LEN(&pProg->frameData) == 0) {
     // Program disabled or frame not yet available, or this is a pip thread

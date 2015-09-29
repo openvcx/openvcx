@@ -68,6 +68,11 @@
 #define RTMP_RCV_TMT_MS               15000
 #define RTMP_RCV_IDLE_TMT_MS          50000
 
+typedef enum RTMP_CLIENTBW_LIMIT_TYPE {
+  RTMP_CLIENTBW_LIMIT_TYPE_HARD             = 0,
+  RTMP_CLIENTBW_LIMIT_TYPE_SOFT             = 1,
+  RTMP_CLIENTBW_LIMIT_TYPE_DYNAMIC          = 2
+} RTMP_CLIENTBW_LIMIT_TYPE_T;
 
 
 typedef int (* RTMP_CB_READDATA)(void *, unsigned char *, unsigned int);
@@ -93,6 +98,7 @@ typedef struct RTMP_PKT {
 } RTMP_PKT_T;
 
 
+
 enum RTMP_STATE {
   RTMP_STATE_INVALID             = 0,
   RTMP_STATE_ERROR               = 1,
@@ -100,39 +106,44 @@ enum RTMP_STATE {
   RTMP_STATE_DISCONNECTED        = 3,
   RTMP_STATE_CLI_START           = 4,
   RTMP_STATE_CLI_HANDSHAKEDONE   = 5,
-  RTMP_STATE_CLI_CONNECT         = 6,
-  RTMP_STATE_CLI_FCPUBLISH       = 7,
-  RTMP_STATE_CLI_CREATESTREAM    = 8,
-  RTMP_STATE_CLI_PUBLISH         = 9,
-  RTMP_STATE_CLI_PLAY            = 10,
-  RTMP_STATE_CLI_PAUSE           = 11,
-  RTMP_STATE_CLI_ONMETA          = 12,
-  RTMP_STATE_CLI_DONE            = 13, 
+  RTMP_STATE_CLI_HAVESERVERBW    = 6,
+  RTMP_STATE_CLI_CONNECT         = 7,
+  RTMP_STATE_CLI_FCPUBLISH       = 8,
+  RTMP_STATE_CLI_CREATESTREAM    = 9,
+  RTMP_STATE_CLI_RELEASESTREAM   = 10,
+  RTMP_STATE_CLI_PUBLISH         = 11,
+  RTMP_STATE_CLI_PLAY            = 12,
+  RTMP_STATE_CLI_PAUSE           = 13,
+  RTMP_STATE_CLI_ONMETA          = 14,
+  RTMP_STATE_CLI_DONE            = 15
 };
 
 enum RTMP_METHOD {
   RTMP_METHOD_UNKNOWN            = 0,
-  RTMP_METHOD_PLAY               = 1,
-  RTMP_METHOD_CREATESTREAM       = 2,
+  RTMP_METHOD_ERROR              = 1,
+  RTMP_METHOD_RESULT             = 2,
   RTMP_METHOD_CONNECT            = 3,
-  RTMP_METHOD_RESULT             = 4,
-  RTMP_METHOD_ERROR              = 5,
-  RTMP_METHOD_ONMETADATA         = 6,
-  RTMP_METHOD_ONSTATUS           = 7,
-  RTMP_METHOD_DELETESTREAM       = 8,
-  RTMP_METHOD_CLOSESTREAM        = 9,
-  RTMP_METHOD_RELEASESTREAM      = 10,
-  RTMP_METHOD_ONFCSUBSCRIBE      = 12,
-  RTMP_METHOD_FCPUBLISH          = 13,
-  RTMP_METHOD_PUBLISH            = 14,
-  RTMP_METHOD_SAMPLEACCESS       = 15,
-  RTMP_METHOD_PAUSERAW           = 16,
-  RTMP_METHOD_SETDATAFRAME       = 17,
-  RTMP_METHOD_SERVERBW           = 18,
-  RTMP_METHOD_CLIENTBW           = 19,
-  RTMP_METHOD_PING               = 20,
-  RTMP_METHOD_CHUNKSZ            = 21,
-  RTMP_METHOD_BYTESREAD          = 22,
+  RTMP_METHOD_PLAY               = 4,
+  RTMP_METHOD_CREATESTREAM       = 5,
+  RTMP_METHOD_DELETESTREAM       = 6,
+  RTMP_METHOD_CLOSESTREAM        = 7,
+  RTMP_METHOD_RELEASESTREAM      = 8,
+  RTMP_METHOD_PAUSERAW           = 9,
+  RTMP_METHOD_PUBLISH            = 10,
+  RTMP_METHOD_UNPUBLISH          = 11,
+  RTMP_METHOD_FCPUBLISH          = 12,
+  RTMP_METHOD_FCUNPUBLISH        = 13,
+  RTMP_METHOD_SAMPLEACCESS       = 14,
+  RTMP_METHOD_SETDATAFRAME       = 15,
+  RTMP_METHOD_SERVERBW           = 16,
+  RTMP_METHOD_CLIENTBW           = 17,
+  RTMP_METHOD_PING               = 18,
+  RTMP_METHOD_CHUNKSZ            = 19,
+  RTMP_METHOD_BYTESREAD          = 20,
+  RTMP_METHOD_ONMETADATA         = 21,
+  RTMP_METHOD_ONSTATUS           = 22,
+  RTMP_METHOD_ONFCPUBLISH        = 23,
+  RTMP_METHOD_ONFCSUBSCRIBE      = 24,
 };
 
 #define RTMP_PARAM_LEN_MAX          128
@@ -162,7 +173,8 @@ typedef struct RTMP_CTXT {
   RTMP_PKT_T               pkt[RTMP_STREAM_INDEXES];
   unsigned int             streamIdx;
   unsigned int             streamIdxPrev;
-  unsigned int             chunkSz; // TODO: should this be stream index specific?
+  unsigned int             chunkSzIn; 
+  unsigned int             chunkSzOut; // TODO: should this be stream index specific?
   RTMP_CONNECT_PARAMS_T    connect;
   RTMP_PUBLISH_PARAMS_T    publish;
   uint8_t                  contentTypeLastInvoke;
@@ -170,6 +182,7 @@ typedef struct RTMP_CTXT {
   struct timeval           tvLastRd;
 
   //TODO: seperate server output stream context from parse ctxt
+  int                      isclient;
   enum RTMP_STATE          state;
   enum RTMP_METHOD         methodParsed;
   double                   advCapabilities; 
@@ -191,7 +204,7 @@ int rtmp_parse_readpkt(RTMP_CTXT_T *pRtmp);
 int rtmp_parse_invoke(RTMP_CTXT_T *pRtmp, FLV_AMF_T *pAmf);
 
 int rtmp_handshake_srv(RTMP_CTXT_T *pRtmp);
-int rtmp_handshake_cli(RTMP_CTXT_T *pRtmp, int fp9);
+int rtmp_handshake_cli(RTMP_CTXT_T *pRtmp, int rtmpfp9);
 
 
 

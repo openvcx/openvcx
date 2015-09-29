@@ -389,8 +389,7 @@ int rtmp_record_init(RTMP_RECORD_T *pRtmp) {
   pRtmp->state.handshake = RTMP_HANDSHAKE_STATE_INPROGRESS;
   pRtmp->state.handshakeIdx = 0;
 
-  fprintf(stderr, "rtmp_record_init chunksz:%u\n", pRtmp->ctxt.chunkSz); 
-
+  //LOG(X_DEBUG("rtmp_record_init chunksz:%u"), pRtmp->ctxt.chunkSzIn); 
 
   return rc;
 }
@@ -434,7 +433,7 @@ int cbOnPkt_rtmp(void *pArg, const COLLECT_STREAM_PKTDATA_T *pPkt) {
 
 
 #ifdef DEBUG_RTMP_READ
-  fprintf(stderr, "rtmp_ondata(0x%x) len:%d 0x%x 0x%x 0x%x 0x%x chunkSz:%u hshk:%d\n", pRtmp, len, pData[0], pData[1], pData[2], pData[3], pRtmp->ctxt.chunkSz, pRtmp->state.handshake);
+  fprintf(stderr, "rtmp_ondata(0x%x) len:%d 0x%x 0x%x 0x%x 0x%x chunksz:%u hshk:%d\n", pRtmp, len, pData[0], pData[1], pData[2], pData[3], pRtmp->ctxt.chunkSzInt, pRtmp->state.handshake);
   //avc_dumpHex(stderr, pData, len > 1024 ? 1024 : len, 1);
 #endif // DEBUG_RTMP_READ
 

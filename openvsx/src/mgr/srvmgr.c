@@ -1287,10 +1287,11 @@ int srvmgr_check_start_proc(SRV_MGR_CONN_T *pConn,
   }
 
   VSX_DEBUG_MGR(LOG(X_DEBUG("MGR - check_start_proc virtRsrc: '%s', id: '%s', instanceId: '%s' "
-                            "found proc 0x%x, instanceIid: '%s', haveFullMedia: %d, shared: %d"), 
+                            "found proc 0x%x, instanceIid: '%s', haveFullMedia: %d, shared: %d, methodbits: 0x%x"), 
          pMediaRsrc->virtRsrc, pMediaRsrc->pId, pMediaRsrc->instanceId, pProc, 
-         pProc ? pProc->instanceId : "", haveFullMediaDescr, *pMediaRsrc->pshared));
-
+         pProc ? pProc->instanceId : "", haveFullMediaDescr, pMediaRsrc->pshared ? *pMediaRsrc->pshared : 0,
+         pMediaRsrc->pmethodBits ? *pMediaRsrc->pmethodBits : 0));
+ 
   //
   // Lock the process list
   //
@@ -2424,7 +2425,7 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
     }
   }
 
-  //fprintf(stderr, "TRY RTMP %d '%s' 1:%s:%d\n", params.rtmplivemax ,params.rtmpliveaddr[0], inet_ntoa(cfg.listenRtmp[0].sa.sin_addr), ntohs(INET_PORT(cfg.listenRtmp[0].sa)));
+  //fprintf(stderr, "TRY RTMP %d '%s' 1:%s:%d\n", params.rtmplivemax ,params.rtmpliveaddr[0], INET_NTOP(cfg.listenRtmp[0].sa, tmp, sizeof(tmp)), ntohs(INET_PORT(cfg.listenRtmp[0].sa)));
   memset(cfg.listenRtmp, 0, sizeof(cfg.listenRtmp));
   if(params.rtmplivemax > 0 && params.rtmpliveaddr[0] &&
      (rc = vsxlib_parse_listener((const char **) params.rtmpliveaddr, SRV_LISTENER_MAX_RTMP,

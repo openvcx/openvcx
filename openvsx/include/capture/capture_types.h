@@ -352,6 +352,12 @@ typedef enum CAPTURE_FILTER_TRANSPORT {
                                        || (t) == CAPTURE_FILTER_TRANSPORT_HTTPDASH \
                                        || (t) == CAPTURE_FILTER_TRANSPORT_HTTPSDASH)
 
+#define IS_CAPTURE_FILTER_TRANSPORT_RTSP(t)  ((t) == CAPTURE_FILTER_TRANSPORT_RTSP \
+                                       || (t) == CAPTURE_FILTER_TRANSPORT_RTSPS)
+
+#define IS_CAPTURE_FILTER_TRANSPORT_RTMP(t)  ((t) == CAPTURE_FILTER_TRANSPORT_RTMP \
+                                       || (t) == CAPTURE_FILTER_TRANSPORT_RTMPS)
+
 #define IS_CAPTURE_FILTER_TRANSPORT_SSL(t)  ((t) == CAPTURE_FILTER_TRANSPORT_HTTPSGET \
                                        || (t) == CAPTURE_FILTER_TRANSPORT_HTTPSFLV \
                                        || (t) == CAPTURE_FILTER_TRANSPORT_HTTPSMP4 \
