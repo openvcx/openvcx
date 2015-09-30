@@ -1718,21 +1718,30 @@ int capture_rtmp_server(CAP_ASYNC_DESCR_T *pCfg) {
     pClient = (CLIENT_CONN_T *) pClient->pool.pNext;
   }
 
-
   if((NETIOSOCK_FD(pCfg->pSockList->netsockets[0]) = 
       net_listen((const struct sockaddr *) &pCfg->pSockList->salist[0], 2)) == INVALID_SOCKET) {
     pool_close(&pool, 0);
     return -1;
   }
 
-  LOG(X_INFO("RTMP capture listener available on %s:%d"),
-      FORMAT_NETADDR(pCfg->pSockList->salist[0], tmp, sizeof(tmp)), ntohs(INET_PORT(pCfg->pSockList->salist[0])));
-
   memset(&listenCfg, 0, sizeof(listenCfg));
   listenCfg.pnetsockSrv = &pCfg->pSockList->netsockets[0];
+  listenCfg.netflags = pCfg->pSockList->netsockets[0].flags;
   listenCfg.pConnPool = &pool;
   listenCfg.urlCapabilities = URL_CAP_RTMPLIVE;
   memcpy(&listenCfg.sa, &pCfg->pSockList->salist[0], sizeof(listenCfg.sa));
+
+  //
+  // Enable SSL/TLS
+  //
+  if(pCfg->pStreamerCfg && pCfg->pStreamerCfg->pStorageBuf && 
+     ((STREAM_STORAGE_T *) pCfg->pStreamerCfg->pStorageBuf)->pParams) {
+    rc = vsxlib_ssl_initserver(((STREAM_STORAGE_T *) pCfg->pStreamerCfg->pStorageBuf)->pParams, &listenCfg);
+  }
+
+  LOG(X_INFO("RTMP capture listener available on "URL_RTMP_FMT_STR),
+         URL_HTTP_FMT_ARGS2(&listenCfg, FORMAT_NETADDR(listenCfg.sa, tmp, sizeof(tmp))));
+      //FORMAT_NETADDR(pCfg->pSockList->salist[0], tmp, sizeof(tmp)), ntohs(INET_PORT(pCfg->pSockList->salist[0])));
 
   //
   // Service any client connections on the live listening port
