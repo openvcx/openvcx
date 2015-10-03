@@ -120,28 +120,6 @@ static int addPorts(const char *str,
   return numPortsAdded;
 }
 
-char *capture_safe_copyToBuf(char *buf, size_t szbuf, const char *pstart, const char *pend) {
-  size_t sz;
-
-  if(!buf || !pstart) {
-    return NULL;
-  }
-
-  if(pend) {
-    if((sz = pend - pstart) >= szbuf) {
-      sz = szbuf - 1;
-    }
-  } else {
-    sz = szbuf - 1;
-  }
-
-  memcpy(buf, pstart, sz);
-  buf[sz] = '\0';
-
-  return buf;
-}
-
-
 int capture_parsePortStr(const char *str,
                  uint16_t localPorts[], 
                  size_t maxLocalPorts,
@@ -157,7 +135,7 @@ int capture_parsePortStr(const char *str,
   while(p && numPortsAdded < maxLocalPorts) {
 
     if((p2 = strstr(p, ","))) {
-      pdata = capture_safe_copyToBuf(buf, sizeof(buf), p, p2);
+      pdata = strutil_safe_copyToBuf(buf, sizeof(buf), p, p2);
     } else {
       pdata = p;
     }

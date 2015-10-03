@@ -734,8 +734,6 @@ static int mgr_rtmp_handle_conn(RTMP_CTXT_T *pRtmp, SRV_MGR_CONN_T *pConn) {
   memset(&rtmpCli, 0, sizeof(rtmpCli));
   mgr_rtmp_init(&rtmpCli.ctxt);
   rtmpCli.ctxt.pSd = &sdSrv;
-  rtmpCli.client.app = pRtmp->connect.app;
-  rtmpCli.client.tcUrl = pRtmp->connect.tcurl;
   rtmpCli.ctxt.connect.objEncoding = pRtmp->connect.objEncoding;
   rtmpCli.ctxt.connect.capabilities = pRtmp->connect.capabilities;
   rtmpCli.ctxt.chunkSzIn = pRtmp->chunkSzIn;

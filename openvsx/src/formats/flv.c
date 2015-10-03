@@ -1323,5 +1323,28 @@ int flv_extractRaw(FLV_CONTAINER_T *pFlv, const char *outPrfx,
   return rc;
 }
 
+const FLV_AMF_T *flv_amf_find(const FLV_AMF_T *pAmf, const char *str) {
+
+  if(!str) {
+    return NULL;
+  }
+
+  while(pAmf) {
+    if(pAmf->key.p && !strncasecmp((const char *) pAmf->key.p, str, strlen(str))) {
+      return pAmf;
+    }
+    pAmf = pAmf->pnext;
+  }
+  return NULL;
+}
+
+const char *flv_amf_get_key_string(const FLV_AMF_T *pAmf) {
+  if(pAmf && pAmf->val.type == FLV_AMF_TYPE_STRING && pAmf->val.u.str.p) {
+    return (const char *) pAmf->val.u.str.p;
+  } else {
+    return "";
+  }
+}
+
 #endif // VSX_EXTRACT_CONTAINER
 

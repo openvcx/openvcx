@@ -90,6 +90,7 @@ OBJS_PRIMARY= \
            ${BUILD_DIR}/formats/rtmp_hshake.o \
            ${BUILD_DIR}/formats/rtmp_parse.o \
            ${BUILD_DIR}/formats/rtmp_pkt.o \
+           ${BUILD_DIR}/formats/rtmp_auth.o \
            ${BUILD_DIR}/formats/sdp.o \
            ${BUILD_DIR}/formats/sdputil.o \
            ${BUILD_DIR}/formats/stun.o \
@@ -255,6 +256,7 @@ OBJS_MGR= \
           ${BUILD_DIR}/formats/rtmp_hshake.o \
           ${BUILD_DIR}/formats/rtmp_parse.o \
           ${BUILD_DIR}/formats/rtmp_pkt.o \
+          ${BUILD_DIR}/formats/rtmp_auth.o \
           ${BUILD_DIR}/formats/sdp.o \
           ${BUILD_DIR}/formats/stun.o \
           ${BUILD_DIR}/vsxlib_int.o \

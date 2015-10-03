@@ -38,7 +38,7 @@ typedef struct STREAM_RTMP_PUBLISH {
                                                          // 0 - off, 1 - forever, 
                                                          // 2 - once, 3 twice, etc... 
   pthread_mutex_t               mtx;
-  RTMP_CLIENT_SESSION_T        *pSession;
+  SOCKET_DESCR_T                *pSd;
   RTMP_CLIENT_CFG_T             cfg;
 } STREAM_RTMP_PUBLISH_T;
 

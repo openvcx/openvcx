@@ -44,10 +44,10 @@ int path_getLenNonPrefixPart(const char *path);
 int path_getLenDirPart(const char *path);
 int get_port_range(const char *str, uint16_t *pstart, uint16_t *pend);
 int strutil_parseDimensions(const char *str, int *px, int *py);
-int strutil_parse_csv(STRUTIL_PARSE_CSV_TOKEN cbToken, void *pCbTokenArg,
-                      const char *line);
-
+int strutil_parse_csv(STRUTIL_PARSE_CSV_TOKEN cbToken, void *pCbTokenArg, const char *line);
+int strutil_parse_delimeted_str(STRUTIL_PARSE_CSV_TOKEN cbToken, void *pCbTokenArg, const char *line, char delimeter);
 int strutil_parse_pair(const char *str, void *pParseCtxt, PARSE_PAIR_CB cbParseElement);
+char *strutil_safe_copyToBuf(char *buf, size_t szbuf, const char *pstart, const char *pend);
 const char *strutil_skip_key(const char *p, unsigned int len);
 int strutil_read_rgb(const char *str, unsigned char RGB[3]);
 int64_t strutil_read_numeric(const char *s, int bAllowbps, int bytesInK, int dflt);

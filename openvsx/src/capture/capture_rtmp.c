@@ -27,9 +27,9 @@
 #if defined(VSX_HAVE_CAPTURE)
 
 
-#define RTMP_TCURL_SZMAX     512
-//#define RTMP_FLASH_VER       "WIN 10,0,32,18"
-#define RTMP_FLASH_VER       "FMLE/3.0 (compatible; FMSc/1.0)"
+#define RTMP_FLASH_VER_CAPTURE_CLIENT       "WIN 10,0,32,18"
+#define RTMP_FLASH_VER_PUBLISH              "FMLE/3.0 (compatible; FMSc/1.0)"
+
 
 static int handle_audpkt_aac(RTMP_CTXT_CLIENT_T *pRtmp, FLV_TAG_AUDIO_T *pTag, 
                              unsigned char *pData, unsigned int len,
@@ -584,51 +584,81 @@ static int rtmp_create_bytes_read(RTMP_CTXT_T *pRtmp) {
 }
 
 
-static int rtmp_connect(RTMP_CTXT_CLIENT_T *pRtmp) {
+static int rtmp_connect(RTMP_CTXT_CLIENT_T *pClient, const char *flashVer) {
   int rc = 0;
-  //unsigned int lenData;
+  size_t sz;
+  char authstr[128];
   char portstr[32];
+  const char *app = NULL;
   
   portstr[0] = '\0';
-  if(ntohs(INET_PORT(pRtmp->ctxt.pSd->sa)) != RTMP_LISTEN_PORT) {
-    snprintf(portstr, sizeof(portstr) - 1, ":%d", ntohs(INET_PORT(pRtmp->ctxt.pSd->sa)));
+  if(ntohs(INET_PORT(pClient->ctxt.pSd->sa)) != RTMP_LISTEN_PORT) {
+    snprintf(portstr, sizeof(portstr) - 1, ":%d", ntohs(INET_PORT(pClient->ctxt.pSd->sa)));
   } 
 
-  LOG(X_DEBUG("URL: '%s' '%s'"), pRtmp->purl, pRtmp->puri);
-  pRtmp->client.app = pRtmp->puri;
-  pRtmp->client.playElem = pRtmp->puridocname;
-  if(*pRtmp->client.app == '\0') {
-    pRtmp->client.app = pRtmp->puridocname;
-  }
-  if(*pRtmp->client.app == '/') {
-    pRtmp->client.app++;
-  }
-  pRtmp->client.flashVer = RTMP_FLASH_VER;
-  //pRtmp->client.swfUrl = "http://192.168.1.151:8082/wowza/LiveVideoStreaming/client/live.swf";
-  //pRtmp->client.pageUrl = "http://192.168.1.151:8082/wowza/LiveVideoStreaming/client/live.html";
-  snprintf((char *) pRtmp->client.tcUrl, RTMP_TCURL_SZMAX , "rtmp://%s%s%s%s", pRtmp->purl, portstr, 
-       *pRtmp->puri != '\0' ? "/" : "", pRtmp->puri);
+  //LOG(X_DEBUG("URL: '%s' URI: '%s', lastAuthState: %d, salt: '%s', username: '%s'"), pClient->purl, pClient->puri, pClient->auth.ctxt.lastAuthState, pClient->auth.ctxt.p.salt, pClient->auth.pcreds ? pClient->auth.pcreds->username: "<NULL>");
 
-  //VSX_DEBUG_RTMP( 
-   LOG(X_DEBUG("RTMP connect app: '%s', flashVer: '%s', swfUrl: '%s', tcUrl: '%s', pageUrl: '%s', playElement: '%s'"), 
-       pRtmp->client.app, pRtmp->client.flashVer, pRtmp->client.cfg.prtmpswfurl, pRtmp->client.tcUrl, 
-       pRtmp->client.cfg.prtmppageurl, pRtmp->client.playElem); 
-  //);
+  pClient->client.playElem = pClient->puridocname;
+  app = pClient->puri;
+  if(*app == '\0') {
+    app = pClient->puridocname;
+  }
+  if(*app == '/') {
+    app++;
+  }
+  pClient->client.flashVer = flashVer;
+  //pClient->client.swfUrl = "http://192.168.1.151:8082/wowza/LiveVideoStreaming/client/live.swf";
+  //pClient->client.pageUrl = "http://192.168.1.151:8082/wowza/LiveVideoStreaming/client/live.html";
+  authstr[0] = '\0';
 
-  pRtmp->ctxt.out.idx = 0;
-  if((rc = rtmp_create_chunksz(&pRtmp->ctxt)) < 0) {
+  //
+  // Add client authentication user, challenge, response, opaque to the URI
+  //
+  if(pClient->auth.ctxt.lastAuthState == RTMP_AUTH_STATE_NEED_CHALLENGE ||
+     pClient->auth.ctxt.lastAuthState == RTMP_AUTH_STATE_HAVE_CHALLENGE) {
+
+    if(!pClient->auth.pcreds) {
+      return -1;
+    }
+
+    rc = snprintf(authstr, sizeof(authstr), "?authmod=%s&user=%s", 
+           rtmp_auth_getauthmodstr(pClient->auth.ctxt.authmod), pClient->auth.pcreds->username);
+    if(rc >= 0 && pClient->auth.ctxt.lastAuthState == RTMP_AUTH_STATE_HAVE_CHALLENGE) {
+      sz = rc; 
+      pClient->auth.ctxt.challenge_cli[0] = '\0';
+      if((rc = rtmp_auth_compute(&pClient->auth.ctxt, pClient->auth.pcreds)) < 0) {
+        LOG(X_ERROR("RTMP failed to create authmod connect request"));
+        return rc;
+      } else {
+        rc = snprintf(&authstr[sz], sizeof(authstr) - sz, "&challenge=%s&response=%s&opaque=%s",
+                    pClient->auth.ctxt.challenge_cli, pClient->auth.ctxt.response, pClient->auth.ctxt.p.opaque);
+      }
+    }
+  }
+  
+  snprintf(pClient->ctxt.connect.app, sizeof(pClient->ctxt.connect.app), "%s%s", app, authstr);
+  snprintf(pClient->ctxt.connect.tcUrl, sizeof(pClient->ctxt.connect.tcUrl), 
+          "rtmp://%s%s%s%s%s", pClient->purl, portstr, *pClient->puri != '\0' ? "/" : "", pClient->puri, authstr);
+
+   LOG(X_DEBUG("RTMP connect app: '%s', flashVer: '%s', swfUrl: '%s', tcUrl: '%s', pageUrl: '%s', "
+               "playElement: '%s'"), 
+     pClient->ctxt.connect.app, pClient->client.flashVer, pClient->client.cfg.prtmpswfurl, 
+     pClient->ctxt.connect.tcUrl, pClient->client.cfg.prtmppageurl, pClient->client.playElem); 
+
+  pClient->ctxt.out.idx = 0;
+  if((rc = rtmp_create_chunksz(&pClient->ctxt)) < 0) {
     return rc;
   }
 
-  if((rc = rtmp_create_connect(&pRtmp->ctxt, &pRtmp->client)) < 0) {
+  if((rc = rtmp_create_connect(&pClient->ctxt, &pClient->client)) < 0) {
     return rc; 
   }
 
-  if((rc = rtmp_send(&pRtmp->ctxt, "rtmp_connect")) < 0) {
+  if((rc = rtmp_send(&pClient->ctxt, "rtmp_connect")) < 0) {
     return -1;
   }
 
-  pRtmp->ctxt.out.idx = 0;
+  pClient->ctxt.out.idx = 0;
 
   return rc;
 }
@@ -764,32 +794,6 @@ static CONNECT_RETRY_RC_T rtmp_createStream(RTMP_CTXT_T *pRtmp, int contentType,
 
   return retryRc;
 }
-/*
-static CONNECT_RETRY_RC_T rtmp_onstatus(RTMP_CTXT_T *pRtmp, const RTMP_CLIENT_PARAMS_T *pClientParams) {
-  CONNECT_RETRY_RC_T retryRc = CONNECT_RETRY_RC_OK;
-  int rc = 0;
-
-  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_onstatus called...")) );
-
-  if(rc >= 0 && (rc = rtmp_create_onstatus(pRtmp, 0)) < 0) {
-    retryRc = CONNECT_RETRY_RC_ERROR;
-  }
-
-  if(rc >= 0) {
-
-    if((rc = rtmp_send(pRtmp, "onstatus")) < 0) {
-      retryRc = CONNECT_RETRY_RC_ERROR;
-    }
-    pRtmp->out.idx = 0;
-  }
-
-  if(rc < 0) {
-    pRtmp->state = RTMP_STATE_ERROR;
-  }
-
-  return retryRc;
-}
-*/
 
 static CONNECT_RETRY_RC_T rtmp_play(RTMP_CTXT_CLIENT_T *pRtmp) {
   CONNECT_RETRY_RC_T retryRc = CONNECT_RETRY_RC_OK; 
@@ -801,8 +805,6 @@ static CONNECT_RETRY_RC_T rtmp_play(RTMP_CTXT_CLIENT_T *pRtmp) {
   if(rc >= 0 && (rc = rtmp_create_play(&pRtmp->ctxt, &pRtmp->client)) < 0) {
     retryRc = CONNECT_RETRY_RC_ERROR;
   }
-  //lenPlay = rc;
-  //LOG(X_DEBUG("RTMP_PLAY RC: %d"), rc);
 
   if(rc >= 0) {
     lenData = pRtmp->ctxt.out.idx - 12;
@@ -831,25 +833,6 @@ static CONNECT_RETRY_RC_T rtmp_play(RTMP_CTXT_CLIENT_T *pRtmp) {
   return retryRc;
 }
 
-static const FLV_AMF_T *amf_find(const FLV_AMF_T *pAmf, const char *str) {
-
-  while(pAmf) {
-    if(pAmf->key.p && !strncasecmp((const char *) pAmf->key.p, str, strlen(str))) {
-      return pAmf;
-    }
-    pAmf = pAmf->pnext;
-  }
-  return NULL;
-}
-
-static const char *amf_get_key_string(const FLV_AMF_T *pAmf) {
-  if(pAmf && pAmf->val.type == FLV_AMF_TYPE_STRING && pAmf->val.u.str.p) {
-    return (const char *) pAmf->val.u.str.p;
-  } else {
-    return "";
-  }
-}
-
 static int rtmp_parse_serverbw(RTMP_CTXT_T *pRtmp) {
   int rc = 0;
   BYTE_STREAM_T bs;
@@ -872,7 +855,6 @@ static int parse_handle_ping(RTMP_CTXT_T *pRtmp) {
   uint16_t type;
   uint32_t arg1;
   char tmp[128];
-  //char buf[SAFE_INET_NTOA_LEN_MAX];
 
   type = htons( *((uint16_t *) &pRtmp->in.buf[0]) ); 
 
@@ -979,75 +961,221 @@ static int parse_readpkt(RTMP_CTXT_T *pRtmp, FLV_AMF_T *pAmfList) {
   return rc;
 }
 
-/*
-static int rtmp_parse_readpkt_client(RTMP_CTXT_T *pRtmp, FLV_AMF_T *pAmfList) {
-  int rc = 0;
-  int contentType;
-  //FLV_AMF_T *pAmf = NULL;
-
-  pRtmp->in.idx = 0;
-
-  if((rc = rtmp_parse_readpkt(pRtmp)) < 0) {
-    return -1;
-  } else if(rc == 0) {
-    LOG(X_ERROR("Failed to read entire rtmp packet contents"));
-    return -1;
-  }
-  //fprintf(stderr, "rtmp full pkt sz:%d ct:%d, id:%d, ts:%d(%d), dest:0x%x, hdr:%d\n", pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt, pRtmp->pkt[pRtmp->streamIdx].hdr.contentType, pRtmp->pkt[pRtmp->streamIdx].hdr.id, pRtmp->pkt[pRtmp->streamIdx].hdr.ts, pRtmp->pkt[pRtmp->streamIdx].tsAbsolute, pRtmp->pkt[pRtmp->streamIdx].hdr.dest, pRtmp->pkt[pRtmp->streamIdx].szHdr0);
-  //avc_dumpHex(stderr, pRtmp->in.buf, pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt > 16 ? 16 : pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt, 1);
-
-  pRtmpContentType = pRtmp->pkt[pRtmp->streamIdx].hdr.contentType;
-  contentType = pRtmp->pkt[pRtmp->streamIdx].hdr.contentType;
-
-  switch(contentType) {
-
-    case RTMP_CONTENT_TYPE_INVOKE:
-    case RTMP_CONTENT_TYPE_MSG:
-    case RTMP_CONTENT_TYPE_NOTIFY:
-      //avc_dumpHex(stderr, pRtmp->in.buf, pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt, 1);
-      rc = rtmp_parse_invoke(pRtmp, pAmfList);
-      break;
-    case RTMP_CONTENT_TYPE_SERVERBW:
-      rtmp_parse_serverbw(pRtmp);
-      break;
-    case RTMP_CONTENT_TYPE_CLIENTBW:
-      break;
-    case RTMP_CONTENT_TYPE_PING:
-      parse_handle_ping(pRtmp);    
-      break;
-    case RTMP_CONTENT_TYPE_CHUNKSZ:
-      // automatically handled in rtmp_parse_readpkt
-      break;
-
-    default:
-      //avc_dumpHex(stderr, pRtmp->in.buf, pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt, 1);
-      break;
-  }
-
-  if(rc >=0) {
-    rc = contentType;
-  }
-
-  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - parse_readpkt_client contentType: 0x%x, state: %d, rc: %d"), 
-                              contentType, pRtmp->state, rc) );
-
-  return rc;
-}
-*/
-
-static int rtmp_is_resp_error(const FLV_AMF_T *pAmfList, const char *operation) {
+static int rtmp_is_resp_error(const FLV_AMF_T *pAmfList, const char *operation, int explicit, int logLevel) {
   int rc = 0;
   const FLV_AMF_T *pAmf;
 
-  if((pAmf = amf_find(pAmfList, "_error"))) {
+  if(explicit || (pAmf = flv_amf_find(pAmfList, "_error"))) {
 
     rc = 1;
 
-    LOG(X_ERROR("RTMP %s error code: '%s' description: '%s'"),
-      operation, amf_get_key_string(amf_find(pAmfList, "code")),
-      amf_get_key_string(amf_find(pAmfList, "description")));
+    LOG(logLevel, ("RTMP %s error code: '%s' description: '%s'\n"),
+      operation, flv_amf_get_key_string(flv_amf_find(pAmfList, "code")),
+      flv_amf_get_key_string(flv_amf_find(pAmfList, "description")));
 
   }
+
+  return rc;
+}
+
+static int check_cli_auth(RTMP_CTXT_CLIENT_T *pClient, int *phaveConnect) {
+  int rc = 0;
+  RTMP_AUTH_PARSE_CTXT_T rtmpAuthParse;
+  const char *p = NULL;
+  const char *user = NULL;
+  const char *reason = NULL;
+  const char *response = NULL;
+  const char *opaque_cli = NULL;
+  size_t sz;
+  char description[512];
+  char challengestr[256];
+  char codestr[256];
+  RTMP_AUTH_CTXT_T *pAuth = &pClient->auth.ctxt;
+
+  *phaveConnect = 0;
+
+  if(!pClient->auth.pcreds || !IS_AUTH_CREDENTIALS_SET(pClient->auth.pcreds)) {
+    *phaveConnect = 1;
+    LOG(X_DEBUG("RTMP sending connect success response for app: '%s'"), pClient->ctxt.connect.app);
+    return rtmp_create_result_invoke(&pClient->ctxt);
+  }
+
+  memset(&rtmpAuthParse, 0, sizeof(rtmpAuthParse));
+  pAuth->authmod = RTMP_AUTHMOD_ADOBE;
+  codestr[0] = '\0';
+  challengestr[0] = '\0';
+  pAuth->challenge_cli[0] = '\0';
+  pAuth->response[0] = '\0';
+  
+  if(rtmp_auth_parse_req(pClient->ctxt.connect.app, &rtmpAuthParse) < 0) {
+    LOG(X_ERROR("Failed to parse RTMP connect app: '%s'"), pClient->ctxt.connect.app);
+    return -1;
+  }
+
+  if((user = conf_find_keyval(&rtmpAuthParse.authList.list[0], "user"))) {
+
+    if(rtmp_auth_getauthmod(&rtmpAuthParse) != pAuth->authmod) {
+      LOG(X_ERROR("RTMP connect authmod: '%s' does not match server autmod: '%s'"), 
+                 rtmpAuthParse.authmodStr, rtmp_auth_getauthmodstr(pAuth->authmod)); 
+      snprintf(challengestr, sizeof(challengestr), "?reason=%s", RTMP_AUTH_REASON_FAILED);
+      rc = -1;
+    }
+  }
+
+  if((p = conf_find_keyval(&rtmpAuthParse.authList.list[0], "challenge"))) {
+    strncpy(pAuth->challenge_cli, p, sizeof(pAuth->challenge_cli) - 1);
+  }
+  response = conf_find_keyval(&rtmpAuthParse.authList.list[0], "response");
+  opaque_cli = conf_find_keyval(&rtmpAuthParse.authList.list[0], "opaque");
+
+  if(user != NULL && rc >= 0) {
+
+    if(response && strlen(response) > 0) {
+
+      if(!opaque_cli || opaque_cli[0] == '\0') {
+        LOG(X_ERROR("RTMP connect client response is missing opaque"));
+        reason = RTMP_AUTH_REASON_FAILED;
+        rc = -1;
+      } else if(pAuth->challenge_cli[0] == '\0') {
+        LOG(X_ERROR("RTMP connect client response is missing challenge"));
+        reason = RTMP_AUTH_REASON_FAILED;
+        rc = -1;
+      } else if((rc = rtmp_auth_cache_remove(pClient->pcachedAuth, opaque_cli, &pAuth->p)) < 0) {
+        LOG(X_ERROR("RTMP unable to retrieve cached server challenge for opaque: '%s'"), opaque_cli);
+        reason = RTMP_AUTH_REASON_FAILED;
+      }
+
+      if(rc >= 0) {
+        if((rc = rtmp_auth_compute(pAuth, pClient->auth.pcreds)) >= 0 &&
+           !strcmp(response, pAuth->response)) {
+  
+          *phaveConnect = 1;
+          LOG(X_DEBUG("RTMP sending connect success response for app: '%s'"), pClient->ctxt.connect.app);
+          return rtmp_create_result_invoke(&pClient->ctxt);
+
+        } else {
+          LOG(X_DEBUG("RTMP invalid client credentials authmod: '%s', user: '%s', resp: '%s', computed: '%s', "
+                      "salt: '%s', challenge: '%s', opaque: '%s'"), rtmp_auth_getauthmodstr(pAuth->authmod), 
+                      user, response, pAuth->response, pAuth->p.salt, pAuth->p.challenge, pAuth->p.opaque); 
+          reason = RTMP_AUTH_REASON_FAILED;
+          rc = -1;
+        }
+      }
+
+    } else {
+
+      rtmp_auth_create_challenge(&pAuth->p);
+      rtmp_auth_cache_store(pClient->pcachedAuth, &pAuth->p);
+      reason = RTMP_AUTH_REASON_NEEDAUTH;
+    }
+
+    if(rc < 0) {
+      snprintf(challengestr, sizeof(challengestr), "?reason=%s", reason);
+    } else {
+      snprintf(challengestr, sizeof(challengestr), "?reason=%s&user=%s&salt=%s&challenge=%s&opaque=%s",
+             reason, user, pAuth->p.salt, pAuth->p.challenge, pAuth->p.opaque); 
+    }
+
+  } else if(challengestr[0] == '\0') {
+    snprintf(codestr, sizeof(codestr), " code=%d need auth;", 403);
+  }
+  
+  if((rc = snprintf(description, sizeof(description), 
+                "[ AccessManager.Reject ] : [%s authmod=%s ] : %s", 
+                codestr, rtmp_auth_getauthmodstr(pAuth->authmod), challengestr)) > 0) {
+    sz = rc;
+  }
+
+  LOG(X_DEBUG("RTMP sending connect '%s' for app: '%s'"), description, pClient->ctxt.connect.app);
+  rtmp_create_error(&pClient->ctxt, 1, RTMP_NETCONNECT_REJECTED, description);
+
+  //LOG(X_DEBUG("HAVE OCNNECT user: '%s', app: '%s', tcUrl: '%s'"), pClient->auth.pcreds ? pClient->auth.pcreds->username : "NOTSET", pClient->ctxt.connect.app, pClient->ctxt.connect.tcUrl);
+
+  return rc;
+}
+
+static int check_srv_auth(RTMP_CTXT_CLIENT_T *pClient, const FLV_AMF_T *pAmfList) {
+  int rc = 0;
+  const FLV_AMF_T *pAmf;
+  const char *code = NULL;
+  const char *description = NULL;
+  const char *p = NULL;
+  const char *reason = NULL;
+  RTMP_AUTH_PARSE_CTXT_T rtmpAuthParse;
+  RTMP_AUTHMOD_T authmod = RTMP_AUTHMOD_UNKNOWN;
+  RTMP_AUTH_STATE_T lastAuthState = pClient->auth.ctxt.lastAuthState;
+
+  pClient->auth.ctxt.lastAuthState = RTMP_AUTH_STATE_UNKNOWN;
+  pClient->auth.ctxt.consecretry++;
+
+  if(!(pAmf = flv_amf_find(pAmfList, "_error"))) {
+    return -1;
+  } else if(!(code = flv_amf_get_key_string(flv_amf_find(pAmfList, "code")))) {
+    return -1;
+  } else if(strcasecmp(code, RTMP_NETCONNECT_REJECTED)) {
+    return 0;
+  } else if(!(description = flv_amf_get_key_string(flv_amf_find(pAmfList, "description")))) {
+    return -1;
+  }
+
+  memset(&rtmpAuthParse, 0, sizeof(rtmpAuthParse));
+
+  if(rtmp_auth_parse_resp(description, &rtmpAuthParse) < 0) {
+    return -1;
+  } else if(strcasecmp(rtmpAuthParse.errorStr, "AccessManager.Reject")) {
+    LOG(X_ERROR("Unrecognized RTMP code: '%s' description: '%s' object"), code, description); 
+    return -1;
+  } else if((authmod = rtmp_auth_getauthmod(&rtmpAuthParse)) != RTMP_AUTHMOD_ADOBE &&
+             authmod != RTMP_AUTHMOD_LLNW) {
+    LOG(X_ERROR("Unsupported RTMP authmod in: '%s'"), description);
+    pClient->auth.ctxt.lastAuthState = RTMP_AUTH_STATE_FATAL;
+    return -1;
+  } else if(!pClient->auth.pcreds || pClient->auth.pcreds->username[0] == '\0' ||
+                            pClient->auth.pcreds->pass[0] == '\0') {
+    LOG(X_ERROR("RTMP Server requires authentication"));
+    pClient->auth.ctxt.lastAuthState = RTMP_AUTH_STATE_FATAL;
+    return -1;
+  } 
+        
+  if(authmod != RTMP_AUTHMOD_UNKNOWN) {
+    pClient->auth.ctxt.authmod = authmod;
+  }
+  if((reason = conf_find_keyval(&rtmpAuthParse.authList.list[0], "reason"))) {
+
+  }
+
+  if((p = conf_find_keyval(&rtmpAuthParse.authList.list[0], "salt"))) {
+    strncpy(pClient->auth.ctxt.p.salt, p, sizeof(pClient->auth.ctxt.p.salt) - 1);
+  }
+  if((p = conf_find_keyval(&rtmpAuthParse.authList.list[0], "challenge"))) {
+    strncpy(pClient->auth.ctxt.p.challenge, p, sizeof(pClient->auth.ctxt.p.challenge) - 1);
+  }
+  if((p = conf_find_keyval(&rtmpAuthParse.authList.list[0], "opaque"))) {
+    strncpy(pClient->auth.ctxt.p.opaque, p, sizeof(pClient->auth.ctxt.p.opaque) - 1);
+  }
+
+  if(lastAuthState == RTMP_AUTH_STATE_HAVE_CHALLENGE && reason &&
+     !strcasecmp(reason, RTMP_AUTH_REASON_FAILED)) {
+    //
+    // We tried to auth and we failed with invalid credentials
+    //
+    pClient->auth.ctxt.lastAuthState = RTMP_AUTH_STATE_FATAL;
+
+  } else if(pClient->auth.ctxt.p.salt[0] != '\0' && 
+     (pClient->auth.ctxt.p.challenge[0] != '\0' || pClient->auth.ctxt.p.opaque[0] != '\0')) {
+
+    //
+    // We want to try to auth given the server's salt and challenge
+    //
+    pClient->auth.ctxt.lastAuthState = RTMP_AUTH_STATE_HAVE_CHALLENGE;
+
+  } else if(lastAuthState == RTMP_AUTH_STATE_UNKNOWN) {
+    pClient->auth.ctxt.lastAuthState = RTMP_AUTH_STATE_NEED_CHALLENGE;
+  } else {
+    pClient->auth.ctxt.lastAuthState = RTMP_AUTH_STATE_INVALID;
+  }
+
+  //LOG(X_DEBUG("Received RTMP error: '%s', authmod: '%s' %d"), rtmpAuthParse.errorStr, rtmpAuthParse.authmod, pClient->auth.ctxt.authmod);
 
   return rc;
 }
@@ -1057,14 +1185,13 @@ static void rtmp_client_close(RTMP_CTXT_CLIENT_T *pRtmp) {
   rtmp_close(&pRtmp->ctxt);
   pRtmp->pQVid = NULL;
   pRtmp->pQAud = NULL;
+  pRtmp->pcachedAuth = NULL;
 
 }
 
 static int rtmp_client_init(RTMP_CTXT_CLIENT_T *pRtmp, CAP_ASYNC_DESCR_T *pCfg, 
                             unsigned int maxPktLen, unsigned int growMaxPktLen) {
   int rc = 0;
-
-  memset(pRtmp, 0, sizeof(RTMP_CTXT_CLIENT_T));
 
   if((rc = rtmp_parse_init(&pRtmp->ctxt, maxPktLen, growMaxPktLen)) < 0) {
     return rc;
@@ -1085,6 +1212,7 @@ static int rtmp_client_init(RTMP_CTXT_CLIENT_T *pRtmp, CAP_ASYNC_DESCR_T *pCfg,
     return -1;
   }
 
+  pRtmp->ctxt.pSd = &pRtmp->sd;
   pRtmp->ctxt.cbRead = rtmp_cbReadDataNet;
   pRtmp->ctxt.pCbData = pRtmp;
   pRtmp->ctxt.state = RTMP_STATE_INVALID;
@@ -1126,23 +1254,34 @@ static int capture_rtmpUriParts(char *puri, char **ppuri, char **ppuriDocName) {
   return rc;
 }
 
-static int onresp_connect(RTMP_CTXT_T *pRtmp, const FLV_AMF_T *pAmfArr) { 
+static int onresp_connect(RTMP_CTXT_CLIENT_T *pClient, const FLV_AMF_T *pAmfArr) { 
   int rc = CONNECT_RETRY_RC_OK;
   const FLV_AMF_T *pAmf = NULL;
+  RTMP_CTXT_T *pRtmp = &pClient->ctxt;
 
-  if(rtmp_is_resp_error(pAmfArr, "Connect")) {
+  if(rtmp_is_resp_error(pAmfArr, "Connect", 0, S_DEBUG)) {
+
+    check_srv_auth(pClient, pAmfArr);
+
+    if(pClient->auth.ctxt.lastAuthState != RTMP_AUTH_STATE_NEED_CHALLENGE &&
+       pClient->auth.ctxt.lastAuthState != RTMP_AUTH_STATE_HAVE_CHALLENGE) {
+      rtmp_is_resp_error(pAmfArr, "Connect", 0, S_ERROR);
+    }
+
     pRtmp->state = RTMP_STATE_ERROR;
     rc = CONNECT_RETRY_RC_ERROR;
-  } else if((pAmf = amf_find(pAmfArr, "_result"))) {
 
-    //TODO: check code ??
-    //pAmf = amf_find(pAmfArr, "code");
+    
+  } else if((pAmf = flv_amf_find(pAmfArr, "_result"))) {
 
     pRtmp->state = RTMP_STATE_CLI_CONNECT;
 
     LOG(X_DEBUG("RTMP Connect succesful: '%s' description: '%s'"),
-      amf_get_key_string(amf_find(pAmfArr, "code")), amf_get_key_string(amf_find(pAmfArr, "description")));
+      flv_amf_get_key_string(flv_amf_find(pAmfArr, "code")), 
+      flv_amf_get_key_string(flv_amf_find(pAmfArr, "description")));
 
+    pClient->auth.ctxt.lastAuthState = RTMP_AUTH_STATE_UNKNOWN;
+    pClient->auth.ctxt.consecretry = 0;
   }
 
   return rc;
@@ -1154,7 +1293,7 @@ static int onresp_createStream(RTMP_CTXT_CLIENT_T *pClient, const FLV_AMF_T *pAm
 
   VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - onresp_createStream...")) );
 
-  if((pAmf = amf_find(pAmfArr, "_result"))) {
+  if((pAmf = flv_amf_find(pAmfArr, "_result"))) {
 
     pClient->ctxt.state = RTMP_STATE_CLI_CREATESTREAM;
     LOG(X_DEBUG("RTMP createStream ok"));
@@ -1163,7 +1302,7 @@ static int onresp_createStream(RTMP_CTXT_CLIENT_T *pClient, const FLV_AMF_T *pAm
     pClient->ctxt.state = RTMP_STATE_ERROR;
     rc = CONNECT_RETRY_RC_ERROR;
     LOG(X_ERROR("RTMP Invalid createStream response"));
-    rtmp_is_resp_error(pAmfArr, "createStream");
+    rtmp_is_resp_error(pAmfArr, "createStream", 0, S_ERROR);
 
   }
 
@@ -1176,7 +1315,7 @@ static int onresp_releaseStream(RTMP_CTXT_CLIENT_T *pClient, const FLV_AMF_T *pA
 
   VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - onresp_releaseStream...")) );
 
-  if((pAmf = amf_find(pAmfArr, "_result"))) {
+  if((pAmf = flv_amf_find(pAmfArr, "_result"))) {
 
     pClient->ctxt.state = RTMP_STATE_CLI_RELEASESTREAM;
     LOG(X_DEBUG("RTMP releaseStream ok"));
@@ -1185,7 +1324,7 @@ static int onresp_releaseStream(RTMP_CTXT_CLIENT_T *pClient, const FLV_AMF_T *pA
     pClient->ctxt.state = RTMP_STATE_ERROR;
     rc = CONNECT_RETRY_RC_ERROR;
     LOG(X_ERROR("RTMP Invalid releaseStream response"));
-    rtmp_is_resp_error(pAmfArr, "releaseStream");
+    rtmp_is_resp_error(pAmfArr, "releaseStream", 0, S_ERROR);
 
   }
 
@@ -1198,7 +1337,7 @@ static int onresp_fcpublish(RTMP_CTXT_CLIENT_T *pClient, const FLV_AMF_T *pAmfAr
 
   VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - onresp_fcpublish...")) );
 
-  if((p = amf_get_key_string(amf_find(pAmfArr, "code"))) &&
+  if((p = flv_amf_get_key_string(flv_amf_find(pAmfArr, "code"))) &&
           (!strncasecmp(p, "NetStream.Publish.Start", strlen("NetStream.Publish.Start")))) {
     pClient->ctxt.state = RTMP_STATE_CLI_FCPUBLISH;
     LOG(X_DEBUG("RTMP fcpublish ok"));
@@ -1206,30 +1345,58 @@ static int onresp_fcpublish(RTMP_CTXT_CLIENT_T *pClient, const FLV_AMF_T *pAmfAr
     pClient->ctxt.state = RTMP_STATE_ERROR;
     rc = CONNECT_RETRY_RC_ERROR;
     LOG(X_ERROR("RTMP Invalid fcpublish response"));
-    rtmp_is_resp_error(pAmfArr, "fcpublish");
+    rtmp_is_resp_error(pAmfArr, "fcpublish", 0, S_ERROR);
   }
 
   return rc;
 }
 
-static int onresp_onstatus(RTMP_CTXT_CLIENT_T *pClient, const FLV_AMF_T *pAmfArr) { 
-  int rc = CONNECT_RETRY_RC_OK;
-  const char *p;
+static int onresp_onstatus(RTMP_CTXT_CLIENT_T *pClient, const FLV_AMF_T *pAmfArr, RTMP_METHOD_T reqMethod) { 
+  int rc = CONNECT_RETRY_RC_ERROR;
+  const char *code;
 
   VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - onresp_onstatus...")) );
 
-  if((p = amf_get_key_string(amf_find(pAmfArr, "code"))) &&
-          (!strncasecmp(p, "NetStream.Publish.Start", strlen("NetStream.Publish.Start")))) {
+  code = flv_amf_get_key_string(flv_amf_find(pAmfArr, "code"));
 
-    pClient->ctxt.state = RTMP_STATE_CLI_PUBLISH;
-    LOG(X_DEBUG("RTMP publish ok"));
+  if(reqMethod == RTMP_METHOD_PLAY) {
+    if(code && (!strncasecmp(code, RTMP_NETSTREAM_DATA_START, strlen(RTMP_NETSTREAM_DATA_START)) || 
+              !strncasecmp(code, RTMP_NETSTREAM_PLAY_START, strlen(RTMP_NETSTREAM_PLAY_START)) ||
+              !strncasecmp(code, RTMP_NETSTREAM_PLAY_RESET, strlen(RTMP_NETSTREAM_PLAY_RESET)))) {
 
-  } else {
+      rc = CONNECT_RETRY_RC_OK;
+
+      if(!strncasecmp(code, RTMP_NETSTREAM_DATA_START, strlen(RTMP_NETSTREAM_DATA_START))) {
+        pClient->ctxt.state = RTMP_STATE_CLI_PLAY;
+        LOG(X_INFO("RTMP play %s ok.  Starting playback"), code);
+      } else {
+        LOG(X_DEBUG("RTMP play %s ok"), code);
+      }
+
+    } 
+/*
+else if((pAmf = flv_amf_find(pAmfArr, "onFCSubscribe"))) {
+
+        if((p = flv_amf_get_key_string(flv_amf_find(&amfEntries[0], "code"))) &&
+          !strncasecmp(p, RTMP_NETSTREAM_PLAY_START, strlen(RTMP_NETSTREAM_PLAY_START))) {
+          rtmp.ctxt.state = RTMP_STATE_CLI_PLAY;
+        }
+      }
+*/
+
+  } else if(reqMethod == RTMP_METHOD_PUBLISH) {
+
+    if(code && (!strncasecmp(code, RTMP_NETSTREAM_PUBLISH_START, strlen(RTMP_NETSTREAM_PUBLISH_START)))) {
+
+      pClient->ctxt.state = RTMP_STATE_CLI_PUBLISH;
+      LOG(X_DEBUG("RTMP publish %s ok"), code);
+      rc = CONNECT_RETRY_RC_OK;
+    }
+  }
+
+  if(rc != CONNECT_RETRY_RC_OK) {
     pClient->ctxt.state = RTMP_STATE_ERROR;
-    rc = CONNECT_RETRY_RC_ERROR;
-    LOG(X_ERROR("RTMP Invalid publish response"));
-    rtmp_is_resp_error(pAmfArr, "publish");
-
+    rtmp_is_resp_error(pAmfArr, (reqMethod == RTMP_METHOD_PLAY ? "play" : "publish"), 1, S_ERROR);
   }
 
   return rc;
@@ -1243,10 +1410,8 @@ static CONNECT_RETRY_RC_T run_capture_client(CAP_ASYNC_DESCR_T *pCfg) {
   unsigned int idx;
   const char *p = NULL;
   struct timeval tv0, tv;
-  char tcUrl[RTMP_TCURL_SZMAX];
   char hostname[RTSP_URL_LEN];
   char uribuf[CAPTURE_HTTP_HOSTBUF_MAXLEN];
-  const FLV_AMF_T *pAmf = NULL;
   FLV_AMF_T amfEntries[20];
   char tmp[128];
 
@@ -1254,11 +1419,15 @@ static CONNECT_RETRY_RC_T run_capture_client(CAP_ASYNC_DESCR_T *pCfg) {
   NETIO_SET(sockDescr.netsocket, pCfg->pSockList->netsockets[0]);
   memcpy(&sockDescr.sa, &pCfg->pSockList->salist[0], sizeof(sockDescr.sa));
 
+  memset(&rtmp, 0, sizeof(rtmp));
+
   if(rtmp_client_init(&rtmp, pCfg, RTMP_TMPFRAME_VID_SZ, 0x1000) < 0) {
     return CONNECT_RETRY_RC_NORETRY;
   }
 
+  //
   // Remove any URI parts from the URL and only leave the hostname 
+  //
   strncpy(hostname, pCfg->pcommon->localAddrs[0], sizeof(hostname));
   if((p = strchr(hostname, '/'))) {
     *((char *) p) = '\0'; 
@@ -1270,11 +1439,7 @@ static CONNECT_RETRY_RC_T run_capture_client(CAP_ASYNC_DESCR_T *pCfg) {
 
   capture_rtmpUriParts(uribuf, NULL, (char **) &rtmp.puridocname);
 
-  rtmp.client.tcUrl = tcUrl;
   memcpy(&rtmp.client.cfg, &pCfg->pcommon->rtmpcfg, sizeof(rtmp.client.cfg));
-  //rtmp.client.cfg.pageUrl = pCfg->pcommon->cfg.prtmppageurl;
-  //rtmp.client.swfUrl = pCfg->pcommon->cfg.prtmpswfurl;
-  //rtmp.client.rtmpfp9 = pCfg->pcommon->cfg.rtmpfp9;
   rtmp.ctxt.av.aud.pStreamerCfg = pCfg->pStreamerCfg;
   rtmp.ctxt.av.vid.pStreamerCfg = pCfg->pStreamerCfg;
   rtmp.ctxt.pSd = &sockDescr;
@@ -1292,7 +1457,7 @@ static CONNECT_RETRY_RC_T run_capture_client(CAP_ASYNC_DESCR_T *pCfg) {
   //
   // Send RTMP connect
   //
-  if(rc >= CONNECT_RETRY_RC_OK && rtmp_connect(&rtmp) < 0)  {
+  if(rc >= CONNECT_RETRY_RC_OK && rtmp_connect(&rtmp, RTMP_FLASH_VER_CAPTURE_CLIENT) < 0)  {
     rc = CONNECT_RETRY_RC_ERROR;
   } 
 
@@ -1304,6 +1469,8 @@ static CONNECT_RETRY_RC_T run_capture_client(CAP_ASYNC_DESCR_T *pCfg) {
     }
 
     //rtmp.contentTypeLastInvoke = 0;
+    VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - b4run_capture_client ct: 0x%x, methodParsed: %d, state: %d"),
+                                     contentType, rtmp.ctxt.methodParsed, rtmp.ctxt.state) );
 
     if((contentType = parse_readpkt(&rtmp.ctxt, &amfEntries[0])) < 0) {
       LOG(X_ERROR("Failed to read rtmp packet from server"));
@@ -1311,20 +1478,20 @@ static CONNECT_RETRY_RC_T run_capture_client(CAP_ASYNC_DESCR_T *pCfg) {
       break;
     } 
 
-    //fprintf(stderr, "READ PKT CT:%d LASTCT: 0x%x state:%d\n", contentType, rtmp.ctxt.contentTypeLastInvoke, rtmp.ctxt.state);
+    VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - run_capture_client ct: 0x%x, methodParsed: %d, state: %d"),
+                                     contentType, rtmp.ctxt.methodParsed, rtmp.ctxt.state) );
 
-    if(rtmp.ctxt.state == RTMP_STATE_CLI_HANDSHAKEDONE && contentType == RTMP_CONTENT_TYPE_INVOKE) {
+    if(rtmp.ctxt.state == RTMP_STATE_CLI_HANDSHAKEDONE && 
+         (rtmp.ctxt.methodParsed == RTMP_METHOD_RESULT || rtmp.ctxt.methodParsed == RTMP_METHOD_ERROR)) {
 
-      if((rc = onresp_connect(&rtmp.ctxt, &amfEntries[0])) >= CONNECT_RETRY_RC_OK) {
-        rc = rtmp_serverBw(&rtmp.ctxt);
-        if((rc = rtmp_createStream(&rtmp.ctxt, RTMP_CONTENT_TYPE_MSG, 1)) < CONNECT_RETRY_RC_OK) {
-        }
+      if((rc = onresp_connect(&rtmp, &amfEntries[0])) >= CONNECT_RETRY_RC_OK) {
+         rc = rtmp_serverBw(&rtmp.ctxt);
+         if((rc = rtmp_createStream(&rtmp.ctxt, RTMP_CONTENT_TYPE_MSG, 1)) < CONNECT_RETRY_RC_OK) {
+         }
       } 
      
     } else if(rtmp.ctxt.state == RTMP_STATE_CLI_CONNECT && 
-              (contentType == RTMP_CONTENT_TYPE_MSG ||
-               contentType == RTMP_CONTENT_TYPE_NOTIFY ||
-               contentType == RTMP_CONTENT_TYPE_INVOKE)) {
+         (rtmp.ctxt.methodParsed == RTMP_METHOD_RESULT || rtmp.ctxt.methodParsed == RTMP_METHOD_ERROR)) {
 
       if((rc = onresp_createStream(&rtmp, &amfEntries[0])) >= CONNECT_RETRY_RC_OK) {
         if((rc = rtmp_play(&rtmp)) < CONNECT_RETRY_RC_OK) {
@@ -1332,49 +1499,38 @@ static CONNECT_RETRY_RC_T run_capture_client(CAP_ASYNC_DESCR_T *pCfg) {
       }
 
     } else if(rtmp.ctxt.state == RTMP_STATE_CLI_CREATESTREAM && 
-              (contentType == RTMP_CONTENT_TYPE_MSG ||
-               contentType == RTMP_CONTENT_TYPE_NOTIFY ||
-               contentType == RTMP_CONTENT_TYPE_INVOKE)) {
+         (rtmp.ctxt.methodParsed == RTMP_METHOD_RESULT || rtmp.ctxt.methodParsed == RTMP_METHOD_ERROR ||
+         (rtmp.ctxt.methodParsed == RTMP_METHOD_ONSTATUS))) {
 
-      if(rtmp_is_resp_error(&amfEntries[0], "play")) {
-        rtmp.ctxt.state = RTMP_STATE_ERROR;
-        rc = CONNECT_RETRY_RC_ERROR;
-        break;
-      } 
-
-      if((pAmf = amf_find(&amfEntries[0], "onStatus"))) {
-
-        if((p = amf_get_key_string(amf_find(&amfEntries[0], "code"))) &&
-          (!strncasecmp(p, "NetStream.Data.Start", strlen("NetStream.Data.Start")) || 
-           !strncasecmp(p, "NetStream.Play.Start", strlen("NetStream.Play.Start")))) {
-          rtmp.ctxt.state = RTMP_STATE_CLI_PLAY;
+        if((rc = onresp_onstatus(&rtmp, &amfEntries[0], RTMP_METHOD_PLAY)) >= CONNECT_RETRY_RC_OK) {
+           //gettimeofday(&tv0, NULL);
         }
-
-      } else if((pAmf = amf_find(&amfEntries[0], "onFCSubscribe"))) {
-        if((p = amf_get_key_string(amf_find(&amfEntries[0], "code"))) &&
-          !strncasecmp(p, "NetStream.Play.Start", strlen("NetStream.Play.Start"))) {
+/*
+      else if((pAmf = flv_amf_find(&amfEntries[0], "onFCSubscribe"))) {
+        if((p = flv_amf_get_key_string(flv_amf_find(&amfEntries[0], "code"))) &&
+          !strncasecmp(p, RTMP_NETSTREAM_PLAY_START, strlen(RTMP_NETSTREAM_PLAY_START))) {
           rtmp.ctxt.state = RTMP_STATE_CLI_PLAY;
         }
       }
 
       if(rtmp.ctxt.state == RTMP_STATE_CLI_PLAY) {
 
-        gettimeofday(&tv0, NULL);
+          gettimeofday(&tv0, NULL);
 
         //if(!strncasecmp(p, "NetStream.Data.Start", strlen("NetStream.Data.Start")) ||
         //   !strncasecmp(p, "NetStream.Play.Start", strlen("NetStream.Play.Start"))) {
           LOG(X_INFO("RTMP play succesful: '%s' description: '%s'"),
-            amf_get_key_string(amf_find(&amfEntries[0], "code")),
-            amf_get_key_string(amf_find(&amfEntries[0], "description")));
+            flv_amf_get_key_string(flv_amf_find(&amfEntries[0], "code")),
+            flv_amf_get_key_string(flv_amf_find(&amfEntries[0], "description")));
 
         //} else {
 
           //LOG(X_DEBUG("RTMP play) succesful: '%s' description: '%s'"),
-          //  amf_get_key_string(amf_find(&amfEntries[0], "code")),
-          //  amf_get_key_string(amf_find(&amfEntries[0], "description")));
+          //  flv_amf_get_key_string(flv_amf_find(&amfEntries[0], "code")),
+          //  flv_amf_get_key_string(flv_amf_find(&amfEntries[0], "description")));
         //}
-
       }
+*/
 
     } else if(rtmp.ctxt.state == RTMP_STATE_CLI_PLAY) {
 
@@ -1382,7 +1538,7 @@ static CONNECT_RETRY_RC_T run_capture_client(CAP_ASYNC_DESCR_T *pCfg) {
          contentType == RTMP_CONTENT_TYPE_NOTIFY ||
          contentType == RTMP_CONTENT_TYPE_INVOKE) {
 
-         if(amf_find(&amfEntries[0], "onMetaData")) {
+         if(flv_amf_find(&amfEntries[0], "onMetaData")) {
            LOG(X_DEBUG("RTMP onMetaData"));
          }
 
@@ -1520,19 +1676,32 @@ static int cap_rtmp_handle_conn(RTMP_CTXT_CLIENT_T *pRtmp) {
       rtmp_create_clientbw(&pRtmp->ctxt, 2500000);
       rtmp_create_ping(&pRtmp->ctxt, 0, 0);
       rtmp_create_chunksz(&pRtmp->ctxt);
-      rtmp_create_result_invoke(&pRtmp->ctxt);
+      
+      if((rc = check_cli_auth(pRtmp, &haveConnect)) < 0) {
+        return rc;
+      }
 
       if((rc = rtmp_send(&pRtmp->ctxt, "cap_rtmp_handle_conn connect response")) < 0) {
         return rc;
       }
 
-      haveConnect = 1;
+      if(!haveConnect) {
+        //
+        // Break the connection since the client may not send another connect attempt for auth fail
+        //
+        break;
+
+        //
+        // We did not have succesful authentication, so we expect another connect request with credentials
+        //
+        pRtmp->ctxt.state = RTMP_STATE_CLI_HANDSHAKEDONE;
+      }
 
     } 
 
     if(!haveConnect) {
 
-      if(pRtmp->ctxt.methodParsed != RTMP_METHOD_CHUNKSZ) {
+      if(pRtmp->ctxt.methodParsed != RTMP_METHOD_CHUNKSZ && pRtmp->ctxt.methodParsed != RTMP_METHOD_CONNECT) {
         LOG(X_WARNING("RTMP contentType: %0x, method: %d, state: %d.  Expecting connect from client."),
            pRtmp->ctxt.contentTypeLastInvoke, pRtmp->ctxt.methodParsed, pRtmp->ctxt.state);
       }
@@ -1623,7 +1792,7 @@ static int cap_rtmp_handle_conn(RTMP_CTXT_CLIENT_T *pRtmp) {
       LOG(X_WARNING("Invalid client play method received while in server capture mode"));
 
       pRtmp->ctxt.out.idx = 0;
-      rtmp_create_error(&pRtmp->ctxt, "play not available when in capture mode");
+      rtmp_create_error(&pRtmp->ctxt, 0, NULL, "play not available when in capture mode");
       if((rc = rtmp_send(&pRtmp->ctxt, "cap_rtmp_handle_conn play error response")) < 0) {
         return rc;
       }
@@ -1660,28 +1829,35 @@ static int cap_rtmp_handle_conn(RTMP_CTXT_CLIENT_T *pRtmp) {
   return rc;
 }
 
+typedef struct CAP_RTMP_SRV_PROC_USERDATA {
+  CAP_ASYNC_DESCR_T             *pCfg;
+  RTMP_AUTH_PERSIST_STORAGE_T   cachedAuth;
+} CAP_RTMP_SRV_PROC_USERDATA_T;
+
 static void cap_rtmp_srv_proc(void *pfuncarg) {
   CLIENT_CONN_T *pConn = (CLIENT_CONN_T *) pfuncarg;
-  CAP_ASYNC_DESCR_T *pCfg = (CAP_ASYNC_DESCR_T *) pConn->pUserData;
+  CAP_RTMP_SRV_PROC_USERDATA_T *pUserData = (CAP_RTMP_SRV_PROC_USERDATA_T *) pConn->pUserData;
+  CAP_ASYNC_DESCR_T *pCfg = pUserData->pCfg;
   RTMP_CTXT_CLIENT_T rtmp;
   int rc;
-  SOCKET_DESCR_T sockDescr;
   char tmp[128];
 
   LOG(X_INFO("Starting RTMP capture connection from %s:%d"), 
          FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
 
-  memset(&sockDescr, 0, sizeof(sockDescr));
-  NETIO_SET(sockDescr.netsocket, pConn->sd.netsocket);
-  memcpy(&sockDescr.sa, &pCfg->pSockList->salist[0], sizeof(sockDescr.sa));
+  memset(&rtmp, 0, sizeof(rtmp));
+  NETIO_SET(rtmp.sd.netsocket, pConn->sd.netsocket);
+  memcpy(&rtmp.sd.sa, &pCfg->pSockList->salist[0], sizeof(rtmp.sd.sa));
 
   if((rc = rtmp_client_init(&rtmp, pCfg, RTMP_TMPFRAME_VID_SZ, 0x1000)) < 0) {
     return;
   }
-  rtmp.ctxt.pSd = &sockDescr;
+  rtmp.ctxt.pSd = &rtmp.sd;
   rtmp.ctxt.connect.capabilities = 31.0f;
   rtmp.ctxt.av.aud.pStreamerCfg = pCfg->pStreamerCfg;
   rtmp.ctxt.av.vid.pStreamerCfg = pCfg->pStreamerCfg;
+  rtmp.auth.pcreds = &pCfg->pcommon->creds[0];
+  rtmp.pcachedAuth = &pUserData->cachedAuth;
 
   cap_rtmp_handle_conn(&rtmp);
 
@@ -1698,10 +1874,14 @@ int capture_rtmp_server(CAP_ASYNC_DESCR_T *pCfg) {
   char tmp[128];
   SRV_LISTENER_CFG_T listenCfg;
   CLIENT_CONN_T *pClient;
+  CAP_RTMP_SRV_PROC_USERDATA_T userData;
   
   if(pCfg->pcommon->filt.numFilters <= 0) {
     return -1;
   }
+
+  memset(&userData, 0, sizeof(userData));
+  userData.pCfg = pCfg; 
 
   memset(&pool, 0, sizeof(pool));
   if(pool_open(&pool, 2, sizeof(CLIENT_CONN_T), 1) != 0) {
@@ -1714,12 +1894,17 @@ int capture_rtmp_server(CAP_ASYNC_DESCR_T *pCfg) {
   pClient = (CLIENT_CONN_T *) pool.pElements;
   while(pClient) {
     //pClient->purlCap = &urlCapabilities;
-    pClient->pUserData = pCfg;
+    pClient->pUserData = &userData;
     pClient = (CLIENT_CONN_T *) pClient->pool.pNext;
   }
 
   if((NETIOSOCK_FD(pCfg->pSockList->netsockets[0]) = 
       net_listen((const struct sockaddr *) &pCfg->pSockList->salist[0], 2)) == INVALID_SOCKET) {
+    pool_close(&pool, 0);
+    return -1;
+  }
+
+  if(rtmp_auth_cache_init(&userData.cachedAuth) < 0) {
     pool_close(&pool, 0);
     return -1;
   }
@@ -1739,47 +1924,21 @@ int capture_rtmp_server(CAP_ASYNC_DESCR_T *pCfg) {
     rc = vsxlib_ssl_initserver(((STREAM_STORAGE_T *) pCfg->pStreamerCfg->pStorageBuf)->pParams, &listenCfg);
   }
 
-  LOG(X_INFO("RTMP capture listener available on "URL_RTMP_FMT_STR),
-         URL_HTTP_FMT_ARGS2(&listenCfg, FORMAT_NETADDR(listenCfg.sa, tmp, sizeof(tmp))));
-      //FORMAT_NETADDR(pCfg->pSockList->salist[0], tmp, sizeof(tmp)), ntohs(INET_PORT(pCfg->pSockList->salist[0])));
+  LOG(X_INFO("RTMP capture listener available on "URL_RTMP_FMT_STR"%s"),
+         URL_HTTP_FMT_ARGS2(&listenCfg, FORMAT_NETADDR(listenCfg.sa, tmp, sizeof(tmp))),
+         IS_AUTH_CREDENTIALS_SET(&pCfg->pcommon->creds[0]) ? " (Using auth)" : "");
 
   //
   // Service any client connections on the live listening port
   //
   rc = srvlisten_loop(&listenCfg, cap_rtmp_srv_proc);
 
+  rtmp_auth_cache_close(&userData.cachedAuth);
   netio_closesocket(&pCfg->pSockList->netsockets[0]);
   pool_close(&pool, 1);
 
   return rc;
 }
-
-
-
-
-
-
-int capture_rtmp_close(RTMP_CLIENT_SESSION_T *pSession) {
-  int rc = 0;
-
-  if(!pSession) {
-    return -1;
-  }
-
-  VSX_DEBUG_RTSP( LOG(X_DEBUG("RTMP - close")) );
-
-  netio_closesocket(&pSession->sd.netsocket);
-  //pSession->issetup = 0;
-  //pSession->isplaying = 0;
-
-  //if(pSession->ctxtmode == RTSP_CTXT_MODE_SERVER_CAPTURE || pSession->ctxtmode == RTSP_CTXT_MODE_SERVER_STREAM) {
-  //  pthread_cond_destroy(&pSession->cond.cond);
-  //  pthread_mutex_destroy(&pSession->cond.mtx);
-  //}
-
-  return rc;
-}
-
 
 int stream_rtmp_close(STREAMER_CFG_T *pStreamerCfg) {
   int rc = 0;
@@ -1788,46 +1947,35 @@ int stream_rtmp_close(STREAMER_CFG_T *pStreamerCfg) {
     return -1;
   }
 
-  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - stream_rtmp_close close 0x%x 0x%x"), pStreamerCfg, pStreamerCfg->rtmppublish.pSession) );
+  VSX_DEBUG_RTMP( 
+    LOG(X_DEBUG("RTMP - stream_rtmp_close close 0x%x 0x%x"), pStreamerCfg, pStreamerCfg->rtmppublish.pSd) );
 
   pthread_mutex_lock(&pStreamerCfg->rtmppublish.mtx);
-  rc = capture_rtmp_close(pStreamerCfg->rtmppublish.pSession);
-  pStreamerCfg->rtmppublish.pSession = NULL;
+  if(pStreamerCfg->rtmppublish.pSd) {
+    netio_closesocket(&pStreamerCfg->rtmppublish.pSd->netsocket);
+    pStreamerCfg->rtmppublish.pSd = NULL;
+  }
   pthread_mutex_unlock(&pStreamerCfg->rtmppublish.mtx);
 
   return rc;
 }
 
-
-static int rtmp_run_publishclient(RTMP_CLIENT_SESSION_T *pSession, RTMP_REQ_CTXT_T *pReqCtxt) {
+static CONNECT_RETRY_RC_T rtmp_run_publishclient(RTMP_REQ_CTXT_T *pReqCtxt) {
+  CONNECT_RETRY_RC_T retryRc = CONNECT_RETRY_RC_OK;
   int rc = 0;
   int contentType;
   unsigned int idx;
-  char tcUrlBuf[RTMP_TCURL_SZMAX];
   RTMP_CTXT_CLIENT_T *pClient = NULL;
   RTMP_CTXT_T *pRtmp = NULL;
-  //FLV_AMF_T *pAmf = NULL;
   FLV_AMF_T amfEntries[20];
   char tmp[128];
-  char uribuf[CAPTURE_HTTP_HOSTBUF_MAXLEN];
   unsigned int rcvTmtMs = 0;
 
-  if(!pSession || !pReqCtxt || !(pClient = pReqCtxt->pClient) || !(pRtmp = &pClient->ctxt) || !pReqCtxt->pCfg) {
-    return -1;
+  if(!pReqCtxt || !(pClient = pReqCtxt->pClient) || !(pRtmp = &pClient->ctxt) || !pReqCtxt->pCfg || !pRtmp->pSd) {
+    return CONNECT_RETRY_RC_NORETRY;
   }
 
-  tcUrlBuf[0] = '\0';
-  pClient->client.tcUrl = tcUrlBuf;
-  memcpy(&pClient->client.cfg, &pReqCtxt->pStreamerCfg->rtmppublish.cfg, sizeof(pClient->client.cfg));
-  pRtmp->av.aud.pStreamerCfg = pReqCtxt->pStreamerCfg;
-  pRtmp->av.vid.pStreamerCfg = pReqCtxt->pStreamerCfg;
-  pRtmp->pSd = &pSession->sd;
-
-  uribuf[0] = '\0';
-  if(pClient->puri) {
-    strncpy(uribuf, pClient->puri, sizeof(uribuf) - 1);
-    capture_rtmpUriParts(uribuf, (char **) &pClient->puri, (char **) &pClient->puridocname);
-  }
+  rtmp_parse_reset(pRtmp);
 
   if(rtmp_handshake_cli(pRtmp, pReqCtxt->pCfg->rtmpfp9) < 0) {
     LOG(X_ERROR("RTMP handshake failed for %s:%d"),
@@ -1842,7 +1990,7 @@ static int rtmp_run_publishclient(RTMP_CLIENT_SESSION_T *pSession, RTMP_REQ_CTXT
   //
   // Send RTMP connect
   //
-  if(rc >= CONNECT_RETRY_RC_OK && rtmp_connect(pClient) < 0)  {
+  if(rc >= CONNECT_RETRY_RC_OK && rtmp_connect(pClient, RTMP_FLASH_VER_PUBLISH) < 0)  {
     rc = CONNECT_RETRY_RC_ERROR;
   }
 
@@ -1872,9 +2020,10 @@ static int rtmp_run_publishclient(RTMP_CLIENT_SESSION_T *pSession, RTMP_REQ_CTXT
     VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_run_publishclient ct: 0x%x, methodParsed: %d, state: %d"),
                                      contentType, pRtmp->methodParsed, pRtmp->state) );
 
-    if(pRtmp->state == RTMP_STATE_CLI_HANDSHAKEDONE && pRtmp->methodParsed == RTMP_METHOD_RESULT) {
+    if(pRtmp->state == RTMP_STATE_CLI_HANDSHAKEDONE && 
+       (pRtmp->methodParsed == RTMP_METHOD_RESULT || pRtmp->methodParsed == RTMP_METHOD_ERROR)) {
 
-      if((rc = onresp_connect(pRtmp, &amfEntries[0])) >= CONNECT_RETRY_RC_OK) {
+      if((rc = onresp_connect(pClient, &amfEntries[0])) >= CONNECT_RETRY_RC_OK) {
         rc = rtmp_serverBw(pRtmp);
         rc = rtmp_releaseStream(pRtmp, &pClient->client);
         rc = rtmp_fcpublish(pRtmp, &pClient->client);
@@ -1908,10 +2057,17 @@ static int rtmp_run_publishclient(RTMP_CLIENT_SESSION_T *pSession, RTMP_REQ_CTXT
     } else if(pRtmp->state == RTMP_STATE_CLI_CREATESTREAM && 
                (pRtmp->methodParsed == RTMP_METHOD_RESULT || pRtmp->methodParsed == RTMP_METHOD_ONSTATUS)) {
 
-      if((rc = onresp_onstatus(pClient, &amfEntries[0]) ) >= CONNECT_RETRY_RC_OK) {
-        //if((rc = rtmp_onstatus(pRtmp, &pClient->client)) < CONNECT_RETRY_RC_OK) {
-        //}
-        pRtmp->state = RTMP_STATE_CLI_PUBLISH;
+      if((rc = onresp_onstatus(pClient, &amfEntries[0], RTMP_METHOD_PUBLISH)) >= CONNECT_RETRY_RC_OK) {
+
+        pReqCtxt->pStreamerCfg->rtmppublish.ispublished = 1;
+
+        //
+        // Signal the conditional indicating a that streaming should start
+        // This will cause stream_rtmp_publish_start to return to it's caller
+        //
+        vsxlib_cond_signal(&pReqCtxt->pStreamerCfg->rtmppublish.cond.cond, 
+                           &pReqCtxt->pStreamerCfg->rtmppublish.cond.mtx);
+
       }
 
     } else if(pRtmp->state == RTMP_STATE_CLI_PUBLISH && 
@@ -1919,53 +2075,37 @@ static int rtmp_run_publishclient(RTMP_CLIENT_SESSION_T *pSession, RTMP_REQ_CTXT
       LOG(X_DEBUG("RESP TO ONST.."));
     }
 
-    //VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_run_publishclient loop... ")); );
-    // handle AMF messages
-    //usleep(900000);
   }
 
-  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_run_publishclient loop done rc: %d"), rc); );
-
-  return rc;
-}
-
-static CONNECT_RETRY_RC_T rtmp_publishstream(RTMP_REQ_CTXT_T *pReqCtxt, RTMP_CLIENT_SESSION_T *pSession,
-                                            const char *purl) {
-
-  CONNECT_RETRY_RC_T rc = CONNECT_RETRY_RC_OK;
-  //unsigned int outidx = pSession->s.requestOutIdx;
-  STREAMER_CFG_T *pStreamerCfg = pReqCtxt->pStreamerCfg;
-
-  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_publishstream")) );
-
-  pStreamerCfg->rtmppublish.ispublished = 1;
-  pSession->isplaying = 1;
-
   //
-  // Signal the conditional indicating a that streaming should start
-  // This will cause stream_rtmp_publish_start to return to it's caller
+  // If the server needs authentication, check if we should reconnect and try again with credentials
   //
-  vsxlib_cond_signal(&pStreamerCfg->rtmppublish.cond.cond, &pStreamerCfg->rtmppublish.cond.mtx);
+  if(pClient->auth.ctxt.lastAuthState == RTMP_AUTH_STATE_FATAL) {
+    retryRc = CONNECT_RETRY_RC_NORETRY;
+  } else if(pClient->auth.ctxt.consecretry < 3 && (
+     pClient->auth.ctxt.lastAuthState == RTMP_AUTH_STATE_NEED_CHALLENGE ||
+      pClient->auth.ctxt.lastAuthState == RTMP_AUTH_STATE_HAVE_CHALLENGE)) {
+     retryRc = CONNECT_RETRY_RC_CONNECTAGAIN; 
+  }
 
-  rc = rtmp_run_publishclient(pSession, pReqCtxt);
+  //LOG(X_DEBUG("DONE... with connect...rc: %d, lastAuthState: %d, auth.consecretry:%d, retryRc: %d"), rc, pClient->auth.ctxt.lastAuthState, pClient->auth.ctxt.consecretry, retryRc);
 
-  return rc;
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_run_publishclient loop done rc: %d, retryRc: %d, running: %d"), 
+                     rc,  retryRc, pReqCtxt->pStreamerCfg->running); );
+
+  return retryRc;
 }
-
-
-typedef struct CONNECT_RETRY_CTXT_RTMP_PUBLISH {
-  RTMP_REQ_CTXT_T           *pReqCtxt;
-  RTMP_CLIENT_SESSION_T     *pSession;
-  const char                *purl;
-} CONNECT_RETRY_CTXT_RTMP_PUBLISH_T;
 
 CONNECT_RETRY_RC_T stream_rtmp_cbonpublishstream(void *pArg) {
-  CONNECT_RETRY_CTXT_RTMP_PUBLISH_T *pCtxt = (CONNECT_RETRY_CTXT_RTMP_PUBLISH_T *) pArg;
-  return rtmp_publishstream(pCtxt->pReqCtxt, pCtxt->pSession, pCtxt->purl);
+  CONNECT_RETRY_RC_T retryRc = CONNECT_RETRY_RC_OK;
+
+  retryRc = rtmp_run_publishclient((RTMP_REQ_CTXT_T *) pArg);
+
+
+  return retryRc;
 }
 
-static int stream_rtmp_outfmt_start(STREAMER_CFG_T *pStreamerCfg, RTMP_CTXT_CLIENT_T *pClient,
-                                    SOCKET_DESCR_T *pSd) {
+static int stream_rtmp_outfmt_start(STREAMER_CFG_T *pStreamerCfg, RTMP_CTXT_CLIENT_T *pClient) {
   int rc = 0;
   unsigned int numQFull = 0;
   STREAMER_OUTFMT_T *pLiveFmt = NULL;
@@ -1978,7 +2118,7 @@ static int stream_rtmp_outfmt_start(STREAMER_CFG_T *pStreamerCfg, RTMP_CTXT_CLIE
 
   if(pStreamerCfg->pMonitor && pStreamerCfg->pMonitor->active) {
       if(!(pstats = stream_monitor_createattach(pStreamerCfg->pMonitor,
-             (const struct sockaddr *) &pSd->sa, STREAM_METHOD_RTMP, STREAM_MONITOR_ABR_NONE))) {
+             (const struct sockaddr *) &pClient->sd.sa, STREAM_METHOD_RTMP, STREAM_MONITOR_ABR_NONE))) {
       }
   }
 
@@ -1997,13 +2137,15 @@ static int stream_rtmp_outfmt_start(STREAMER_CFG_T *pStreamerCfg, RTMP_CTXT_CLIE
     return -1;
   }
 
-  pRtmp->pSd = pSd;
+  pRtmp->pSd = &pClient->sd;
   pRtmp->novid = pStreamerCfg->novid;
   pRtmp->noaud = pStreamerCfg->noaud;
   pRtmp->av.vid.pStreamerCfg = pStreamerCfg;
   pRtmp->av.aud.pStreamerCfg = pStreamerCfg;
   pClient->pStreamStats = pstats;
   pClient->pOutFmt = pOutFmt;
+  NETIOSOCK_FD(pClient->sd.netsocket) = INVALID_SOCKET;
+  pClient->auth.pcreds = &pStreamerCfg->creds[STREAMER_AUTH_IDX_RTMPPUBLISH].stores[0];
 
   //
   // Unpause the outfmt callback mechanism now that rtmp_init was called
@@ -2031,13 +2173,10 @@ static int stream_rtmp_publish(STREAMER_CFG_T *pStreamerCfg) {
   int rc = 0;
   unsigned int outidx = 0;
   STREAMER_DEST_CFG_T *pDestCfg;
-  char url[RTSP_URL_LEN];
   RTMP_CTXT_CLIENT_T rtmpClient;
   RTMP_REQ_CTXT_T reqCtxt;
-  RTMP_CLIENT_SESSION_T session;
   CONNECT_RETRY_CTXT_T retryCtxt;
-  CONNECT_RETRY_CTXT_RTMP_PUBLISH_T retryCbCtxt;
-  //OUTFMT_CFG_T *pOutFmt = NULL;
+  char uribuf[CAPTURE_HTTP_HOSTBUF_MAXLEN];
 
   VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - stream_rtmp_publish start...")); );
 
@@ -2045,17 +2184,16 @@ static int stream_rtmp_publish(STREAMER_CFG_T *pStreamerCfg) {
     return -1;
   }
 
-  memset(&session, 0, sizeof(session));
   memset(&rtmpClient, 0, sizeof(rtmpClient));
 
   if(pDestCfg->dstUri[0] == '\0') {
     LOG(X_ERROR("No RTMP URL specified for %s"), pDestCfg->dstHost);
     return -1;
-  } else if(capture_getdestFromStr(pDestCfg->dstHost, &session.sd.sa, NULL, NULL, pDestCfg->ports[0]) < 0) {
+  } else if(capture_getdestFromStr(pDestCfg->dstHost, &rtmpClient.sd.sa, NULL, NULL, pDestCfg->ports[0]) < 0) {
     return -1;
   }
 
-  if((rc = stream_rtmp_outfmt_start(pStreamerCfg, &rtmpClient, &session.sd)) < 0) {
+  if((rc = stream_rtmp_outfmt_start(pStreamerCfg, &rtmpClient)) < 0) {
     stream_rtmp_close(pStreamerCfg);
     return -1;
   }
@@ -2063,41 +2201,33 @@ static int stream_rtmp_publish(STREAMER_CFG_T *pStreamerCfg) {
   memset(&reqCtxt, 0, sizeof(reqCtxt));
   reqCtxt.pStreamerCfg = pStreamerCfg;
   reqCtxt.pClient = &rtmpClient;
-  //reqCtxt.pCtxt = pRtmp;
-  //reqCtxt.pSession = &session.s;
-  //reqCtxt.pSd = &session.sd;
   reqCtxt.pCfg = &pStreamerCfg->rtmppublish.cfg;
-  //BYTE_STREAM_T            bs;
   //pthread_mutex_init(&reqCtxt.mtx, NULL);
 
-  NETIOSOCK_FD(session.sd.netsocket) = INVALID_SOCKET;
-  //TODO: is it ok to share with RTSP?
-  //session.authCliCtxt.pcreds = &pStreamerCfg->creds[STREAMER_AUTH_IDX_RTSPANNOUNCE].stores[0];
-  //session.authCliCtxt.puri = pDestCfg->dstUri;
-  //session.s.inuse = 1;
-  //session.s.requestOutIdx = outidx;
-
   if(IS_CAPTURE_FILTER_TRANSPORT_SSL(pDestCfg->outTransType)) {
-    session.sd.netsocket.flags |= NETIO_FLAG_SSL_TLS;
+    rtmpClient.sd.netsocket.flags |= NETIO_FLAG_SSL_TLS;
   }
 
+  uribuf[0] = '\0';
   rtmpClient.purl = pDestCfg->dstHost;
   rtmpClient.puri = pDestCfg->dstUri;
+  memcpy(&rtmpClient.client.cfg, &pStreamerCfg->rtmppublish.cfg, sizeof(rtmpClient.client.cfg));
+  strncpy(uribuf, rtmpClient.puri, sizeof(uribuf) - 1);
+  capture_rtmpUriParts(uribuf, (char **) &rtmpClient.puri, (char **) &rtmpClient.puridocname);
+  rtmpClient.ctxt.av.aud.pStreamerCfg = pStreamerCfg;
+  rtmpClient.ctxt.av.vid.pStreamerCfg = pStreamerCfg;
 
-  pStreamerCfg->rtmppublish.pSession = &session;
+  pStreamerCfg->rtmppublish.pSd = &rtmpClient.sd;
 
   //
   // Initialize the retry context for connecting to the remote endpoint
   //
   memset(&retryCtxt, 0, sizeof(retryCtxt));
-  retryCbCtxt.pReqCtxt = &reqCtxt;
-  retryCbCtxt.pSession = &session;
-  retryCbCtxt.purl = url;
   retryCtxt.cbConnectedAction = stream_rtmp_cbonpublishstream;
-  retryCtxt.pConnectedActionArg = &retryCbCtxt;
+  retryCtxt.pConnectedActionArg = &reqCtxt;
   //retryCtxt.pAuthCliCtxt = &session.authCliCtxt;
-  retryCtxt.pnetsock = &session.sd.netsocket;
-  retryCtxt.psa = (struct sockaddr *) &session.sd.sa;
+  retryCtxt.pnetsock = &rtmpClient.sd.netsocket;
+  retryCtxt.psa = (struct sockaddr *) &rtmpClient.sd.sa;
   retryCtxt.connectDescr = "RTMP";
   retryCtxt.pconnectretrycntminone = &pStreamerCfg->rtmppublish.connectretrycntminone;
 
@@ -2106,6 +2236,11 @@ static int stream_rtmp_publish(STREAMER_CFG_T *pStreamerCfg) {
   // This will automatically invoke any retry logic according to the retry config
   //
   rc = connect_with_retry(&retryCtxt);
+
+  if(!pStreamerCfg->rtmppublish.ispublished) {
+    pStreamerCfg->running = STREAMER_STATE_ERROR;
+  }
+  pStreamerCfg->rtmppublish.ispublished = 0;
 
   stream_rtmp_outfmt_stop(&rtmpClient);
   rtmp_client_close(&rtmpClient);
@@ -2121,6 +2256,10 @@ static void rtmp_stream_publish_proc(void *pArg) {
 
   stream_rtmp_publish(pStreamerCfg);
 
+  //
+  // Signal the conditional which cause stream_rtmp_publish_start to return to it's caller
+  // if it hasn't already
+  //
   vsxlib_cond_signal(&pStreamerCfg->rtmppublish.cond.cond, &pStreamerCfg->rtmppublish.cond.mtx);
 
   LOG(X_DEBUG("RTMP stream publish thread exiting"));

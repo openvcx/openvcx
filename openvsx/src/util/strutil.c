@@ -301,14 +301,14 @@ int strutil_parseDimensions(const char *str, int *px, int *py) {
 }
 
 
-static const char *find_end(const char *line) {
+static const char *find_end(const char *line, char delimeter) {
   const char *p = line;
   int inquote = 0;
 
   while(*p != '\0' && *p != '\n') {
     if(*p == '\"') {
       inquote = !inquote;
-    } else if(!inquote && *p == ',') {
+    } else if(!inquote && *p == delimeter) {
       return p;
     }
     p++;
@@ -340,7 +340,7 @@ const char *strutil_skip_key(const char *p0, unsigned int len) {
   return p;
 }
 
-int strutil_parse_csv(STRUTIL_PARSE_CSV_TOKEN cbToken, void *pCbTokenArg, const char *line) {
+int strutil_parse_delimeted_str(STRUTIL_PARSE_CSV_TOKEN cbToken, void *pCbTokenArg, const char *line, char delimeter) {
   const char *p, *p2;
   unsigned int sz;
   int rc = 0;
@@ -353,7 +353,7 @@ int strutil_parse_csv(STRUTIL_PARSE_CSV_TOKEN cbToken, void *pCbTokenArg, const 
   p = (char *) line;
   while(*p != '\n' && *p != '\0') {
 
-    p2 = (char *) find_end(p);
+    p2 = (char *) find_end(p, delimeter);
     if(*p2 != '\n' && *p2 != '\0') {
       sz = MIN(p2 - p, sizeof(buf) - 1);
       while(sz > 1 && (p[sz - 1] == ' ' || p[sz - 1] == '\t')) {
@@ -378,6 +378,10 @@ int strutil_parse_csv(STRUTIL_PARSE_CSV_TOKEN cbToken, void *pCbTokenArg, const 
   }
 
   return rc;
+}
+
+int strutil_parse_csv(STRUTIL_PARSE_CSV_TOKEN cbToken, void *pCbTokenArg, const char *line) {
+  return strutil_parse_delimeted_str(cbToken, pCbTokenArg, line, ',');
 }
 
 int strutil_read_rgb(const char *str, unsigned char RGB[3]) {
@@ -425,7 +429,7 @@ int strutil_parse_pair(const char *str, void *pParseCtxt, PARSE_PAIR_CB cbParseE
   while(p && count++ < 2) {
 
     if((p2 = strchr(p, ','))) {
-      pdata = capture_safe_copyToBuf(buf, sizeof(buf), p, p2);
+      pdata = strutil_safe_copyToBuf(buf, sizeof(buf), p, p2);
     } else {
       pdata = p;
     }
@@ -448,6 +452,27 @@ int strutil_parse_pair(const char *str, void *pParseCtxt, PARSE_PAIR_CB cbParseE
   }
 
   return count;
+}
+
+char *strutil_safe_copyToBuf(char *buf, size_t szbuf, const char *pstart, const char *pend) {
+  size_t sz;
+
+  if(!buf || !pstart) {
+    return NULL;
+  }
+
+  if(pend) {
+    if((sz = pend - pstart) >= szbuf) {
+      sz = szbuf - 1;
+    }
+  } else {
+    sz = szbuf - 1;
+  }
+
+  memcpy(buf, pstart, sz);
+  buf[sz] = '\0';
+
+  return buf;
 }
 
 int64_t strutil_read_numeric(const char *s, int bAllowbps, int bytesInK, int dflt) {

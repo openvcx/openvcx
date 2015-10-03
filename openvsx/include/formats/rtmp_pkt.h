@@ -25,6 +25,7 @@
 #ifndef __RTMP_PKT_H__
 #define __RTMP_PKT_H__
 
+//#include "formats/rtmp_auth.h"
 
 enum RTMP_ONSTATUS_TYPE {
   RTMP_ONSTATUS_TYPE_PUBNOTIFY,
@@ -42,9 +43,7 @@ typedef struct RTMP_CLIENT_CFG {
 
 
 typedef struct RTMP_CLIENT_PARAMS {
-  const char                  *app;
   const char                  *flashVer;
-  const char                  *tcUrl;
   const char                  *playElem;
   RTMP_CLIENT_CFG_T            cfg;
 } RTMP_CLIENT_PARAMS_T;
@@ -68,18 +67,18 @@ int rtmp_create_ping(struct RTMP_CTXT *pRtmp, uint16_t type, uint32_t arg);
 int rtmp_create_chunksz(struct RTMP_CTXT *pRtmp);
 int rtmp_create_result_invoke(struct RTMP_CTXT *pRtmp);
 int rtmp_create_result(struct RTMP_CTXT *pRtmp);
-int rtmp_create_error(struct RTMP_CTXT *pRtmp, const char *msg);
+int rtmp_create_error(struct RTMP_CTXT *pRtmp, double value, const char *code, const char *descr);
 int rtmp_create_onstatus(struct RTMP_CTXT *pRtmp, enum RTMP_ONSTATUS_TYPE type);
 int rtmp_create_notify(struct RTMP_CTXT *pRtmp);
 int rtmp_create_notify_netstart(struct RTMP_CTXT *pRtmp);
 int rtmp_create_onmeta(struct RTMP_CTXT *pRtmp);
 int rtmp_create_setDataFrame(struct RTMP_CTXT *pRtmp);
-int rtmp_create_connect(struct RTMP_CTXT *pRtmp, const RTMP_CLIENT_PARAMS_T *pClient);
-int rtmp_create_fcpublish(struct RTMP_CTXT *pRtmp, const RTMP_CLIENT_PARAMS_T *pClient);
-int rtmp_create_publish(struct RTMP_CTXT *pRtmp, const RTMP_CLIENT_PARAMS_T *pClient);
+int rtmp_create_connect(struct RTMP_CTXT *pRtmp, const struct RTMP_CLIENT_PARAMS *pClient);
+int rtmp_create_fcpublish(struct RTMP_CTXT *pRtmp, const struct RTMP_CLIENT_PARAMS *pClient);
+int rtmp_create_publish(struct RTMP_CTXT *pRtmp, const struct RTMP_CLIENT_PARAMS *pClient);
 int rtmp_create_createStream(struct RTMP_CTXT *pRtmp, int contentType);
-int rtmp_create_releaseStream(struct RTMP_CTXT *pRtmp, const RTMP_CLIENT_PARAMS_T *pClient);
-int rtmp_create_play(struct RTMP_CTXT *pRtmp, RTMP_CLIENT_PARAMS_T *pClient);
+int rtmp_create_releaseStream(struct RTMP_CTXT *pRtmp, const struct RTMP_CLIENT_PARAMS *pClient);
+int rtmp_create_play(struct RTMP_CTXT *pRtmp, const struct RTMP_CLIENT_PARAMS *pClient);
 int rtmp_create_close(struct RTMP_CTXT *pRtmp);
 int rtmp_create_onfcpublish(struct RTMP_CTXT *pRtmp);
 int rtmp_send(struct RTMP_CTXT *pRtmp, const char *descr);

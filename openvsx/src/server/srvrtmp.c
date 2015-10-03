@@ -285,6 +285,7 @@ int rtmp_addFrame(void *pArg, const OUTFMT_FRAME_DATA_T *pFrame) {
   RTMP_CTXT_T *pRtmp = (RTMP_CTXT_T *) pArg;
   OUTFMT_FRAME_DATA_T frame;
   int keyframe = 0;
+  STREAMER_CFG_T *pStreamerCfg = NULL;
 
   if(!pArg || !pFrame) {
     return -1;
@@ -295,6 +296,8 @@ int rtmp_addFrame(void *pArg, const OUTFMT_FRAME_DATA_T *pFrame) {
          codecType_getCodecDescrStr(pFrame->mediaType));
     return -1;
   }
+
+  pStreamerCfg = pRtmp->av.vid.pStreamerCfg ? pRtmp->av.vid.pStreamerCfg :  pRtmp->av.aud.pStreamerCfg;
 
   //if(pFrame->isvid) avc_dumpHex(stderr, pFrame->pData, 48, 1);
   //if(pFrame->isvid && pFrame->keyframe) fprintf(stderr, "KEYFRAME sps:%d pps:%d\n", OUTFMT_VSEQHDR(pFrame).h264.sps_len, OUTFMT_VSEQHDR(pFrame).h264.pps_len);
@@ -341,9 +344,8 @@ int rtmp_addFrame(void *pArg, const OUTFMT_FRAME_DATA_T *pFrame) {
       //
       // Request an IDR from the underling encoder
       //
-      if(pRtmp->av.vid.pStreamerCfg) {
-        streamer_requestFB(pRtmp->av.vid.pStreamerCfg, pFrame->xout.outidx, ENCODER_FBREQ_TYPE_FIR, 0, 
-                           REQUEST_FB_FROM_LOCAL);
+      if(pStreamerCfg) {
+        streamer_requestFB(pStreamerCfg, pFrame->xout.outidx, ENCODER_FBREQ_TYPE_FIR, 0, REQUEST_FB_FROM_LOCAL);
       }
 
       return 0;
@@ -462,7 +464,6 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
   int rc = 0;
   long idlems = 0;
   struct timeval tv;
-  //char buf[SAFE_INET_NTOA_LEN_MAX];
   char tmp[128];
 
   pRtmp->state = RTMP_STATE_CLI_START;
@@ -487,6 +488,7 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
       return rc;
     }
   } while(pRtmp->state != RTMP_STATE_CLI_CONNECT);
+
 
   VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - sending connect response ct: %d, methodParsed: %d, state: %d"), 
          pRtmp->contentTypeLastInvoke, pRtmp->methodParsed, pRtmp->state) );
@@ -573,7 +575,7 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
 
       if(pRtmp->methodParsed == RTMP_METHOD_PUBLISH) {
         pRtmp->out.idx = 0;
-        rtmp_create_error(pRtmp, "publish not available when in server mode");
+        rtmp_create_error(pRtmp, 0, NULL, "publish not available when in server mode");
         if((rc = rtmp_send(pRtmp, "rtmp_handle_conn play error response")) < 0) {
           return rc;
         }

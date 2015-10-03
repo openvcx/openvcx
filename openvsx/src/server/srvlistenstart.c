@@ -306,7 +306,9 @@ static void srv_rtmp_proc(void *pfuncarg) {
 static void srvlisten_rtmplive_proc(void *pArg) {
 
   SRV_LISTENER_CFG_T *pListenCfg = (SRV_LISTENER_CFG_T *) pArg;
+  CLIENT_CONN_T *pConn = NULL;
   NETIO_SOCK_T netsocksrv;
+  int haveRtmpAuth = 0;
   struct sockaddr_storage  sa;
   int rc = 0;
   char tmp[128];
@@ -322,13 +324,25 @@ static void srvlisten_rtmplive_proc(void *pArg) {
     return;
   }
 
+  if((pConn = (CLIENT_CONN_T *) pListenCfg->pConnPool->pElements)) {
+    if(IS_AUTH_CREDENTIALS_SET(&pConn->pStreamerCfg0->creds[STREAMER_AUTH_IDX_RTMP].stores[pListenCfg->idxCfg])) {
+      //
+      // RTMP server streaming credentials not implemented 
+      //
+      //haveRtmpAuth = 1;
+    }
+  }
+
   pthread_mutex_lock(&pListenCfg->mtx);
   pListenCfg->pnetsockSrv = &netsocksrv; 
   pthread_mutex_unlock(&pListenCfg->mtx);
 
-  LOG(X_INFO("rtmp %sserver available at rtmp://%s:%d max:%d"), 
+  LOG(X_INFO("rtmp %sserver available at "URL_RTMP_FMT_STR"%s max:%d"), 
            ((pListenCfg->netflags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : ""), 
-           FORMAT_NETADDR(sa, tmp, sizeof(tmp)), ntohs(INET_PORT(sa)), pListenCfg->max);
+           URL_PROTO_FMT2_ARGS(
+               (pListenCfg->netflags & NETIO_FLAG_SSL_TLS),
+                 FORMAT_NETADDR(sa, tmp, sizeof(tmp))), ntohs(INET_PORT(sa)), 
+           (haveRtmpAuth ? " (Using auth)" : ""), pListenCfg->max);
 
   //
   // Service any client connections on the live listening port
@@ -382,7 +396,6 @@ int srvlisten_startrtmplive(SRV_LISTENER_CFG_T *pListenCfg) {
 
 static void srv_rtsp_proc(void *pfuncarg) {
   CLIENT_CONN_T *pConn = (CLIENT_CONN_T *) pfuncarg;
-  //char buf[SAFE_INET_NTOA_LEN_MAX];
   RTSP_REQ_CTXT_T rtspCtxt;
   char tmp[128];
 
@@ -414,7 +427,6 @@ static void srvlisten_rtsplive_proc(void *pArg) {
   struct sockaddr_storage  sa;
   int haveRtspAuth = 0;
   char tmp[128];
-  //char buf[SAFE_INET_NTOA_LEN_MAX];
   char bufses[32];
   int rc = 0;
 
@@ -423,9 +435,6 @@ static void srvlisten_rtsplive_proc(void *pArg) {
   memset(&sa, 0, sizeof(sa));
   memset(&netsocksrv, 0, sizeof(netsocksrv));
   memcpy(&sa, &pListenCfg->sa, sizeof(sa));
-  //sa.sin_family = PF_INET;
-  //sa.sin_addr = pListenCfg->sain.sin_addr;
-  //sa.sin_port = pListenCfg->sain.sin_port;
   netsocksrv.flags = pListenCfg->netflags;
 
   if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, 5)) == INVALID_SOCKET) {
@@ -433,8 +442,7 @@ static void srvlisten_rtsplive_proc(void *pArg) {
     return;
   }
 
-   pConn = (CLIENT_CONN_T *) pListenCfg->pConnPool->pElements;
-    if(pConn) {
+  if((pConn = (CLIENT_CONN_T *) pListenCfg->pConnPool->pElements)) {
     if(IS_AUTH_CREDENTIALS_SET(&pConn->pStreamerCfg0->creds[STREAMER_AUTH_IDX_RTSP].stores[pListenCfg->idxCfg])) {
       haveRtspAuth = 1;
     }
@@ -452,11 +460,10 @@ static void srvlisten_rtsplive_proc(void *pArg) {
 
   LOG(X_INFO("rtsp %sserver available at "URL_RTSP_FMT_STR"%s max:%d%s"),
            ((pListenCfg->netflags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : ""),
-           URL_RTSP_FMT2_ARGS(
+           URL_PROTO_FMT2_ARGS(
                (pListenCfg->netflags & NETIO_FLAG_SSL_TLS),
                  FORMAT_NETADDR(sa, tmp, sizeof(tmp))), ntohs(INET_PORT(sa)), 
-           (haveRtspAuth ? " (Using auth)" : ""),
-           pListenCfg->max, bufses);
+           (haveRtspAuth ? " (Using auth)" : ""), pListenCfg->max, bufses);
 
   //
   // Service any client connections on the rtsp listening port

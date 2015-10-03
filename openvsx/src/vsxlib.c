@@ -1356,6 +1356,9 @@ static int vsxlib_set_output_int(STREAMER_CFG_T *pStreamerCfg,
     if(capture_parseAuthUrl(&outputs[0], &pStreamerCfg->creds[STREAMER_AUTH_IDX_RTSPANNOUNCE].stores[0]) < 0) {
       return (int) VSX_RC_ERROR;
     }
+    memcpy(&pStreamerCfg->creds[STREAMER_AUTH_IDX_RTMPPUBLISH].stores[0],
+           &pStreamerCfg->creds[STREAMER_AUTH_IDX_RTSPANNOUNCE].stores[0],
+           sizeof(pStreamerCfg->creds[STREAMER_AUTH_IDX_RTMPPUBLISH].stores[0]));
 
     if(IS_CAPTURE_FILTER_TRANSPORT_RTSP(outTransType)) {
       pStreamerCfg->action.do_rtspannounce = 1;
@@ -1867,6 +1870,7 @@ VSX_RC_T vsxlib_stream(VSXLIB_STREAM_PARAMS_T *pParams) {
   pS->streamerCfg.overwritefile = pParams->overwritefile;
   pS->streamerCfg.audsamplesbufdurationms = pParams->outaudbufdurationms;
   pS->streamerCfg.rtspannounce.connectretrycntminone = pParams->connectretrycntminone;
+  pS->streamerCfg.rtmppublish.connectretrycntminone = pParams->connectretrycntminone;
   vsxlib_stream_setup_rtmpclient(&pS->streamerCfg.rtmppublish.cfg, pParams);
   //pS->streamerCfg.frtcp_sr_intervalsec = pParams->frtcp_sr_intervalsec;
   if(pParams->haveavoffsetrtcp) {

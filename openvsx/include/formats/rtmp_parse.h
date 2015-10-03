@@ -68,6 +68,13 @@
 #define RTMP_RCV_TMT_MS               15000
 #define RTMP_RCV_IDLE_TMT_MS          50000
 
+#define RTMP_NETCONNECT_REJECTED     "NetConnection.Connect.Rejected"
+#define RTMP_NETCONNECT_SUCCESS      "NetConnection.Connect.Success"
+#define RTMP_NETSTREAM_DATA_START    "NetStream.Data.Start"
+#define RTMP_NETSTREAM_PLAY_START    "NetStream.Play.Start"
+#define RTMP_NETSTREAM_PLAY_RESET    "NetStream.Play.Reset"
+#define RTMP_NETSTREAM_PUBLISH_START "NetStream.Publish.Start"
+
 typedef enum RTMP_CLIENTBW_LIMIT_TYPE {
   RTMP_CLIENTBW_LIMIT_TYPE_HARD             = 0,
   RTMP_CLIENTBW_LIMIT_TYPE_SOFT             = 1,
@@ -99,7 +106,7 @@ typedef struct RTMP_PKT {
 
 
 
-enum RTMP_STATE {
+typedef enum RTMP_STATE {
   RTMP_STATE_INVALID             = 0,
   RTMP_STATE_ERROR               = 1,
   RTMP_STATE_CLI_DELETESTREAM    = 2,
@@ -116,9 +123,9 @@ enum RTMP_STATE {
   RTMP_STATE_CLI_PAUSE           = 13,
   RTMP_STATE_CLI_ONMETA          = 14,
   RTMP_STATE_CLI_DONE            = 15
-};
+} RTMP_STATE_T;
 
-enum RTMP_METHOD {
+typedef enum RTMP_METHOD {
   RTMP_METHOD_UNKNOWN            = 0,
   RTMP_METHOD_ERROR              = 1,
   RTMP_METHOD_RESULT             = 2,
@@ -144,13 +151,13 @@ enum RTMP_METHOD {
   RTMP_METHOD_ONSTATUS           = 22,
   RTMP_METHOD_ONFCPUBLISH        = 23,
   RTMP_METHOD_ONFCSUBSCRIBE      = 24,
-};
+} RTMP_METHOD_T;
 
 #define RTMP_PARAM_LEN_MAX          128
 
 typedef struct RTMP_CONNECT_PARAMS {
   char                     app[RTMP_PARAM_LEN_MAX];
-  char                     tcurl[RTMP_PARAM_LEN_MAX];
+  char                     tcUrl[RTMP_PARAM_LEN_MAX];
   char                     play[RTMP_PARAM_LEN_MAX];
   double                   capabilities;
   double                   objEncoding;
@@ -200,8 +207,12 @@ typedef struct RTMP_CTXT {
 
 int rtmp_parse_init(RTMP_CTXT_T *pRtmp, unsigned int insz, unsigned int outsz);
 void rtmp_parse_close(RTMP_CTXT_T *pRtmp);
+int rtmp_parse_reset(RTMP_CTXT_T *pRtmp);
 int rtmp_parse_readpkt(RTMP_CTXT_T *pRtmp);
 int rtmp_parse_invoke(RTMP_CTXT_T *pRtmp, FLV_AMF_T *pAmf);
+
+const FLV_AMF_T *rtmp_amf_find(const FLV_AMF_T *pAmf, const char *str);
+const char *rtmp_amf_get_key_string(const FLV_AMF_T *pAmf);
 
 int rtmp_handshake_srv(RTMP_CTXT_T *pRtmp);
 int rtmp_handshake_cli(RTMP_CTXT_T *pRtmp, int rtmpfp9);

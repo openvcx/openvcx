@@ -271,10 +271,10 @@ int flv_extractRaw(FLV_CONTAINER_T *pFlv, const char *outPrfx,
 int flv_amf_read(int amfKeyType, FLV_AMF_T *pEntry, BYTE_STREAM_T *bs, int alloc);
 const unsigned char *flv_amf_read_string(FLV_AMF_STR_T *pStr, BYTE_STREAM_T *bs, 
                                          int alloc);
-
-
-
 int flv_parse_onmeta(FLV_AMF_T *pEntry, BYTE_STREAM_T *bs);
 void flv_amf_free(FLV_AMF_T *pEntry);
+
+const FLV_AMF_T *flv_amf_find(const FLV_AMF_T *pAmf, const char *str);
+const char *flv_amf_get_key_string(const FLV_AMF_T *pAmf);
 
 #endif // __FLV_H__

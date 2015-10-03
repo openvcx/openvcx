@@ -27,13 +27,15 @@
 #if defined(VSX_HAVE_CAPTURE)
 
 static int capture_should_retry(int connectretrycntminone, const int *prunning, unsigned int *pidxretry, 
-                                int consecretryerr, int consecunauth) {
+                                int consecretryerr, int consecunauth, CONNECT_RETRY_RC_T rccb) {
   unsigned int retrysleepsec = 0;
   struct timeval tv0, tv1;
 
   if((!prunning || *prunning == 0) && !g_proc_exit) {
 
-    if(consecunauth > 0) {
+    if(rccb == CONNECT_RETRY_RC_CONNECTAGAIN) {    
+      return 1; 
+    } else if(consecunauth > 0) {
       if(consecunauth > 2) {
         return 0;
       }
@@ -139,7 +141,7 @@ int connect_with_retry(CONNECT_RETRY_CTXT_T *pRetryCtxt) {
 
     if((rcconn < 0 || rccb != CONNECT_RETRY_RC_NORETRY) && pRetryCtxt->pconnectretrycntminone) {
       do_retry = capture_should_retry(*pRetryCtxt->pconnectretrycntminone, pRetryCtxt->prunning, 
-                                      &idxretry, consecretryerr, consecunauth);
+                                      &idxretry, consecretryerr, consecunauth, rccb);
     } else {
       do_retry = 0;
     }

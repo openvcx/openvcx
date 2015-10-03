@@ -81,17 +81,6 @@ typedef struct RTSP_CLIENT_SESSION {
   PKTQUEUE_COND_T               cond;    // conditional for server based capture setup completion
 } RTSP_CLIENT_SESSION_T;
 
-typedef struct RTMP_CLIENT_SESSION {
-  int                           isplaying;
-  STREAMER_STATE_T              runMonitor;
-  int                           runInterleaved;
-  pthread_mutex_t               mtx;
-  char                          localAddrBuf[VSX_MAX_PATH_LEN];
-  SOCKET_DESCR_T                sd;
-  int                           cseq;
-  PKTQUEUE_COND_T               cond;    // conditional for server based capture setup completion
-} RTMP_CLIENT_SESSION_T;
-
 typedef struct CAPTURE_DEVICE_CFG {
   void                         *pCapVidData;
   void                         *pCapAudData;

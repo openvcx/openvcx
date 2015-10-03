@@ -63,6 +63,7 @@
 #include "formats/bmp.h"
 #include "formats/image.h"
 #include "formats/codecfmt.h"
+#include "formats/rtmp_auth.h"
 #include "formats/rtmp_parse.h"
 #include "formats/flv_write.h"
 #include "formats/mkv_write.h"

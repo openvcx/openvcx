@@ -832,7 +832,8 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
   if(maxRtmpLive > 0) {
 
     if((rc = vsxlib_parse_listener((const char **) pParams->rtmpliveaddr, SRV_LISTENER_MAX_RTMP,
-                               pSrv->startcfg.listenRtmp, URL_CAP_RTMPLIVE, NULL)) < 0) {
+                               pSrv->startcfg.listenRtmp, URL_CAP_RTMPLIVE, 
+                               pStreamerCfg->creds[STREAMER_AUTH_IDX_RTMP].stores)) < 0) {
       vsxlib_closeServer(pSrv);
       return rc;
     }

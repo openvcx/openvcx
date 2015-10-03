@@ -208,7 +208,7 @@ char *auth_digest_gethexrandom(unsigned int lenRaw, char *pOut, unsigned int len
   unsigned char buf[1024];
   unsigned int idx;
 
-  for(idx = 0; idx < lenRaw; idx += 2) {
+  for(idx = 0; idx < MIN(lenRaw, sizeof(buf)); idx += 2) {
     *((uint16_t *) &buf[idx]) = (random() % RAND_MAX);
   }
 

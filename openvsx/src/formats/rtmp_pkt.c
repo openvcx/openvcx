@@ -221,7 +221,7 @@ int rtmp_create_result_invoke(RTMP_CTXT_T *pRtmp) {
 
   bs.buf[bs.idx++] = FLV_AMF_TYPE_OBJECT;
   flv_write_key_val_string(&bs, "level", "status");
-  flv_write_key_val_string(&bs, "code", "NetConnection.Connect.Success");
+  flv_write_key_val_string(&bs, "code", RTMP_NETCONNECT_SUCCESS);
   flv_write_key_val_string(&bs, "description", "Connection succeeded.");
 
   flv_write_string(&bs, "data");
@@ -280,10 +280,12 @@ int rtmp_create_result(RTMP_CTXT_T *pRtmp) {
   return pRtmp->out.idx - bs.idx; 
 }
 
-int rtmp_create_error(RTMP_CTXT_T *pRtmp, const char *msg) {
+
+int rtmp_create_error(struct RTMP_CTXT *pRtmp, double value, const char *code, const char *descr) {
   int rc;
   BYTE_STREAM_T bs;
   const unsigned int hdrlen = 12;
+  int in_obj = 0;
 
   bs.idx = hdrlen;
   bs.buf = &pRtmp->out.buf[pRtmp->out.idx];
@@ -296,9 +298,25 @@ int rtmp_create_error(RTMP_CTXT_T *pRtmp, const char *msg) {
 
   bs.buf[bs.idx++] = FLV_AMF_TYPE_STRING;
   //TODO: should this match client's createStream value
-  flv_write_key_val(&bs, "_error", 0, FLV_AMF_TYPE_NUMBER);
-  if(msg != NULL) {
-    flv_write_key_val_string(&bs, "description", msg);
+  flv_write_key_val(&bs, "_error", value, FLV_AMF_TYPE_NUMBER);
+
+  if(code != NULL && descr != NULL) {
+    bs.buf[bs.idx++] = FLV_AMF_TYPE_NULL;
+    bs.buf[bs.idx++] = FLV_AMF_TYPE_OBJECT;
+    in_obj++;
+    flv_write_key_val_string(&bs, "level", "error");
+  }
+
+  if(code != NULL) {
+    flv_write_key_val_string(&bs, "code", code);
+  }
+  if(descr != NULL) {
+    flv_write_key_val_string(&bs, "description", descr);
+  }
+
+  while(in_obj > 0) {
+    flv_write_objend(&bs);
+    in_obj--;
   }
 
   if((rc = rtmp_create_hdr(&pRtmp->out.buf[pRtmp->out.idx], 
@@ -314,7 +332,6 @@ int rtmp_create_error(RTMP_CTXT_T *pRtmp, const char *msg) {
 int rtmp_create_close(RTMP_CTXT_T *pRtmp) {
   int rc;
   BYTE_STREAM_T bs;
-  double code;
   const unsigned int hdrlen = 12;
 
   bs.idx = hdrlen;
@@ -698,8 +715,8 @@ int rtmp_create_connect(RTMP_CTXT_T *pRtmp, const RTMP_CLIENT_PARAMS_T *pClient)
   bs.buf[bs.idx++] = FLV_AMF_TYPE_STRING;
   flv_write_key_val(&bs, "connect", 1.0, FLV_AMF_TYPE_NUMBER);
   bs.buf[bs.idx++] = FLV_AMF_TYPE_OBJECT;
-  if(pClient->app && pClient->app[0] != '\0') {
-    flv_write_key_val_string(&bs, "app", pClient->app);
+  if(pRtmp->connect.app[0] != '\0') {
+    flv_write_key_val_string(&bs, "app", pRtmp->connect.app);
   }
   if(pClient->flashVer && pClient->flashVer[0] != '\0') {
     flv_write_key_val_string(&bs, "flashVer", pClient->flashVer);
@@ -707,8 +724,8 @@ int rtmp_create_connect(RTMP_CTXT_T *pRtmp, const RTMP_CLIENT_PARAMS_T *pClient)
   if(pClient->cfg.prtmpswfurl && pClient->cfg.prtmpswfurl[0] != '\0') {
     flv_write_key_val_string(&bs, "swfUrl", pClient->cfg.prtmpswfurl);
   }
-  if(pClient->tcUrl && pClient->tcUrl[0] != '\0') {
-    flv_write_key_val_string(&bs, "tcUrl", pClient->tcUrl);
+  if(pRtmp->connect.tcUrl[0] != '\0') {
+    flv_write_key_val_string(&bs, "tcUrl", pRtmp->connect.tcUrl);
   }
 
   //flv_write_key_val_string(&bs, "type", "nonprivate");
@@ -798,7 +815,7 @@ int rtmp_create_createStream(RTMP_CTXT_T *pRtmp, int contentType) {
   return pRtmp->out.idx - bs.idx; 
 }
 
-int rtmp_create_play(RTMP_CTXT_T *pRtmp, RTMP_CLIENT_PARAMS_T *pClient) {
+int rtmp_create_play(RTMP_CTXT_T *pRtmp, const RTMP_CLIENT_PARAMS_T *pClient) {
   int rc;
   BYTE_STREAM_T bs;
   const unsigned int hdrlen = 12;
@@ -835,9 +852,8 @@ int rtmp_create_publish(RTMP_CTXT_T *pRtmp, const RTMP_CLIENT_PARAMS_T *pClient)
   BYTE_STREAM_T bs;
   const unsigned int hdrlen = 12;
 
-  if(!pRtmp || !pClient || !pClient->playElem || !pClient->app) {
-    LOG(X_ERROR("rtmp_create_publish invalid arguments '%s' '%s'"), 
-         pClient ? pClient->playElem : "", pClient ? pClient->app : "");
+  if(!pRtmp || !pClient || !pClient->playElem) {
+    LOG(X_ERROR("rtmp_create_publish invalid arguments '%s'"), pClient ? pClient->playElem : "");
     return -1;
   }
 

@@ -1403,7 +1403,7 @@ int capture_net_async(CAPTURE_LOCAL_DESCR_T *pLocalCfg,
       snprintf((char *) pLocalCfg->common.rtsp.authCliCtxt.uribuf, 
               sizeof(pLocalCfg->common.rtsp.authCliCtxt.uribuf), 
               URL_RTSP_FMT2_STR"", 
-              URL_RTSP_FMT2_ARGS(IS_CAPTURE_FILTER_TRANSPORT_SSL(pLocalCfg->common.filt.filters[0].transType), 
+              URL_PROTO_FMT2_ARGS(IS_CAPTURE_FILTER_TRANSPORT_SSL(pLocalCfg->common.filt.filters[0].transType), 
                            pLocalCfg->common.localAddrs[0]));
 
       pLocalCfg->common.rtsp.authCliCtxt.puri = pLocalCfg->common.rtsp.authCliCtxt.uribuf; 

@@ -452,11 +452,11 @@ static int rtmp_parse_invoke_connect(RTMP_CTXT_T *pRtmp, BYTE_STREAM_T *bs,
     } else if(pAmf->key.len == 14 && !memcmp(pAmf->key.p, "objectEncoding", 14)) {
       pRtmp->connect.objEncoding = pAmf->val.u.d;
     } else if(pAmf->key.len == 5 && !memcmp(pAmf->key.p, "tcUrl", 5)) {
-      if((len = pAmf->val.u.str.len) > sizeof(pRtmp->connect.tcurl) - 1) {
-        len = sizeof(pRtmp->connect.tcurl) - 1;
+      if((len = pAmf->val.u.str.len) > sizeof(pRtmp->connect.tcUrl) - 1) {
+        len = sizeof(pRtmp->connect.tcUrl) - 1;
       }
-      memcpy(pRtmp->connect.tcurl, pAmf->val.u.str.p, len);
-      pRtmp->connect.tcurl[len] = '\0';
+      memcpy(pRtmp->connect.tcUrl, pAmf->val.u.str.p, len);
+      pRtmp->connect.tcUrl[len] = '\0';
     } else if(pAmf->key.len == 3 && !memcmp(pAmf->key.p, "app", 3)) {
       if((len = pAmf->val.u.str.len) > sizeof(pRtmp->connect.app) - 1) {
         len = sizeof(pRtmp->connect.app) - 1;
@@ -760,16 +760,44 @@ int rtmp_parse_invoke(RTMP_CTXT_T *pRtmp, FLV_AMF_T *pAmf) {
       //return rtmp_parse_invoke_generic(pRtmp, &bs, pAmf);
       return 0;
     } else {
-      LOG(X_WARNING("Unhandled rtmp invoke command %c%c%c%c... length: %d"), 
+      LOG(X_WARNING("Unhandled rtmp invoke command %c%c%c%c%c%c%c%c... length: %d"), 
         pAmf->key.p[0], pAmf->key.p[1], pAmf->key.p[2], pAmf->key.p[3], 
-        pAmf->key.len);
-      //avc_dumpHex(stderr, bs.buf, bs.sz, 1);
+        pAmf->key.p[4], pAmf->key.p[5], pAmf->key.p[6], pAmf->key.p[7],pAmf->key.len);
+      VSX_DEBUG_RTMP( LOGHEXT_DEBUG(bs.buf, bs.sz); );
       return 0;
     }
 
    //if(pAmf->key.len>0) fprintf(stderr, "key:'%c%c%c%c' ", pAmf->key.p[0], pAmf->key.p[1], pAmf->key.p[2], pAmf->key.p[3]);
 
   }
+
+  return 0;
+}
+
+int rtmp_parse_reset(RTMP_CTXT_T *pRtmp) {
+
+  if(!pRtmp) {
+    return -1;
+  }
+
+  pRtmp->in.idx = 0;
+  pRtmp->out.idx = 0;
+  pRtmp->streamIdx = RTMP_STREAM_INDEXES;
+  pRtmp->streamIdxPrev = RTMP_STREAM_INDEXES;
+  pRtmp->chunkSzIn = RTMP_CHUNK_SZ_DEFAULT;
+  pRtmp->chunkSzOut = pRtmp->chunkSzIn;
+  pRtmp->rcvTmtMs = RTMP_RCV_TMT_MS;
+  pRtmp->state = RTMP_STATE_INVALID;
+  pRtmp->methodParsed = RTMP_METHOD_UNKNOWN;
+  pRtmp->bytesRead = 0;
+  pRtmp->tmLastPing.tv_sec = 0;
+  pRtmp->tmLastPing.tv_usec = 0;
+
+  // Default values
+  pRtmp->contentTypeLastInvoke = RTMP_CONTENT_TYPE_INVOKE;
+  pRtmp->connect.objEncoding = 3.0;
+  pRtmp->connect.capabilities = 31.0;
+  pRtmp->connect.createStreamCode = 0;
 
   return 0;
 }
@@ -781,9 +809,7 @@ int rtmp_parse_init(RTMP_CTXT_T *pRtmp, unsigned int insz, unsigned int outsz) {
   }
 
   memset(pRtmp, 0, sizeof(RTMP_CTXT_T));
-  pRtmp->streamIdx = RTMP_STREAM_INDEXES;
-  pRtmp->streamIdxPrev = RTMP_STREAM_INDEXES;
-  pRtmp->rcvTmtMs = RTMP_RCV_TMT_MS;
+  rtmp_parse_reset(pRtmp);
 
   pRtmp->in.sz = insz;
   if(pRtmp->in.sz > 0 &&
@@ -797,14 +823,6 @@ int rtmp_parse_init(RTMP_CTXT_T *pRtmp, unsigned int insz, unsigned int outsz) {
     rtmp_parse_close(pRtmp);
     return -1;
   }
-
-  pRtmp->chunkSzIn = RTMP_CHUNK_SZ_DEFAULT;
-  pRtmp->chunkSzOut = pRtmp->chunkSzIn;
-
-  // Default values
-  pRtmp->contentTypeLastInvoke = RTMP_CONTENT_TYPE_INVOKE;
-  pRtmp->connect.objEncoding = 3.0;
-  pRtmp->connect.capabilities = 31.0;
 
   return 0;
 }

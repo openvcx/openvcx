@@ -47,7 +47,8 @@ typedef struct CAP_HTTP_COMMON {
 typedef enum CONNECT_RETRY_RC {
   CONNECT_RETRY_RC_NORETRY            = -2, 
   CONNECT_RETRY_RC_ERROR              = -1, 
-  CONNECT_RETRY_RC_OK                 = 0
+  CONNECT_RETRY_RC_OK                 = 0,
+  CONNECT_RETRY_RC_CONNECTAGAIN       = 1
 } CONNECT_RETRY_RC_T;
 
 typedef CONNECT_RETRY_RC_T (* CONNECT_RETRY_ACTION_CB) (void *);

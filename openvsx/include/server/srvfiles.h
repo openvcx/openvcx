@@ -70,7 +70,7 @@ const SRV_LISTENER_CFG_T *srv_ctrl_findlistener(const SRV_LISTENER_CFG_T *arrCfg
                                                 NETIO_FLAG_T flags, NETIO_FLAG_T flagsMask);
 
 #define URL_RTSP_FMT2_STR                   "rtsp%s://%s"
-#define URL_RTSP_FMT2_ARGS(ssl, location)    (ssl) ? "s" : "", (location) 
+#define URL_PROTO_FMT2_ARGS(ssl, location)    (ssl) ? "s" : "", (location) 
 
 #define URL_RTSP_FMT_STR                   "rtsp%s://%s:%d"
 #define URL_RTMP_FMT_STR                   "rtmp%s://%s:%d"

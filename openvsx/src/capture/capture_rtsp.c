@@ -1610,7 +1610,7 @@ static int capture_rtsp_server(CAP_ASYNC_DESCR_T *pCfg) {
 
   LOG(X_INFO("RTSP %scapture listener available at "URL_RTSP_FMT_STR"%s%s"),
            ((pnetsock->flags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : ""),
-            URL_RTSP_FMT2_ARGS((pnetsock->flags & NETIO_FLAG_SSL_TLS), 
+            URL_PROTO_FMT2_ARGS((pnetsock->flags & NETIO_FLAG_SSL_TLS), 
            FORMAT_NETADDR(*psaSrv, tmp, sizeof(tmp))), ntohs(PINET_PORT(psaSrv)), 
            (IS_AUTH_CREDENTIALS_SET(listenCfg.pAuthStore) ? " (Using auth)" : ""), bufses);
 
