@@ -265,6 +265,7 @@ static void init_rate_params(AVCodecContext *avctx) {
 
 }
 
+/*
 static int vp8ext_reinit(AVCodecContext *avctx) {
     VP8Context *ctx = avctx->priv_data;
     int res;
@@ -287,6 +288,7 @@ static int vp8ext_reinit(AVCodecContext *avctx) {
 
     return rc;
 }
+*/
 
 static av_cold int vp8ext_init(AVCodecContext *avctx)
 {

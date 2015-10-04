@@ -65,6 +65,7 @@
 extern double round ( double );
 extern float roundf ( float );
 extern long double roundl(long double x);
+extern long int lrint(double x);
 
 
 #else

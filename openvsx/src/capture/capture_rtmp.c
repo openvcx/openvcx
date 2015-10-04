@@ -2171,7 +2171,7 @@ static int stream_rtmp_outfmt_stop(RTMP_CTXT_CLIENT_T *pClient) {
 
 static int stream_rtmp_publish(STREAMER_CFG_T *pStreamerCfg) {
   int rc = 0;
-  unsigned int outidx = 0;
+  //unsigned int outidx = 0;
   STREAMER_DEST_CFG_T *pDestCfg;
   RTMP_CTXT_CLIENT_T rtmpClient;
   RTMP_REQ_CTXT_T reqCtxt;
