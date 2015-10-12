@@ -319,6 +319,8 @@ static CONNECT_RETRY_RC_T gethttpdata(CAP_ASYNC_DESCR_T *pCfg,
 
   if((p = conf_find_keyval(httpResp.hdrPairs, HTTP_HDR_CONTENT_TYPE))) {
 
+    LOG(X_DEBUG("Received "HTTP_HDR_CONTENT_TYPE": %s"), p);
+
     if(!strncasecmp(p, CONTENT_TYPE_M3U8, strlen(CONTENT_TYPE_M3U8)) ||
        // TODO: handle multi-br or master playlist
        !strncasecmp(p, CONTENT_TYPE_VND_APPLE, strlen(CONTENT_TYPE_VND_APPLE)) ||

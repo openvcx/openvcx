@@ -108,6 +108,7 @@ static STREAM_STATS_T *stream_stats_create(const struct sockaddr *psaRemote,
     if(rc >= 0 && numWr > 0) {
       // This is used for UDP / RTP output or general TCP based flow queue writing 
       rc = burstmeter_init(&pStats->throughput_rt[0].bitratesWr[idx], periodMs, rangeMs);
+      
     }
     if(rc >= 0 && numWr > 1) { 
       // This is used for UDP / RTCP output
@@ -115,7 +116,7 @@ static STREAM_STATS_T *stream_stats_create(const struct sockaddr *psaRemote,
     }
     if(rc >= 0 && numRd > 0) { 
       // This is used for general TCP based flow queue reading 
-       rc = burstmeter_init(&pStats->throughput_rt[0].bitratesRd[idx], periodMs, rangeMs);
+      rc = burstmeter_init(&pStats->throughput_rt[0].bitratesRd[idx], periodMs, rangeMs);
     }
     if(rc < 0) {
       stream_stats_destroy(&pStats, NULL);
@@ -170,14 +171,19 @@ void stream_stats_addPktSample(STREAM_STATS_T *pStats, pthread_mutex_t *pmtx, un
 
   if(pStats->active) {
 
-    if(pThroughput->written.slots == 0) {
-      TIME_TV_SET(pStats->tvstart, tv);
-    }
+    pThroughput->tmLastWr.tm = TIME_FROM_TIMEVAL(tv);
     pThroughput->written.bytes += len;
     pThroughput->written.slots++;
 
+    if(pThroughput->written.slots == 0) {
+      //TIME_TV_SET(pStats->tvstart, tv);
+      pThroughput->tmStart.tm = pThroughput->tmLastWr.tm;
+      //TIME_TV_SET(pThroughput->tvStart, tv);
+    }
+
     for(idx = 0; idx < THROUGHPUT_STATS_BURSTRATES_MAX; idx++) {
       if(pbitrates[idx].meter.rangeMs > 0) {
+        //TODO: set tmLastWr
         burstmeter_AddSample(&pbitrates[idx], len, &tv);
       } 
     }
@@ -477,7 +483,7 @@ static int stream_monitor_attach(STREAM_STATS_MONITOR_T *pMonitor, STREAM_STATS_
     pMonitor->plist = pStats;
   }
   pStats->pnext = pNode;
-  gettimeofday(&pStats->tvstart, NULL);
+  //gettimeofday(&pStats->tvstart, NULL);
   pStats->pMonitor = pMonitor;
   pMonitor->count++;
   //fprintf(stderr, "ATTACH COUNT:%d\n", pMonitor->count);
@@ -590,11 +596,6 @@ static int stream_monitor_detach(STREAM_STATS_MONITOR_T *pMonitor, STREAM_STATS_
   return rc;
 }
 
-
-//#define THROUGHPUT_BYTES_IN_KILO F          1000.0f
-//#define THROUGHPUT_BYTES_IN_KILO_F          1024.0f
-//#define THROUGHPUT_BYTES_IN_MEG_F           (THROUGHPUT_BYTES_IN_KILO_F * THROUGHPUT_BYTES_IN_KILO_F) 
-
 static char *printDuration(char *buf, unsigned int szbuf, float ms) {
   int rc = 0;
 
@@ -611,7 +612,10 @@ static char *printDuration(char *buf, unsigned int szbuf, float ms) {
   return buf;
 }
 
-static void stream_stats_newinterval(STREAM_STATS_T *pStats, struct timeval *ptv) {
+static void stream_stats_newinterval(STREAM_STATS_T *pStats, TIME_VAL tm) {
+  unsigned int idx;
+  unsigned int idxStats;
+  THROUGHPUT_STATS_T *pT = NULL;
 
   pthread_mutex_lock(&pStats->mtx);
 
@@ -619,14 +623,38 @@ static void stream_stats_newinterval(STREAM_STATS_T *pStats, struct timeval *ptv
   // Copy the current real-time snapshot stats
   //
 
-  TIME_TV_SET(pStats->tv_last, *ptv);
+  pStats->tmLastNewInterval = tm; 
+
+  for(idx = 0; idx < sizeof(pStats->throughput_last) / sizeof(pStats->throughput_last[0]); idx++) {
+
+    pT = &pStats->throughput_rt[idx];
+    if(pT->written.bytes > 0) {
+      for(idxStats = 0; idxStats < sizeof(pT->bitratesWr) / sizeof(pT->bitratesWr[0]); idxStats++) {
+        if(pT->bitratesWr[idxStats].meter.rangeMs > 0) {
+          //
+          // Roll up any real-time rate based counters
+          //
+          //LOG(X_DEBUG("may call update counters...lastRd.%lu, tmnow: %lu,  diff: %lu, rangeMs:%d"),  pT->tmLastWr.tm, tm, (tm - pT->tmLastWr.tm) / TIME_VAL_MS, pT->bitratesWr[idx].meter.rangeMs);
+          if(pT->tmLastWr.tm > 0 && tm > pT->tmLastWr.tm && (tm - pT->tmLastWr.tm) / TIME_VAL_MS >= pT->bitratesWr[idx].meter.rangeMs) {
+            // don't call updateCounters if the timestamp start for the stream is not absolute system time
+            //burstmeter_updateCounters2(&pT->bitratesWr[idx]);
+            burstmeter_reset(&pT->bitratesWr[idx]);
+          }
+          if(pT->tmLastRd.tm > 0 && tm > pT->tmLastRd.tm && (tm - pT->tmLastRd.tm) / TIME_VAL_MS >= pT->bitratesWr[idx].meter.rangeMs) {
+            //burstmeter_updateCounters2(&pT->bitratesRd[idx]);
+            burstmeter_reset(&pT->bitratesRd[idx]);
+          }
+        }
+      }
+    }
+
+  }
 
   memcpy(&pStats->ctr_last, &pStats->ctr_rt, sizeof(pStats->ctr_last));
-
-  //
-  // intentional shallow copy only
-  //
   memcpy(pStats->throughput_last, pStats->throughput_rt, sizeof(pStats->throughput_last));
+
+  //burstmeter_dump(&pStats->throughput_rt[0].bitratesWr[0]);
+  //burstmeter_dump(&pStats->throughput_last[0].bitratesWr[0]);
 
   //
   // Reset any running counters
@@ -638,7 +666,7 @@ static void stream_stats_newinterval(STREAM_STATS_T *pStats, struct timeval *ptv
 }
 
 static char *dump_throughput(char *buf, unsigned int szbuf, const char *prfx, 
-                             THROUGHPUT_STATS_T *pS, int urlidx) {
+                             const THROUGHPUT_STATS_T *pS, int urlidx) {
   int rc;
   unsigned int idx;
   unsigned int idxbuf = 0;
@@ -668,7 +696,7 @@ static char *dump_throughput(char *buf, unsigned int szbuf, const char *prfx,
         //
         // Roll up any real-time rate based counters
         //
-        burstmeter_updateCounters(&pS->bitratesWr[idx], NULL);
+        //burstmeter_updateCounters(&pS->bitratesWr[idx], NULL);
 
         burstmeter_printThroughput(buftmp, sizeof(buftmp), &pS->bitratesWr[idx]);
 
@@ -755,6 +783,7 @@ static char *dump_throughput(char *buf, unsigned int szbuf, const char *prfx,
   return buf;
 }
 
+
 static int stream_stats_dump(char *buf, unsigned int szbuf, STREAM_STATS_T *pStats, int urlidx) {
   int rc;
   uint32_t durationms;
@@ -764,8 +793,8 @@ static int stream_stats_dump(char *buf, unsigned int szbuf, STREAM_STATS_T *pSta
   char tmps[2][128];
   char buftmp[2048];
 
-  if(pStats->tvstart.tv_sec > 0) {
-    durationms = TIME_TV_DIFF_MS(pStats->tv_last, pStats->tvstart);
+  if(pStats->throughput_rt[0].tmStart.tm > 0) {
+    durationms = (pStats->tmLastNewInterval - pStats->throughput_rt[0].tmStart.tm) / TIME_VAL_MS;
   } else {
     durationms = 0;
   }
@@ -849,23 +878,21 @@ static int stream_stats_dump(char *buf, unsigned int szbuf, STREAM_STATS_T *pSta
 
 static void stream_monitor_dump(FILE *fp, STREAM_STATS_MONITOR_T *pMonitor) {
   STREAM_STATS_T *pStats;
-  time_t tm;
-  struct timeval tv;
+  TIME_VAL tm;
+  time_t tmt;
+  uint64_t aggregateBytes = 0;
+  unsigned int rangeMs = 0;
   char buf[1024];
+  char tmpbuf[128];
 
   if(!pMonitor) {
     return ;
   }
 
-  gettimeofday(&tv, NULL);
+  tm = timer_GetTime();
 
   pthread_mutex_lock(&pMonitor->mtx);
 
-  if(fp) {
-    tm = time(NULL);
-    strftime(buf, sizeof(buf) -1, "%H:%M:%S %m/%d/%Y", localtime(&tm));
-    fprintf(fp, "\n======= %s %d Output Streams =======\n", buf, pMonitor->count);
-  }
 
   pStats = pMonitor->plist;
     
@@ -873,7 +900,45 @@ static void stream_monitor_dump(FILE *fp, STREAM_STATS_MONITOR_T *pMonitor) {
 
     if(pStats->active) {
 
-      stream_stats_newinterval(pStats, &tv);
+      stream_stats_newinterval(pStats, tm);
+
+      if(pStats->throughput_last[0].bitratesWr[0].meter.rangeMs > 0) {
+        aggregateBytes += pStats->throughput_last[0].bitratesWr[0].meter.cur.bytes;
+        rangeMs = pStats->throughput_last[0].bitratesWr[0].meter.rangeMs;
+
+      //LOG(X_DEBUG("AGGREGATE += %d -> %llu, rangeMs: %u"), pStats->throughput_last[0].bitratesWr[0].meter.cur.bytes, aggregateBytes, pStats->throughput_last[0].bitratesWr[0].meter.rangeMs);
+      //pktqueue_dumpstats(&pStats->throughput_last[0]);
+ 
+      }
+
+    }
+
+    pStats = pStats->pnext;
+  }
+
+  //
+  // Set aggregate statistics for all streams
+  //
+  if(rangeMs > 0) {
+    pMonitor->aggregate.bps = aggregateBytes * (8000.0f / rangeMs);
+    pMonitor->aggregate.rangeMs = rangeMs;
+  } else {
+    pMonitor->aggregate.bps = 0;
+    pMonitor->aggregate.rangeMs = 0;
+  }
+
+  if(fp) {
+    tmt = time(NULL);
+    strftime(buf, sizeof(buf) -1, "%H:%M:%S %m/%d/%Y", localtime(&tmt));
+    fprintf(fp, "\n======= %s %d Output Streams OutputRate: %s =======\n", buf, pMonitor->count, 
+             burstmeter_printBitrateStr(tmpbuf, sizeof(tmpbuf)-1, pMonitor->aggregate.bps));
+  }
+
+  pStats = pMonitor->plist;
+    
+  while(pStats) {
+
+    if(pStats->active) {
 
       //
       // Invoke the ABR calback
@@ -902,7 +967,6 @@ static void stream_monitor_dump(FILE *fp, STREAM_STATS_MONITOR_T *pMonitor) {
   return;
 }
 
-
 int stream_monitor_dump_url(char *buf, unsigned int szbuf, STREAM_STATS_MONITOR_T *pMonitor) {
   STREAM_STATS_T *pNode;
   unsigned int idxbuf = 0;
@@ -910,7 +974,7 @@ int stream_monitor_dump_url(char *buf, unsigned int szbuf, STREAM_STATS_MONITOR_
   int rc;
   time_t tm;
   struct timeval tv;
-  char tmbuf[128];
+  char tmpbuf[2][128];
 
   if(!pMonitor || !buf) {
     return -1;
@@ -921,18 +985,20 @@ int stream_monitor_dump_url(char *buf, unsigned int szbuf, STREAM_STATS_MONITOR_
   pthread_mutex_lock(&pMonitor->mtx);
 
   tm = time(NULL);
-  strftime(tmbuf, sizeof(tmbuf)-1, "%H:%M:%S_%m/%d/%Y", localtime(&tm));
-  if((rc = snprintf(&buf[idxbuf], szbuf - idxbuf, "date=%s&count=%d", tmbuf, pMonitor->count)) > 0) {
+  strftime(tmpbuf[0], sizeof(tmpbuf[0])-1, "%H:%M:%S_%m/%d/%Y", localtime(&tm));
+  if((rc = snprintf(&buf[idxbuf], szbuf - idxbuf, "date=%s&count=%d&totalRate=%s", tmpbuf[0], pMonitor->count, 
+                    burstmeter_printBitrateStr(tmpbuf[1], sizeof(tmpbuf[1])-1, pMonitor->aggregate.bps))) > 0) {
     idxbuf += rc;
   }
-
   pNode = pMonitor->plist;
     
   while(pNode) {
 
     if(pNode->active) {
 
-      if((rc = stream_stats_dump(&buf[idxbuf], szbuf - idxbuf, pNode, ++urlidx)) > 0) {
+      rc = stream_stats_dump(&buf[idxbuf], szbuf - idxbuf, pNode, ++urlidx);
+     
+      if(rc > 0) {
         idxbuf += rc;
       }
 

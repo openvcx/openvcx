@@ -116,7 +116,7 @@ int capture_cbOnStreamEnd(CAPTURE_STREAM_T *pStream) {
   //int queueFr = 0;
   CAPTURE_CBDATA_SP_T *pSp = NULL;
 
-  if(!pStream) {
+  if(!pStream || !(pSp = (CAPTURE_CBDATA_SP_T *) pStream->pCbUserData)) {
     return -1;
   }
 
@@ -124,9 +124,7 @@ int capture_cbOnStreamEnd(CAPTURE_STREAM_T *pStream) {
   //  queueFr = 1;
   //}
 
-  pSp = (CAPTURE_CBDATA_SP_T *) pStream->pCbUserData;
-
-  LOG(X_DEBUGV("cbOnStreamEnd"));
+  LOG(X_DEBUGV("cbOnStreamEnd %s"), pStream->strSrcDst);
 
   if(pSp->stream1.fp != FILEOPS_INVALID_FP) {
     LOG(X_DEBUG("Closing output file %s"), pSp->stream1.filename);
@@ -705,10 +703,11 @@ int capture_addCompleteFrameToQ(CAPTURE_CBDATA_SP_T *pSp, uint32_t ts) {
     xtra.tm.pts = (uint64_t) (90000 * ((double)ts / clockHz));
     ((CAPTURE_STREAM_T *)pSp->pStream)->ptsLastFrame = xtra.tm.pts;
 
-    VSX_DEBUGLOG("capture-queue-frame [id:%d,rd:%d,wr:%d], len:%d, ts: %u/%uHz (%.3f), flags: 0x%x\n", 
+    VSX_DEBUG_INFRAME(
+      LOG(X_DEBUG("INFRAME  - capture-queue-frame [id:%d,rd:%d,wr:%d], len:%d, ts: %u/%uHz (%.3f), flags: 0x%x"), 
                    pSp->pCapAction->pQueue->cfg.id, pSp->pCapAction->pQueue->idxRd, 
                    pSp->pCapAction->pQueue->idxWr, pSp->pCapAction->tmpFrameBuf.idx, 
-                   ts, clockHz, PTSF(xtra.tm.pts), pSp->spFlags);
+                   ts, clockHz, PTSF(xtra.tm.pts), pSp->spFlags););
 
     xtra.tm.dts = 0;
     //xtra.flags = 0;

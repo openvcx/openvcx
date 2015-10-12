@@ -470,7 +470,7 @@ pm3ubuf="#EXTM3U\r\n"
         "media_2701.ts?wowzasessionid=1144297750\r\n";
 */
 
-      VSX_DEBUGLOG("Got m3u contents '%s'", pm3ubuf);
+      VSX_DEBUG_HTTP( LOG(X_DEBUG("Got m3u contents '%s'"), pm3ubuf); );
       //fprintf(stderr, "Got m3u contents '%s'\n", pm3ubuf);
 
       pthread_mutex_lock(&client.mtx);
@@ -487,6 +487,7 @@ pm3ubuf="#EXTM3U\r\n"
 
           if(highestIdx < 0) {
             LOG(X_WARNING("Unable to find httplive starting index from %s"), puri);
+            LOG(X_DEBUG("Lowest Index: %d, Highest Index: %d, Got m3u contents '%s'"), lowestIdx, highestIdx, pm3ubuf);
           } else {
 
             //

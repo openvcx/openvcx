@@ -42,10 +42,12 @@ typedef struct THROUGHPUT_STATS {
   THROUGHPUT_STATS_METER_T        written;
   THROUGHPUT_STATS_METER_T        read;
   THROUGHPUT_STATS_METER_T        skipped;        // overwritten bytes / slots
-  THROUGHPUT_STATS_TM_T           tmLastWr;
-  THROUGHPUT_STATS_TM_T           tmLastRd;
-  BURSTMETER_SAMPLE_SET_T     bitratesWr[THROUGHPUT_STATS_BURSTRATES_MAX];
-  BURSTMETER_SAMPLE_SET_T     bitratesRd[THROUGHPUT_STATS_BURSTRATES_MAX];
+  THROUGHPUT_STATS_TM_T           tmLastWr;    // real-time of last insertion into bitratesWr
+  THROUGHPUT_STATS_TM_T           tmLastRd;    // real-time of last insertion into bitratesRd
+  THROUGHPUT_STATS_TM_T           tmStart;    // real-time (not sample time) of start of processing
+  //struct timeval                  tvStart; // sample time of first sample
+  BURSTMETER_SAMPLE_SET_T         bitratesWr[THROUGHPUT_STATS_BURSTRATES_MAX];
+  BURSTMETER_SAMPLE_SET_T         bitratesRd[THROUGHPUT_STATS_BURSTRATES_MAX];
 } THROUGHPUT_STATS_T;
 
 

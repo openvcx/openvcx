@@ -221,22 +221,24 @@ int capture_delete_stream(CAPTURE_STATE_T *pState, CAPTURE_STREAM_T *pStream) {
 
   if(pStream) {
 
-    //fprintf(stderr, "DELETE_STREAM... ssrc:0x%x\n", pStream->hdr.key.ssrc);
+    //fprintf(stderr, "DELETE_STREAM... ssrc:0x%x, pStream: 0x%x\n", pStream->hdr.key.ssrc, pStream);
 
-    if(IS_CAPTURE_FILTER_TRANSPORT_RTP(pStream->pFilter->transType)) {
+    if(pStream->pFilter && IS_CAPTURE_FILTER_TRANSPORT_RTP(pStream->pFilter->transType)) {
       snprintf(tmp, sizeof(tmp), " ssrc:0x%x",  (pStream->hdr.key.ssrc));
     } else {
       tmp[0] = '\0';
     }
     LOG(X_DEBUG("Removing input stream %s %s%s"), pStream->strSrcDst,
-         codecType_getCodecDescrStr(pStream->pFilter->mediaType), tmp);
+         pStream->pFilter ? codecType_getCodecDescrStr(pStream->pFilter->mediaType) : "", tmp);
 
     if(pStream->cbOnStreamEnd) {
       pStream->cbOnStreamEnd(pStream);
     }
 
-    srtp_closeInputStream((SRTP_CTXT_T *) &pStream->pFilter->srtps[0]);
-    srtp_closeInputStream((SRTP_CTXT_T *) &pStream->pFilter->srtps[1]);
+    if(pStream->pFilter) {
+      srtp_closeInputStream((SRTP_CTXT_T *) &pStream->pFilter->srtps[0]);
+      srtp_closeInputStream((SRTP_CTXT_T *) &pStream->pFilter->srtps[1]);
+    }
 
     memset(&pStream->hdr, 0, sizeof(COLLECT_STREAM_HDR_T));
 
@@ -247,6 +249,7 @@ int capture_delete_stream(CAPTURE_STATE_T *pState, CAPTURE_STREAM_T *pStream) {
     }
     pStream->pjtBuf = NULL;
     //jtbufpool_free(&pStream->jtBuf.pool);
+    //LOG(X_DEBUG("DELETE_STREAM  pState->pjtBufVid: 0x%x, 0x%x"), pState->pjtBufVid, pState->pjtBufAud);
 
     pStream->tmLastPkt = 0;
     pStream->pFilter = NULL;
@@ -338,7 +341,7 @@ static void init_stream(CAPTURE_STATE_T *pState, CAPTURE_STREAM_T *pStream,
   pStream->tmLastPkt = ((TIME_VAL)pPkt->data.tv.tv_sec * TIME_VAL_US) + 
                                   pPkt->data.tv.tv_usec;
   capture_rtcprr_reset(&pStream->rtcpRR, htonl(pPkt->hdr.key.ssrc), htonl(CREATE_RTP_SSRC()));
-
+  //LOG(X_DEBUG("INIT_STREAM isvid: %d, pState->pjtBufVid: 0x%x, 0x%x, pStream->pjtBuf: 0x%x"), isvid, pState->pjtBufVid, pState->pjtBufAud, pStream->pjtBuf);
   if(isvid && pState->pjtBufVid) {
     pStream->pjtBuf = pState->pjtBufVid;
     pState->pjtBufVid = NULL;
@@ -346,6 +349,7 @@ static void init_stream(CAPTURE_STATE_T *pState, CAPTURE_STREAM_T *pStream,
     pStream->pjtBuf = pState->pjtBufAud;
     pState->pjtBufAud = NULL;
   }
+  //LOG(X_DEBUG("INIT_STREAM-2 isvid: %d, pState->pjtBufVid: 0x%x, 0x%x, pStream->pjtBuf: 0x%x"), isvid, pState->pjtBufVid, pState->pjtBufAud, pStream->pjtBuf);
 
   if(pStream->pjtBuf && pStream->pjtBuf->pPkts) {
     memset(pStream->pjtBuf->pPkts, 0, pStream->pjtBuf->sizePkts * sizeof(CAPTURE_JTBUF_PKT_T));
@@ -377,32 +381,53 @@ static CAPTURE_STREAM_T *add_stream(CAPTURE_STATE_T *pState,
                                     const CAPTURE_FILTER_T *pFilter) {
   unsigned int idx;
   CAPTURE_STREAM_T *pStream = NULL;
-  int isvid = 0;
+  int isvidtmp, isvid = 0;
   TIME_VAL tmPkt = ((TIME_VAL)pPkt->data.tv.tv_sec * TIME_VAL_US) + pPkt->data.tv.tv_usec;
 
+  if(pFilter && IS_CAP_FILTER_VID(pFilter->mediaType)) {
+    isvid = 1;
+  }
+
+
   for(idx = 0; idx < pState->maxStreams; idx++) {
+
     if(pState->pStreams[idx].tmLastPkt + (RTP_STREAM_IDLE_EXPIRE_MS * TIME_VAL_MS) < tmPkt) {
 
       pStream = &pState->pStreams[idx];
+      isvidtmp = pStream->pFilter ? IS_CAP_FILTER_VID(pStream->pFilter->mediaType) : 0;
+      //LOG(X_DEBUG("[%d]/%d, isvid: %d, ssrc: 0x%x, pStream->pFilter: 0x%x isvidtmp: %d"), idx, pState->maxStreams, isvid, pPkt->hdr.key.ssrc, pStream->pFilter, isvidtmp);
 
-      if(pState->pStreams[idx].tmLastPkt != 0) {
-        LOG(X_WARNING("Expiring %s, ssrc:0x%x, pt:%u"), 
-            pStream->strSrcDst, pStream->hdr.key.ssrc, pStream->hdr.payloadType);
+      if((!pStream->pFilter || (isvid && isvidtmp) || (!isvid && !isvidtmp))) {
 
-        capture_delete_stream(pState, pStream);
+        if(pState->pStreams[idx].tmLastPkt != 0) {
+          LOG(X_WARNING("Expiring %s, ssrc:0x%x, pt:%u [%d]/%d after %lld idle ms"), 
+              pStream->strSrcDst, pStream->hdr.key.ssrc, pStream->hdr.payloadType, idx, 
+              pState->maxStreams, (tmPkt - pState->pStreams[idx].tmLastPkt)/TIME_VAL_MS);
+
+          capture_delete_stream(pState, pStream);
+        }
+
+        //LOG(X_DEBUG("breaking..."));
+        break;
+
+      } else {
+        pStream = NULL;
       }
-      break;
     }
   }
 
   if(pStream) {
-    if(pFilter && IS_CAP_FILTER_AUD(pFilter->mediaType)) {
-      pStream->maxRtpGapWaitTmMs = pState->cfgMaxAudRtpGapWaitTmMs;
-    } else {
-      isvid = 1;
+    if(isvid) {
       pStream->maxRtpGapWaitTmMs = pState->cfgMaxVidRtpGapWaitTmMs;
+    } else {
+      pStream->maxRtpGapWaitTmMs = pState->cfgMaxAudRtpGapWaitTmMs;
     }
     init_stream(pState, pStream, pPkt, isvid);
+  } else {
+    //
+    // There is no available slot for the stream until a previous one is epxired 
+    //
+    //LOG(X_DEBUGV("Failed to add new stream ssrc: 0x%x"), pPkt->hdr.key.ssrc);
   }
 
   return pStream;

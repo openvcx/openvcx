@@ -155,6 +155,8 @@ typedef uint32_t in_addr_t;
 #define VSX_DEBUG_FLAG_XCODE            0x00010000
 #define VSX_DEBUG_FLAG_METAFILE         0x00020000
 #define VSX_DEBUG_FLAG_MGR              0x00040000
+#define VSX_DEBUG_FLAG_INFRAME          0x00080000
+#define VSX_DEBUG_FLAG_CODEC            0x00100000
 
 #define VSX_DEBUG_NET(x)        if((g_debug_flags & VSX_DEBUG_FLAG_NET)) { x; }
 #define VSX_DEBUG_STREAMAV(x)   if((g_debug_flags & VSX_DEBUG_FLAG_STREAMAV)) { x; }
@@ -175,9 +177,14 @@ typedef uint32_t in_addr_t;
 #define VSX_DEBUG_XCODE(x)      if((g_debug_flags & VSX_DEBUG_FLAG_XCODE)) { x; }
 #define VSX_DEBUG_METAFILE(x)   if((g_debug_flags & VSX_DEBUG_FLAG_METAFILE)) { x; }
 #define VSX_DEBUG_MGR(x)        if((g_debug_flags & VSX_DEBUG_FLAG_MGR)) { x; }
+#define VSX_DEBUG_INFRAME(x)    if((g_debug_flags & VSX_DEBUG_FLAG_INFRAME)) { x; }
+#define VSX_DEBUG_CODEC(x)      if((g_debug_flags & VSX_DEBUG_FLAG_CODEC)) { x; }
 
 #if defined(ANDROID_LOG)
 
+//
+// The following log macros are deprecated infavor of VSX_DEBUG_<function>
+//
 #define VSX_DEBUGLOG(x...) if(g_verbosity > VSX_VERBOSITY_HIGH) { \
                        __android_log_print(ANDROID_LOG_VERBOSE, LOG_TAG, ##x ); }
 #define VSX_DEBUGLOG2(x...) if(g_verbosity > VSX_VERBOSITY_VERYHIGH) { \
@@ -196,6 +203,9 @@ typedef uint32_t in_addr_t;
 #define VSX_DEBUGLOG_TIME g_debug_ts = timer_GetTime(); \
                            fprintf(stderr, "%"LL64"u.%"LL64"u ", g_debug_ts/TIME_VAL_US, g_debug_ts%TIME_VAL_US); 
 
+//
+// The following log macros are deprecated infavor of VSX_DEBUG_<function>
+//
 #define VSX_LOG(x...) if(g_verbosity > VSX_VERBOSITY_NORMAL) { \
                           VSX_DEBUGLOG_TIME \
                           fprintf(stderr, ##x  ); }
@@ -222,6 +232,7 @@ extern TIME_VAL g_debug_ts;
 extern int g_debug_flags;
 extern const char *vsxlib_get_appnamestr( char *buf, unsigned int len);
 extern const char *vsxlib_get_appnamewwwstr(char *buf, unsigned int len);
+extern const char *vsxlib_get_useragentstr(char *buf, unsigned int len);
 
 #if defined(VSX_HAVE_SSL)
 extern pthread_mutex_t g_ssl_mtx;

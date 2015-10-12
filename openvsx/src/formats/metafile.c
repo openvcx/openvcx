@@ -33,6 +33,7 @@
 #define METAFILE_KEY_DESCRIPTION      "description"
 #define METAFILE_KEY_DEVICE           "device"
 #define METAFILE_KEY_DIGESTAUTH       "digestauth"
+#define METAFILE_KEY_TOKEN            "token"
 #define METAFILE_KEY_ID               "id"
 #define METAFILE_KEY_IGNORE           "ignore"
 #define METAFILE_KEY_INPUT            "input"
@@ -49,23 +50,25 @@
 #define PARSE_FLAG_HAVE_DESCRIPTION       0x0004
 #define PARSE_FLAG_HAVE_DEVNAME           0x0008
 #define PARSE_FLAG_HAVE_DIGESTAUTH        0x0010
-#define PARSE_FLAG_HAVE_ID                0x0020
-#define PARSE_FLAG_HAVE_IGNORE            0x0040
-#define PARSE_FLAG_HAVE_INPUT             0x0080
-#define PARSE_FLAG_HAVE_METHODS           0x0100
-#define PARSE_FLAG_HAVE_PROFILE           0x0200
-#define PARSE_FLAG_HAVE_SHARED            0x0400
-#define PARSE_FLAG_HAVE_HTTP_PROXY        0x0800
-#define PARSE_FLAG_HAVE_RTMP_PROXY        0x1000
-#define PARSE_FLAG_HAVE_RTSP_PROXY        0x2000
-#define PARSE_FLAG_HAVE_XCODEARGS         0x4000
+#define PARSE_FLAG_HAVE_TOKEN             0x0020
+#define PARSE_FLAG_HAVE_ID                0x0040
+#define PARSE_FLAG_HAVE_IGNORE            0x0080
+#define PARSE_FLAG_HAVE_INPUT             0x0100
+#define PARSE_FLAG_HAVE_METHODS           0x0200
+#define PARSE_FLAG_HAVE_PROFILE           0x0400
+#define PARSE_FLAG_HAVE_SHARED            0x0800
+#define PARSE_FLAG_HAVE_HTTP_PROXY        0x1000
+#define PARSE_FLAG_HAVE_RTMP_PROXY        0x2000
+#define PARSE_FLAG_HAVE_RTSP_PROXY        0x4000
+#define PARSE_FLAG_HAVE_XCODEARGS         0x8000
 
 #define MATCH_HAVE_FILENAME   0x01
 #define MATCH_HAVE_XCODE      0x02
 #define MATCH_HAVE_METHODS    0x04
 #define MATCH_HAVE_DIGESTAUTH 0x08
-#define MATCH_BY_PROFILE      0x10
-#define MATCH_BY_DEVICE       0x20
+#define MATCH_HAVE_TOKEN      0x10
+#define MATCH_BY_PROFILE      0x20
+#define MATCH_BY_DEVICE       0x40
 
 
 typedef struct PARSE_ENTRY_DATA {
@@ -79,6 +82,7 @@ typedef struct PARSE_ENTRY_DATA {
   char                xcodestr[META_FILE_XCODESTR_MAX];
   int                 methodBits;
   char                userpass[AUTH_ELEM_MAXLEN * 2 + 1];
+  char                tokenId[META_FILE_TOKEN_LEN];
   char                id[META_FILE_IDSTR_MAX];
   char                profile[META_FILE_PROFILESTR_MAX];
   int                 shared;
@@ -256,6 +260,11 @@ int cbparse_entry_metafile(void *pArg, const char *p) {
                pEntryData->userpass, sizeof(pEntryData->userpass));
     //TODO: verify ascii chars delimited by colon...
 
+  } else if(!strncasecmp(p, METAFILE_KEY_TOKEN, strlen(METAFILE_KEY_TOKEN))) {
+
+    store_parse_entry(p, METAFILE_KEY_TOKEN, &pEntryData->flags, PARSE_FLAG_HAVE_TOKEN,  
+               pEntryData->tokenId, sizeof(pEntryData->tokenId));
+
   } else if(!strncasecmp(p, METAFILE_KEY_METHODS, strlen(METAFILE_KEY_METHODS))) {
 
     p = store_parse_entry(p, METAFILE_KEY_METHODS, &pEntryData->flags, PARSE_FLAG_HAVE_METHODS, NULL, 0);
@@ -354,11 +363,11 @@ static int handle_parsed_line(const PARSE_ENTRY_DATA_T *parseData,
   VSX_DEBUG_METAFILE( 
 
     LOG(X_DEBUG("META - handle_parsed_line flags:0x%x, file:'%s', devname:'%s', profile:'%s', methods:'%s', "
-                "xcode: '%s', digestauth: '%s', matchProf: %d, matchDev: %d, match: %d, pmatch: 0x%x, "
+                "xcode: '%s', digestauth: '%s', token: '%s', matchProf: %d, matchDev: %d, match: %d, pmatch: 0x%x, "
                 "meta-devicefilter:'%s', meta-profilefilter: '%s'"), 
        parseData->flags, parseData->filename, parseData->devname, parseData->profile, 
-       devtype_dump_methods(parseData->methodBits, buf, sizeof(buf)), 
-       parseData->xcodestr, parseData->userpass, matchProf, matchDev, match, *pmatch, pMetaFile->devicefilterstr, 
+       devtype_dump_methods(parseData->methodBits, buf, sizeof(buf)), parseData->xcodestr, 
+       parseData->userpass, parseData->tokenId, matchProf, matchDev, match, *pmatch, pMetaFile->devicefilterstr, 
        pMetaFile->profilefilterstr));
 
   if((parseData->flags & PARSE_FLAG_HAVE_FILENAME) &&
@@ -488,6 +497,24 @@ static int handle_parsed_line(const PARSE_ENTRY_DATA_T *parseData,
       if(match) {
         *pmatch |= MATCH_HAVE_DIGESTAUTH;
         VSX_DEBUG_METAFILE(LOG(X_DEBUG("META - handle_parsed_line set MATCH_HAVE_DIGESTAUTH")));
+      }
+
+    }
+  }
+
+  if((parseData->flags & PARSE_FLAG_HAVE_TOKEN) &&
+     ((matchDev == 1 && matchProf == 1) || !(*pmatch & MATCH_HAVE_TOKEN))) {
+
+    if(match || (matchDev >= 0 && matchProf >= 0 &&
+       !((*pmatch & MATCH_BY_PROFILE) || (*pmatch & MATCH_BY_DEVICE)))) {
+
+      strncpy(pMetaFile->tokenId, parseData->tokenId, sizeof(pMetaFile->tokenId));
+
+      VSX_DEBUG_METAFILE(LOG(X_DEBUG("META - handle_parsed_line set digestauth: '%s', *pmatch: 0x%x"),
+                              pMetaFile->tokenId, *pmatch));
+      if(match) {
+        *pmatch |= MATCH_HAVE_TOKEN;
+        VSX_DEBUG_METAFILE(LOG(X_DEBUG("META - handle_parsed_line set MATCH_HAVE_TOKEN")));
       }
 
     }

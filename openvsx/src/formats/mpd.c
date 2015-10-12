@@ -136,16 +136,20 @@ static int writepath(const MPD_CREATE_CTXT_T *pCtxt,
   int rc;
   const char *uriprfxdelimeter = "";
   char tmp[VSX_MAX_PATH_LEN];
+  char tokenstr[16 + META_FILE_TOKEN_LEN];
 
   if(pCtxt->init.uriprefix && (rc = strlen(pCtxt->init.uriprefix)) > 0 &&
      pCtxt->init.uriprefix[rc - 1] != '/') {
     uriprfxdelimeter = "/";
   }
 
-  if((rc = mpd_format_path(tmp, sizeof(tmp), pCtxt->cbFormatPathPrefix, outidx,
+  tokenstr[0] = '\0';
+  if(srv_write_authtoken(tokenstr, sizeof(tokenstr), pCtxt->init.pAuthTokenId, NULL, 1) < 0 || 
+     (rc = mpd_format_path(tmp, sizeof(tmp), pCtxt->cbFormatPathPrefix, outidx,
                            pCtxt->init.outfileprefix, txt, pCtxt->init.outfilesuffix, adaptationtag)) < 0 ||
-    (rc = snprintf(buf, szbuf, "%s%s%s",
-             (pCtxt->init.uriprefix ? pCtxt->init.uriprefix : ""), uriprfxdelimeter, tmp)) < 0) {
+    (rc = snprintf(buf, szbuf, "%s%s%s%s%s",
+             (pCtxt->init.uriprefix ? pCtxt->init.uriprefix : ""), uriprfxdelimeter, tmp,
+             tokenstr[0] != '\0' ? "?" : "", tokenstr)) < 0) {
     return rc;
   }
 

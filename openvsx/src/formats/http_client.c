@@ -45,7 +45,7 @@ static int http_req_send(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa, con
           method,
           uri, 
           (host && host[0] != '\0') ? host : FORMAT_NETADDR(*psa, tmps[0], sizeof(tmps[0])),
-          vsxlib_get_appnamewwwstr(tmps[1], sizeof(tmps[1]))
+          vsxlib_get_useragentstr(tmps[1], sizeof(tmps[1]))
           )) < 0) {
     return -1;
   }

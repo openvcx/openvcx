@@ -187,6 +187,7 @@ typedef struct RTMP_CTXT {
   uint8_t                  contentTypeLastInvoke;
   unsigned int             rcvTmtMs;
   struct timeval           tvLastRd;
+  const char              *pAuthTokenId;
 
   //TODO: seperate server output stream context from parse ctxt
   int                      isclient;

@@ -112,7 +112,8 @@ static const char *logger_getSeverityStr(unsigned short sev) {
                         { S_WARNING,        "WARN" },
                         { S_INFO,           "INFO" },
                         { S_DEBUG,          "DEBG" },
-                        { S_DEBUG_VERBOSE,  "DBGV" } };
+                        { S_DEBUG_VERBOSE,  "DBGV" },
+                        { S_DEBUG_VVERBOSE, "DBVV" } };
 
   if(sev > 0 && sev <= (sizeof(SEVERITY_LIST) / sizeof(SEVERITY_LIST[0]))) {
     return SEVERITY_LIST[sev - 1].descr;
@@ -135,6 +136,7 @@ static inline int logger_syslogSeverity(int severity) {
     case S_DEBUG:
       return LOG_INFO;
     case S_DEBUG_VERBOSE:
+    case S_DEBUG_VVERBOSE:
       return LOG_DEBUG; 
     default:
       return LOG_INFO;
@@ -341,7 +343,7 @@ int logger_SetLevel(int sev) {
 
   LOG_PROPERTIES_T *pLogProperties = g_plogProps;
  
-  if(sev < S_CRITICAL || sev > S_DEBUG_VERBOSE) {
+  if(sev < S_CRITICAL || sev > S_DEBUG_VVERBOSE) {
     return -1;
   }
 

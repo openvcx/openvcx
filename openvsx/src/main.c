@@ -275,7 +275,8 @@ static void usage_capture(int argc, const const char *argv[]) {
       "   --maxrtpaudiodelay=[ ms to wait for missing audio RTP packet ] (default=%d ms)\n"
       "   --maxrtpvideodelay=[ ms to wait for missing video RTP packet ] (default=%d ms)\n"
       "   --nackxmit=[ 0 | 1 ] Controls sending RTCP FB NACK messages\n" 
-      "   --overwrite   overwrite output file if it exists\n"
+      "   --nortcpbye   Do not exit capture upon RTCP BYE\n"
+      "   --overwrite   Overwrite output file if it exists\n"
       "   --pes         Extract each PES (used with mpeg2-ts capture only)\n"
 #ifndef DISABLE_PCAP
       "   --promisc     Promiscuous capture\n"
@@ -434,6 +435,7 @@ static void usage_stream(int argc, const const char *argv[]) {
       "   --start=[ input file start offset seconds eg.  --start=1.5 ]\n"
       "   --statusmax=[ max ] Max HTTP status server sessions (default=0)\n"
       "   --streamstats=[ File path to dump output statistics (or stdout if omitted) ]\n"
+      "   --token=[ Server Request Authorization Token Id ]\n"
       //"   --httpmax=[ max ] Max HTTP sessions (default=%d)\n"
 
       "   --xcode=[ transcode configuration options or transcoder config file path ]\n"
@@ -885,6 +887,8 @@ enum CMD_OPT {
   CMD_OPT_OUTPUT3,
   CMD_OPT_RTPMUX,
   CMD_OPT_RTCPMUX,
+  CMD_OPT_RTCPDISABLE,
+  CMD_OPT_RTCPIGNOREBYE,
   CMD_OPT_RTCPPORTS,
   CMD_OPT_RTCPPORTS0,
   CMD_OPT_RTCPPORTS1,
@@ -1036,12 +1040,15 @@ enum CMD_OPT {
   CMD_OPT_TURNREALM,
   CMD_OPT_TURNSDPOUTPATH,
   CMD_OPT_TURNPOLICY,
+  CMD_OPT_TOKENID,
   CMD_OPT_DEBUG,
+  CMD_OPT_DEBUG_CODEC,
   CMD_OPT_DEBUG_AUTH,
   CMD_OPT_DEBUG_HTTP,
   CMD_OPT_DEBUG_MKV,
   CMD_OPT_DEBUG_DASH,
   CMD_OPT_DEBUG_LIVE,
+  CMD_OPT_DEBUG_INFRAME,
   CMD_OPT_DEBUG_OUTFMT,
   CMD_OPT_DEBUG_NET,
   CMD_OPT_DEBUG_REMB,
@@ -1129,8 +1136,10 @@ int main(int argc, char *argv[]) {
                  { "debug-auth",  optional_argument,       NULL, CMD_OPT_DEBUG_AUTH },
                  { "debug-http",  optional_argument,       NULL, CMD_OPT_DEBUG_HTTP },
                  { "debug-mkv",   optional_argument,       NULL, CMD_OPT_DEBUG_MKV },
+                 { "debug-codec", optional_argument,       NULL, CMD_OPT_DEBUG_CODEC },
                  { "debug-dash",  optional_argument,       NULL, CMD_OPT_DEBUG_DASH },
                  { "debug-live",  optional_argument,       NULL, CMD_OPT_DEBUG_LIVE  },
+                 { "debug-inframe", optional_argument,     NULL, CMD_OPT_DEBUG_INFRAME },
                  { "debug-net",   optional_argument,       NULL, CMD_OPT_DEBUG_NET  },
                  { "debug-outfmt",optional_argument,       NULL, CMD_OPT_DEBUG_OUTFMT },
                  { "debug-remb",  optional_argument,       NULL, CMD_OPT_DEBUG_REMB },
@@ -1236,6 +1245,8 @@ int main(int argc, char *argv[]) {
                  { "out4",        required_argument,       NULL, CMD_OPT_OUTPUT3 },
                  { "rtpmux",      no_argument      ,       NULL, CMD_OPT_RTPMUX },
                  { "rtp-mux",     no_argument      ,       NULL, CMD_OPT_RTPMUX },
+                 { "rtcpdisable", no_argument      ,       NULL, CMD_OPT_RTCPDISABLE },
+                 { "nortcpbye",   no_argument      ,       NULL, CMD_OPT_RTCPIGNOREBYE },
                  { "rtcpmux",     no_argument      ,       NULL, CMD_OPT_RTCPMUX },
                  { "rtcp-mux",    no_argument      ,       NULL, CMD_OPT_RTCPMUX },
                  { "rtcpports",   required_argument,       NULL, CMD_OPT_RTCPPORTS },
@@ -1362,6 +1373,7 @@ int main(int argc, char *argv[]) {
                  { "statusmax",   required_argument,       NULL, CMD_OPT_STATUSMAX },
                  { "stts",        optional_argument,       NULL, CMD_OPT_STTS },
                  { "test",        optional_argument,       NULL, CMD_OPT_TEST },
+                 { "token",       required_argument,       NULL, CMD_OPT_TOKENID },
                  { "tslive",      optional_argument,       NULL, CMD_OPT_TSLIVEPORT },
                  { "tslivemax",   required_argument,       NULL, CMD_OPT_TSLIVEMAX },
                  { "transport",   required_argument,       NULL, CMD_OPT_TRANSPORT },
@@ -1968,6 +1980,12 @@ int main(int argc, char *argv[]) {
       case CMD_OPT_RTCPMUX:
         streamParams.streamflags |= VSX_STREAMFLAGS_RTCPMUX;
         break;
+      case CMD_OPT_RTCPDISABLE:
+        streamParams.streamflags |= VSX_STREAMFLAGS_RTCPDISABLE;
+        break;
+      case CMD_OPT_RTCPIGNOREBYE:
+        streamParams.streamflags |= VSX_STREAMFLAGS_RTCPIGNOREBYE;
+        break;
       case CMD_OPT_RTCPPORTS:
       case CMD_OPT_RTCPPORTS0:
         streamParams.rtcpPorts[0] = optarg;
@@ -2449,6 +2467,9 @@ int main(int argc, char *argv[]) {
         arg_stts = optarg;
         have_arg_stts = 1;
         break;
+      case CMD_OPT_TOKENID:
+        streamParams.tokenid = optarg;
+        break;
       case CMD_OPT_TSLIVEPORT:
         if(idxTslive < sizeof(streamParams.tsliveaddr) / sizeof(streamParams.tsliveaddr[0])) {
           if(optarg) {
@@ -2521,11 +2542,17 @@ int main(int argc, char *argv[]) {
       case CMD_OPT_DEBUG_MKV:
         g_debug_flags |= VSX_DEBUG_FLAG_MKV;
         break;
+      case CMD_OPT_DEBUG_CODEC:
+        g_debug_flags |= VSX_DEBUG_FLAG_CODEC;
+        break;
       case CMD_OPT_DEBUG_DASH:
         g_debug_flags |= VSX_DEBUG_FLAG_DASH;
         break;
       case CMD_OPT_DEBUG_LIVE:
         g_debug_flags |= VSX_DEBUG_FLAG_LIVE;
+        break;
+      case CMD_OPT_DEBUG_INFRAME:
+        g_debug_flags |= VSX_DEBUG_FLAG_INFRAME;
         break;
       case CMD_OPT_DEBUG_OUTFMT:
         g_debug_flags |= VSX_DEBUG_FLAG_OUTFMT;
@@ -2598,7 +2625,7 @@ int main(int argc, char *argv[]) {
   }
 
   if(streamParams.verbosity >= VSX_VERBOSITY_NORMAL) {
-    loggerLevel = MIN( (streamParams.verbosity + S_WARNING), S_DEBUG_VERBOSE);
+    loggerLevel = MIN( (streamParams.verbosity + S_WARNING), S_DEBUG_VVERBOSE);
   } else {
     loggerLevel = S_WARNING;
   }

@@ -2,7 +2,7 @@
 #
 # This script is automatically called by vsx-wp to launch a vsx media process
 #
-# vsxchild.sh [ instance id ] [ input path ] [ device profile name ] [ streaming methods ] [ xcode config ] [ deprecated --in=... ]
+# vsxchild.sh [ instance id ] [ input path ] [ device profile name ] [ streaming methods ] [ xcode config ] [ deprecated --in=... ] [ token id ]
 #
 
 INSTANCEID=$1
@@ -30,6 +30,7 @@ else
   METHODS=$4
   XCODE_ARGS=$5
   INCAPTURE=$6
+  TOKENID=$7
   OPT_CONF="--conf=etc/vsx.conf"
   OPT_EXTRA="--statusmax=2"
 fi
@@ -253,11 +254,15 @@ else
   OPT_INPUT="${INCAPTURE}"
 fi
 
+if [ "${TOKENID}" != "" ]; then
+  OPT_TOKEN="--token=\"${TOKENID}\""
+fi
+
 pre_create
 
 #date >${LOG_STDOUT}
-echo "Running ./${RUNPATH} --pid=${PID_FILE} ${OPT_VERBOSE} ${OPT_CONF} ${OPT_METHOD} ${OPT_INPUT} ${OPT_EXTRA} ${OPT_XCODE} --log=${LOG_FILE}" 
-./${RUNPATH} --pid=${PID_FILE} ${OPT_VERBOSE} ${OPT_CONF} ${OPT_METHOD} ${OPT_INPUT} ${OPT_EXTRA} ${OPT_XCODE} --log=${LOG_FILE} >${LOG_STDOUT} 2>&1
+echo "Running ./${RUNPATH} --pid=${PID_FILE} ${OPT_VERBOSE} ${OPT_CONF} ${OPT_METHOD} ${OPT_INPUT} ${OPT_TOKEN} ${OPT_EXTRA} ${OPT_XCODE} --log=${LOG_FILE}" 
+./${RUNPATH} --pid=${PID_FILE} ${OPT_VERBOSE} ${OPT_CONF} ${OPT_METHOD} ${OPT_INPUT} ${OPT_TOKEN} ${OPT_EXTRA} ${OPT_XCODE} --log=${LOG_FILE} >${LOG_STDOUT} 2>&1
 #date >>${LOG_FILE}
 
 post_cleanup

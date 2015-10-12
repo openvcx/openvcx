@@ -836,6 +836,8 @@ static int setupDash(MOOFSRV_CTXT_T *pMoofCtxts, STREAMER_CFG_T *pStreamerCfg,
     pMoofCtxts[outidx].dashInitCtxt.indexcount = pParams->moofindexcount;
     pMoofCtxts[outidx].dashInitCtxt.outfileprefix = pParams->mooffileprefix;
     pMoofCtxts[outidx].dashInitCtxt.uriprefix = pParams->moofuriprefix;
+    pMoofCtxts[outidx].dashInitCtxt.pAuthTokenId = pParams->tokenid;
+
     if((pMoofCtxts[outidx].dashInitCtxt.dash_mpd_type = pParams->dash_mpd_type) == 
        DASH_MPD_TYPE_INVALID) {
       pMoofCtxts[outidx].dashInitCtxt.dash_mpd_type = DASH_MPD_TYPE_DEFAULT;
@@ -1771,6 +1773,7 @@ VSX_RC_T vsxlib_stream(VSXLIB_STREAM_PARAMS_T *pParams) {
   const char *inputs[2];
   const char *log_tag = NULL;
   char input1[VSX_MAX_PATH_LEN];
+  char tokenid[META_FILE_TOKEN_LEN];
 
   if(!pParams || !pParams->pPrivate) {
     return VSX_RC_ERROR;
@@ -1873,6 +1876,10 @@ VSX_RC_T vsxlib_stream(VSXLIB_STREAM_PARAMS_T *pParams) {
   pS->streamerCfg.rtmppublish.connectretrycntminone = pParams->connectretrycntminone;
   vsxlib_stream_setup_rtmpclient(&pS->streamerCfg.rtmppublish.cfg, pParams);
   //pS->streamerCfg.frtcp_sr_intervalsec = pParams->frtcp_sr_intervalsec;
+
+  pParams->tokenid = avc_dequote(pParams->tokenid, tokenid, sizeof(tokenid));
+  pS->streamerCfg.pAuthTokenId = pParams->tokenid;
+
   if(pParams->haveavoffsetrtcp) {
     pS->streamerCfg.status.favoffsetrtcp = pParams->favoffsetrtcp;
   }
@@ -2176,7 +2183,7 @@ VSX_RC_T vsxlib_stream(VSXLIB_STREAM_PARAMS_T *pParams) {
   if(rc == VSX_RC_OK && (do_server || do_flvrecord || do_mkvrecord || pParams->dash_moof_segments == 1 || 
                          pS->streamerCfg.action.do_rtspannounce || pS->streamerCfg.action.do_rtmppublish)) {
     vsxlib_setsrvconflimits(pParams, STREAMER_OUTFMT_MAX, STREAMER_LIVEQ_MAX, 
-                             STREAMER_OUTFMT_MAX, STREAMER_OUTFMT_MAX, 0);
+                             STREAMER_OUTFMT_MAX, STREAMER_OUTFMT_MAX, VSX_CONNECTIONS_MAX);
   }
 
   //

@@ -121,7 +121,7 @@ static int upsampleFrame(STREAM_XCODE_DATA_T *pXcodeData) {
 
   PKTQUEUE_PKT_T *pPkt = &XCODE_VID_UDATA_PTR(pXcodeData->piXcode)->tmpFrame;
 
-  VSX_DEBUG_STREAMAV( LOG(X_DEBUG("stream_av upsample inpts:%.3f outpts:%.3f"), 
+  VSX_DEBUG_STREAMAV( LOG(X_DEBUG("STREAM - stream_av upsample inpts:%.3f outpts:%.3f"), 
                 PTSF(pXcodeData->piXcode->vid.common.inpts90Khz),  
                 PTSF(pXcodeData->piXcode->vid.common.outpts90Khz)));
 
@@ -656,7 +656,8 @@ static enum STREAM_NET_ADVFR_RC advanceFrame(AV_PROG_T *pProg,
     }
 
     if(rc != STREAM_NET_ADVFR_RC_OK) { 
-      VSX_DEBUG_STREAMAV( LOG(X_DEBUGV("cbAdvanceFrame rc:%d id:0x%x stype:0x%x"), rc, pProg->streamId, pProg->streamType));
+      VSX_DEBUG_STREAMAV( 
+         LOG(X_DEBUGV("STREAM - cbAdvanceFrame(1) rc:%d id:0x%x stype:0x%x"), rc, pProg->streamId, pProg->streamType));
 
       if(do_xcode && rc == STREAM_NET_ADVFR_RC_NOTAVAIL && isvid && stream_av_havepipframe(pProg)) {
         upsampleFrame(pProg->pXcodeData);
@@ -676,7 +677,7 @@ static enum STREAM_NET_ADVFR_RC advanceFrame(AV_PROG_T *pProg,
       }
 
     } else if(*pAdvfrData->plen <= 0) {
-      VSX_DEBUG_STREAMAV( LOG(X_DEBUG("cbAdvanceFrame rc:%d sid:0x%x stype:0x%x"), 
+      VSX_DEBUG_STREAMAV( LOG(X_DEBUG("STREAM - cbAdvanceFrame(2) rc:%d sid:0x%x stype:0x%x"), 
                      rc, pProg->streamId, pProg->streamType) );
 #if defined(DEBUG_MIXER_TIMING) && (DEBUG_MIXER_TIMING > 2)
     LOG(X_DEBUG("%llu.%llu stream_av tid:0x%x advanceFrame returning *plen=0"), timer_GetTime()/TIME_VAL_US, timer_GetTime()%TIME_VAL_US, pthread_self());
@@ -769,7 +770,8 @@ static enum STREAM_NET_ADVFR_RC advanceFrame(AV_PROG_T *pProg,
 
   //if(isvid){ fprintf(stderr, "VID codec:%d instype:0x%x stype:0x%x cfgFileTypeIn:0x%x, frcodectype:0x%x\n", pProg->frameData.mediaType, pProg->pXcodeData->inStreamType, pProg->streamType, pProg->pXcodeData->piXcode->aud.common.cfgFileTypeIn, pAdvfrData->codecType); }
 
-    VSX_DEBUG_STREAMAV( LOG(X_DEBUGV("cbAdvanceFrame got rc:%d %s len:%d streamtype:0x%x pts:%.3f dts:%.3f lastHz v:%.3f a:%.3f)"), 
+    VSX_DEBUG_STREAMAV( 
+    LOG(X_DEBUGV("STREAM - cbAdvanceFrame got rc:%d %s len:%d streamtype:0x%x pts:%.3f dts:%.3f lastHz v:%.3f a:%.3f)"), 
        rc, isvid?"vid":"aud", OUTFMT_LEN(&pProg->frameData), pProg->streamType, 
        PTSF(*pAdvfrData->pPts),PTSF(*pAdvfrData->pDts), 
        PTSF(pProg->pAv->progs[0].lastHzOut), 
@@ -1039,6 +1041,16 @@ static enum STREAM_NET_ADVFR_RC advanceFrame(AV_PROG_T *pProg,
     //fprintf(stderr, "xcoded aud len:%d pts:%.3f (%.3f)\n", pProg->pXcodeData->curFrame.lenData, (double)*pAdvfrData->pPts/90000.0f, (double)pProg->pXcodeData->curFrame.frameData.xtra.tm.pts/90000.0f);
 
   } // end of if(isvid && is xcode...
+  else if((pProg->pXcodeData->curFrame.tm.waspaused || !pProg->pXcodeData->curFrame.tm.havestarttm0) &&
+         ((isvid && !pProg->pXcodeData->piXcode->vid.common.cfgDo_xcode) ||
+          (!isvid && !pProg->pXcodeData->piXcode->aud.common.cfgDo_xcode))) {
+
+    //
+    // Ensure that curFrame.tm.durationTotPrior is set in case the input stream is reset
+    //
+    LOG(X_DEBUGV("Calling xcode_checkresetrestume from stream_av"));
+    xcode_checkresetresume(pProg->pXcodeData);
+  }
 
   //fprintf(stderr, "advfr done rc:%d\n", rc);
 
@@ -1057,12 +1069,12 @@ static enum STREAM_NET_ADVFR_RC advanceFrame(AV_PROG_T *pProg,
     //fprintf(stderr, "direct frame rc:%d keyframe:%d len:%d(%d) pts:%.3f, dts:%.3f\n", rc, *pAdvfrData->pkeyframe, pProg->pXcodeData->curFrame.lenData, *pAdvfrData->plen, (double)*pAdvfrData->pPts/90000.0f, (double)*pAdvfrData->pDts/90000.0f);
 
   }
-  //fprintf(stderr, "PTS... %.3f, durationTot:%llu\n", PTSF(*pAdvfrData->pPts), pProg->pXcodeData->curFrame.tm.durationTot); 
+  //fprintf(stderr, "PTS... %.3f, durationTotPrior:%llu\n", PTSF(*pAdvfrData->pPts), pProg->pXcodeData->curFrame.tm.durationTotPrior); 
 
   //
-  // Add durationTot pts adjustment from start of session time, across any resets
+  // Add durationTotPrior pts adjustment from start of session time, across any resets
   //
-  *pAdvfrData->pPts += pProg->pXcodeData->curFrame.tm.durationTot;
+  *pAdvfrData->pPts += pProg->pXcodeData->curFrame.tm.durationTotPrior;
 
   //
   // Update any SDP contents for RTP based delivery
@@ -1101,11 +1113,11 @@ static enum STREAM_NET_ADVFR_RC advanceFrame(AV_PROG_T *pProg,
   VSX_DEBUG_STREAMAV(
   if(OUTFMT_LEN(&pProg->frameData) > 0) {
 
-    LOG(X_DEBUG("new-frame[%lld] %s done len:%d stype:0x%x pts:%.3f(+%.1f)+%.3f=%.3f(dlta:%.3f) "
+    LOG(X_DEBUG("STREAM - new-frame[%lld] %s done len:%d stype:0x%x pts:%.3f(+%.1f)+%.3f=%.3f(dlta:%.3f) "
            "dts:%.3f lastHz[v:%.3f(%d) a:%.3f(%d)], frameTmSt:%.3f, key:%d, rc:%d"), 
      pProg->frameId, (isvid ? "vid" : "aud"), OUTFMT_LEN(&pProg->frameData), pProg->streamType, 
      PTSF(*pAdvfrData->pPts), 
-     PTSF(pProg->pXcodeData->curFrame.tm.durationTot),
+     PTSF(pProg->pXcodeData->curFrame.tm.durationTotPrior),
      PTSF(pProg->pavs[0] ? pProg->pavs[0]->offsetCur : 0), 
      PTSF(*pAdvfrData->pPts + (pProg->pavs[0] ? pProg->pavs[0]->offsetCur : 0)), 
      PTSF(*pAdvfrData->pPts - (isvid ? pProg->pAv->dbglastptsvid : 
@@ -1330,11 +1342,13 @@ static int check_nextframe_rc(STREAM_AV_T *pAv, AV_PROG_T *pProg,
     }
 
   } else if(advanceFrRc == STREAM_NET_ADVFR_RC_NEWPROG ||
-            advanceFrRc == STREAM_NET_ADVFR_RC_RESET ||
+            advanceFrRc == STREAM_NET_ADVFR_RC_RESET_TMGAP ||
+            advanceFrRc == STREAM_NET_ADVFR_RC_RESET_TMBKWD ||
             advanceFrRc == STREAM_NET_ADVFR_RC_OVERWRITE) {
 
      
     //fprintf(stderr, "CALLING STREAM_AV_RESET FROM CHECK_NEXT_FR\n");
+    LOG(X_DEBUGV("Calling stream_av_reset rc: %d"), advanceFrRc);
     stream_av_reset(pAv, 2);
     //fprintf(stderr, "stream_av_preparepkt returning: 0 reset\n");
     return 0;
@@ -1635,7 +1649,8 @@ int stream_av_preparepkt(void *pArg) {
   unsigned int idx;
 
   pAv->prepareCalled = 1;
-  VSX_DEBUG_STREAMAV(LOG(X_DEBUGV("stream_av_preparepkt numProg:%d lastHz:[0]:%.3f, [1]:%.3f) " "noMoreData:%d,%d"), 
+  VSX_DEBUG_STREAMAV(
+    LOG(X_DEBUGV("STREAM - stream_av_preparepkt start numProg:%d lastHz:[0]:%.3f, [1]:%.3f) " "noMoreData:%d,%d"), 
     pAv->numProg, PTSF(pAv->progs[0].lastHzOut), 
     PTSF(pAv->progs[1].lastHzOut), pAv->progs[0].noMoreData, pAv->progs[1].noMoreData));
 
@@ -1645,7 +1660,8 @@ int stream_av_preparepkt(void *pArg) {
     rc = get_next_frame(pAv, &pProg);
   }
 
-  //fprintf(stderr, "get_next_frame returned %d, pProg: 0x%x\n", rc, pProg);
+  VSX_DEBUG_STREAMAV( 
+    LOG(X_DEBUGV("STREAM - stream_av_preparepkt get_next_frame returned %d, pProg: 0x%x"), rc, pProg); );
 
   if(rc <= 0) {
     return rc;
@@ -1742,7 +1758,9 @@ int stream_av_preparepkt(void *pArg) {
   //  pAv->startHz = pAv->lastHz;
   //  pAv->haveStartHzIn = 1;
   //}
-  VSX_DEBUG_STREAMAV( LOG(X_DEBUGV("stream_av_preparepkt isvid: %d, frameId: %llu, len: %d, pts: %.3f (%lluHz) "), pProg->frameData.isvid, pProg->frameId, OUTFMT_LEN(&pProg->frameData), PTSF(pProg->lastHzOut), pProg->lastHzOut) );
+  VSX_DEBUG_STREAMAV( 
+   LOG(X_DEBUGV("STREAM - stream_av_preparepkt isvid: %d, frameId: %llu, len: %d, pts: %.3f, dts: %.3f, prog pts: %.3f (%lluHz) "), 
+      pProg->frameData.isvid, pProg->frameId, OUTFMT_LEN(&pProg->frameData), PTSF(OUTFMT_PTS(&pProg->frameData)), PTSF(OUTFMT_DTS(&pProg->frameData)), PTSF(pProg->lastHzOut), pProg->lastHzOut) );
 
   if(OUTFMT_LEN(&pProg->frameData) == 0) {
     // Program disabled or frame not yet available, or this is a pip thread
@@ -1983,7 +2001,7 @@ int stream_av_cansend(void *pArg) {
     return -2;
   }
 
-  VSX_DEBUG_STREAMAV( LOG(X_DEBUGV("cansend returning %d"), rc));
+  VSX_DEBUG_STREAMAV( LOG(X_DEBUGVV("STREAM - cansend returning %d"), rc));
 
   return rc;
 }

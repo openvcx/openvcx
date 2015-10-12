@@ -30,13 +30,17 @@
 #define AUTH_OPAQUE_MAXLEN   AUTH_NONCE_MAXLEN
 #define IS_AUTH_CREDENTIALS_SET(pAuthStore) ((pAuthStore)->username[0] != '\0' || (pAuthStore)->pass[0] != '\0')
 
+struct SRV_LISTENER_CFG;
+
 const char *srv_check_authorized(const AUTH_CREDENTIALS_STORE_T *pAuthStore, const HTTP_REQ_T *pReq, 
                                  char *authbuf);
 
 int srvauth_authenticate(const AUTH_CREDENTIALS_STORE_T *pAuth, const HTTP_REQ_T *pReq,
                          const char *nonce_srv, const char *opaque_srv, const char *realm_srv,
                          char *bufAuthHdr, unsigned int outBufSz);
-
+int srv_check_authtoken(const struct SRV_LISTENER_CFG *pListenCfg, const HTTP_REQ_T *pReq, int allowcoma);
+int srv_write_authtoken(char *buf, unsigned int szbuf, const char *pAuthTokenId, 
+                        const char *authTokenFromUri, int querystr);
 
 
 #endif // __SERVER_CMD_H__

@@ -583,7 +583,12 @@ int rtmp_handshake_srv(RTMP_CTXT_T *pRtmp) {
                   LOGHEXT_DEBUG(buf, RTMP_HANDSHAKE_SZ + 1) );
 
   if(buf[0] != RTMP_HANDSHAKE_HDR) {
-    LOG(X_ERROR("Invalid rtmp handshake header 0x%x"), buf[0]);
+    if(!memcmp("POST /fcs/ident2", buf, 16)) {
+      LOG(X_ERROR("RTMPT client tunnel request not supported"));
+      //http_resp_error(pRtmp->pSd, , HTTP_STATUS_NOTFOUND, 1, NULL, NULL);
+    } else {
+      LOG(X_ERROR("Invalid rtmp handshake header 0x%x"), buf[0]);
+    }
     return -1;
   }
 

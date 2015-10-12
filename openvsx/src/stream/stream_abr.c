@@ -861,6 +861,7 @@ int stream_abr_cbOnStream(STREAM_STATS_T *pStats) {
     return 0;
   }
 
+  //TODO: updateCounters absolute time tv should not be used with output stream using relative stream time!
 
   if((pBitrateRtp = &pStats->throughput_last[0].bitratesWr[0])) {
     //
@@ -875,8 +876,10 @@ int stream_abr_cbOnStream(STREAM_STATS_T *pStats) {
     burstmeter_updateCounters(pBitrateRtcp, &tv);
   }
 
-  if(pStats->throughput_last[0].written.slots > 0 && pStats->tvstart.tv_sec > 0 && pStats->tv_last.tv_sec > 0) {
-    durationMs = TIME_TV_DIFF_MS(pStats->tv_last, pStats->tvstart);
+  //if(pStats->throughput_last[0].written.slots > 0 && pStats->tvstart.tv_sec > 0 && pStats->tv_last.tv_sec > 0) {
+  if(pStats->throughput_last[0].written.slots > 0 && pStats->throughput_last[0].tmStart.tm > 0 && pStats->tmLastNewInterval > 0) {
+    //durationMs = TIME_TV_DIFF_MS(pStats->tv_last, pStats->tvstart);
+    durationMs = (pStats->tmLastNewInterval - pStats->throughput_rt[0].tmStart.tm) / TIME_VAL_MS;
   } else {
     durationMs = 0;
   }

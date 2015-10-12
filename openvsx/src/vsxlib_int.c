@@ -37,6 +37,10 @@ const char *vsxlib_get_appnamewwwstr(char *buf, unsigned int len) {
   snprintf(buf, len > 0 ? len -1 : 0, VSX_APPNAME);
   return buf;
 }
+const char *vsxlib_get_useragentstr(char *buf, unsigned int len) {
+  snprintf(buf, len > 0 ? len -1 : 0, VSX_USER_AGENT);
+  return buf;
+}
 
 int vsxlib_initlog(int verbosity, const char *logfile, const char *homedir,
                     unsigned int logmaxsz, unsigned int logrollmax, const char *tag) {
@@ -93,7 +97,7 @@ int vsxlib_initlog(int verbosity, const char *logfile, const char *homedir,
   logger_AddStderr(S_INFO, LOG_OUTPUT_DEFAULT_STDERR);
 
   if(verbosity >= VSX_VERBOSITY_NORMAL) {
-    loglevel = MIN( (verbosity + S_WARNING), S_DEBUG_VERBOSE);
+    loglevel = MIN( (verbosity + S_WARNING), S_DEBUG_VVERBOSE);
   }
 
   if(tag) {
@@ -108,7 +112,7 @@ int vsxlib_initlog(int verbosity, const char *logfile, const char *homedir,
     flags |= LOG_OUTPUT_DEFAULT | LOG_FLAG_USELOCKING | LOG_OUTPUT_PRINT_TID | LOG_OUTPUT_PRINT_TAG;
     logger_SetFile(plogdir, logfile, logrollmax, logmaxsz, flags);
     //
-    // Be advised when logging to file at debug, stderr is always info
+    // Be advised when logging to file at debug, stderr is always info, otherwise do '--log=stderr'
     //
     logger_AddStderr(S_INFO, 0);
   } else {
@@ -396,7 +400,7 @@ int vsxlib_cond_waitwhile(PKTQUEUE_COND_T *pCond, int *pflag, int value) {
 }
 
 
-void vsxlib_setsrvconflimits(VSXLIB_STREAM_PARAMS_T *pParams,
+void vsxlib_setsrvconflimits(VSXLIB_STREAM_PARAMS_T *pParams, 
                               unsigned int rtmphardlimit, unsigned int rtsphardlimit,
                               unsigned int flvhardlimit, unsigned int mkvhardlimit, 
                               unsigned int httphardlimit) {
@@ -405,12 +409,16 @@ void vsxlib_setsrvconflimits(VSXLIB_STREAM_PARAMS_T *pParams,
     return;
   }
 
+  if(httphardlimit <= 0) {
+    httphardlimit = VSX_CONNECTIONS_MAX;
+  }
+
   //
   // Global HTTP settings
   //
-  if(pParams->httpmax > VSX_CONNECTIONS_MAX) {
-    LOG(X_WARNING("Max HTTP sessions limited to %d"), VSX_CONNECTIONS_MAX);
-    pParams->httpmax = VSX_CONNECTIONS_MAX;
+  if(pParams->httpmax > httphardlimit) {
+    LOG(X_WARNING("Max HTTP sessions limited to %d"), httphardlimit);
+    pParams->httpmax = httphardlimit;
   }
 
   //

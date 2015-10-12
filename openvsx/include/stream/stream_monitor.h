@@ -61,7 +61,7 @@ typedef struct STREAM_STATS {
   struct sockaddr_storage       saRemote;
   struct STREAM_RTP_DEST       *pRtpDest;
   STREAM_MONITOR_ABR_TYPE_T     abrEnabled;
-  struct timeval                tvstart;
+  //struct timeval                tvstart;
   unsigned int                  numWr;
   unsigned int                  numRd;
 
@@ -74,7 +74,8 @@ typedef struct STREAM_STATS {
   //
   // snapshot of running counters last time stream_stats_newinterval was called 
   //
-  struct timeval                tv_last;
+  //struct timeval                tv_last;
+  TIME_VAL                      tmLastNewInterval;
   STREAM_STATS_CTRS_T           ctr_last;
   THROUGHPUT_STATS_T            throughput_last[2];
 
@@ -83,6 +84,11 @@ typedef struct STREAM_STATS {
   struct STREAM_STATS_MONITOR  *pMonitor;
 
 } STREAM_STATS_T;
+
+typedef struct STREAM_STATS_AGGREGATE {
+  float                         bps;
+  unsigned int                  rangeMs;
+} STREAM_STATS_AGGREGATE_T;
 
 typedef struct STREAM_STATS_MONITOR {
   int                           active;
@@ -94,6 +100,7 @@ typedef struct STREAM_STATS_MONITOR {
   pthread_mutex_t               mtx;
   int                           rangeMs1;
   int                           rangeMs2;
+  STREAM_STATS_AGGREGATE_T      aggregate;
   STREAM_STATS_T               *plist;
 } STREAM_STATS_MONITOR_T;
 

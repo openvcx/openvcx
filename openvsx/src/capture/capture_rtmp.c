@@ -96,6 +96,11 @@ static int handle_audpkt_aac(RTMP_CTXT_CLIENT_T *pRtmp, FLV_TAG_AUDIO_T *pTag,
     if(pRtmp->pQAud->cfg.userDataType != XC_CODEC_TYPE_AAC) {
       pRtmp->pQAud->cfg.userDataType = XC_CODEC_TYPE_AAC;
     }
+
+    VSX_DEBUG_INFRAME( 
+     LOG(X_DEBUG("INFRAME - RTMP aud aac pts:%.3f dts:%.3f, ts: %u, len:%d, ts: %u (%llu)"),
+        PTSF(xtra.tm.pts), PTSF(xtra.tm.dts), idx + len,  ts, PTSF(ts * 90)););
+
     rc = pktqueue_addpkt(pRtmp->pQAud, pRtmp->ctxt.av.aud.tmpFrame.buf, idx + len, &xtra, 0);
     VSX_DEBUG_RTMP( 
         LOG(X_DEBUG("RTMP - handle_audpkt_aac queing pkt rc:%d len:%d %.3f %.3f"), 
@@ -151,7 +156,7 @@ static int append_h264_frame(RTMP_CTXT_CLIENT_T *pRtmp, H264_AVC_FRAME_T *pFrame
   int rc = 0;
   const uint32_t startCode = htonl(1); 
 
-  if(pFrame->nalType == NAL_TYPE_SEQ_PARAM ||  
+  if(pFrame->nalType == NAL_TYPE_SEQ_PARAM || 
      pFrame->nalType == NAL_TYPE_PIC_PARAM) {
     return 0;
   }
@@ -238,14 +243,17 @@ static int handle_vidpkt_avc(RTMP_CTXT_CLIENT_T *pRtmp, FLV_TAG_VIDEO_T *pTag,
   int lennal;
   H264_AVC_FRAME_T frame;
   unsigned int idx = 0;
+  unsigned int skip = 0;
   PKTQ_EXTRADATA_T xtra;
 
   memset(&frame, 0, sizeof(frame));
   frame.pTmpFrame =  &pRtmp->ctxt.av.vid.tmpFrame;
 
+  //LOG(X_DEBUG("handle_vidpkt_avc type: %d, len:%d, ts:%d"), pTag->avc.pkttype, len, ts); LOGHEX_DEBUG(&pData[idx], len > 48 ? 48 : len);
+
   if(pTag->avc.pkttype == FLV_VID_AVC_PKTTYPE_SEQHDR) {
 
-    //fprintf(stderr, "NAL SEQHDRS len:%d\n", len);
+    //fprintf(stderr, "NAL SEQHDRS len:%d\n\n\n\n\n\n\n\n\n\n\n", len);
     //avc_dumpHex(stderr, pData, len, 1);
 
     avcc_freeCfg(&pRtmp->ctxt.av.vid.codecCtxt.h264.avcc);
@@ -277,7 +285,28 @@ static int handle_vidpkt_avc(RTMP_CTXT_CLIENT_T *pRtmp, FLV_TAG_VIDEO_T *pTag,
       idx += pRtmp->ctxt.av.vid.codecCtxt.h264.avcc.lenminusone + 1;
       frame.nalType = (pData[idx] & NAL_TYPE_MASK);
 
-      //fprintf(stderr, "NAL idx:%d type:0x%x ts[%d]:%d tsAbsolute:%d tm:%d, len:%d 0x%x 0x%x 0x%x 0x%x\n", idx, frame.nalType, pRtmp->ctxt.streamIdx, pRtmp->ctxt.pkt[pRtmp->ctxt.streamIdx].hdr.ts, ts, pTag->avc.comptime32, lennal, pData[idx], pData[idx+1], pData[idx+2], pData[idx+3]);
+      //
+      // Workaround to handle AVC SPS , AVC NAL PPS + NAL IDR 
+      //
+      if((frame.nalType == NAL_TYPE_PIC_PARAM || frame.nalType == NAL_TYPE_ACCESS_UNIT_DELIM)
+         && lennal == (len - idx)) {
+        H264_STREAM_CHUNK_T h264Stream;
+        memset(&h264Stream, 0, sizeof(h264Stream));
+        h264Stream.bs.sz = 32;
+        skip  = frame.nalType == NAL_TYPE_ACCESS_UNIT_DELIM ? 2 : 0;
+        h264Stream.bs.buf = &pData[idx + skip];
+        if((rc = h264_findStartCode(&h264Stream, 1, NULL)) > 0) {
+          rc += skip;
+          LOG(X_DEBUG("RTMP H.264 skipping %d of improper length %d H.264 0x%x NAL to get to 0x%x NAL"), rc, (len - idx - rc), frame.nalType, (pData[idx + rc] & NAL_TYPE_MASK));
+          idx += rc;
+          lennal = len - idx;
+          frame.nalType = (pData[idx] & NAL_TYPE_MASK);
+          //LOG(X_DEBUG("AT 0x%x 0x%x, idx:%d, lennal:%d "), pData[idx], pData[idx+1], idx, lennal);
+        }
+
+      }
+
+      //fprintf(stderr, "NAL idx:%d/%d type:0x%x ts[%d]:%d tsAbsolute:%d tm:%d, len:%d 0x%x 0x%x 0x%x 0x%x\n", idx, len, frame.nalType, pRtmp->ctxt.streamIdx, pRtmp->ctxt.pkt[pRtmp->ctxt.streamIdx].hdr.ts, ts, pTag->avc.comptime32, lennal, pData[idx], pData[idx+1], pData[idx+2], pData[idx+3]);
       //avc_dumpHex(stderr, &pData[idx], len > 16 ? 16 : len, 1);
 
       if(frame.nalType != NAL_TYPE_ACCESS_UNIT_DELIM) {
@@ -289,6 +318,8 @@ static int handle_vidpkt_avc(RTMP_CTXT_CLIENT_T *pRtmp, FLV_TAG_VIDEO_T *pTag,
 
       idx += lennal;
     }
+
+    VSX_DEBUG_INFRAME( LOG(X_DEBUG("INFRAME - RTMP vid avc type: %d, len: %d, ts: %u, frame.idx:%d"), pTag->avc.pkttype, len, ts, frame.idx) );
 
     if(frame.idx > 0) {
       xtra.pQUserData = NULL;
@@ -308,7 +339,10 @@ static int handle_vidpkt_avc(RTMP_CTXT_CLIENT_T *pRtmp, FLV_TAG_VIDEO_T *pTag,
         //}
       }
 
-      //fprintf(stderr, "RTMP VID AVC PTS:%.3f DTS:%.3f tm:%d, len:%d (from flv pkt:%.3f %.3f)\n", PTSF(xtra.tm.pts), PTSF(xtra.tm.dts), pTag->avc.comptime32, frame.idx, PTSF(ts * 90), PTSF(pTag->avc.comptime32 * 90));
+      VSX_DEBUG_INFRAME( 
+       LOG(X_DEBUG("INFRAME - RTMP vid avc pts:%.3f dts:%.3f tm:%d, len:%d, key: %d, (from flv pkt:%.3f %.3f)"), 
+          PTSF(xtra.tm.pts), PTSF(xtra.tm.dts), pTag->avc.comptime32, frame.idx, frame.keyFrame, PTSF(ts * 90), 
+          PTSF(pTag->avc.comptime32 * 90)););
 
       //if(frame.keyFrame) {
       //  xtra.flags = CAPTURE_SP_FLAG_KEYFRAME;
@@ -398,6 +432,7 @@ int rtmp_handle_vidpkt(RTMP_CTXT_CLIENT_T *pRtmp, unsigned char *pData,
 
     case FLV_VID_CODEC_ON2VP6:
 
+      //VSX_DEBUG_INFRAME( LOG(X_DEBUG("RTMP - rtmp_handle_vidpkt vp6 len: %d, ts: %u"), len, ts) );
       if(len < 2) {
         return -1;
       }
@@ -1261,6 +1296,10 @@ static int onresp_connect(RTMP_CTXT_CLIENT_T *pClient, const FLV_AMF_T *pAmfArr)
 
   if(rtmp_is_resp_error(pAmfArr, "Connect", 0, S_DEBUG)) {
 
+    //
+    // Perform any authentication
+    // setting value of pClient->auth.ctxt.lastAuthState 
+    //
     check_srv_auth(pClient, pAmfArr);
 
     if(pClient->auth.ctxt.lastAuthState != RTMP_AUTH_STATE_NEED_CHALLENGE &&

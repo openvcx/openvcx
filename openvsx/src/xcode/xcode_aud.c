@@ -940,16 +940,15 @@ enum STREAM_NET_ADVFR_RC xcode_aud(STREAM_XCODE_DATA_T *pData) {
   STREAM_XCODE_AUD_UDATA_T *pUData = (STREAM_XCODE_AUD_UDATA_T *)pXcode->pUserData;
   //unsigned int idx;
 
-  VSX_DEBUGLOG("xcode_aud: decode[%d,%d] encode[%d,%d] xcoder: %3f %.3f "
-  //fprintf(stderr, "xcode_aud: decode[%d,%d] encode[%d,%d] xcoder: %3f %.3f "
-                "(pts:%.3f,dts:%.3f,%.3f, compfr[%d/%d], len:%d)\n", 
+  VSX_DEBUG_XCODE( LOG(X_DEBUG("xcode_aud: decode[%d,%d] encode[%d,%d] xcoder: %3f %.3f "
+                "(pts:%.3f,dts:%.3f,%.3f, compfr[%d/%d], len:%d)"), 
     pXcode->common.decodeInIdx, pXcode->common.decodeOutIdx, 
     pXcode->common.encodeInIdx, pXcode->common.encodeOutIdx, 
     PTSF(pXcode->common.inpts90Khz), PTSF(pXcode->common.outpts90Khz), 
     PTSF(pData->curFrame.pkt.xtra.tm.pts), PTSF(pData->curFrame.pkt.xtra.tm.dts),
     PTSF((int64_t)pData->curFrame.pkt.xtra.tm.pts-pData->curFrame.dbgprevpts),
     pData->curFrame.idxCompoundFrame, pData->curFrame.numCompoundFrames, pData->curFrame.lenData); 
-    pData->curFrame.dbgprevpts = pData->curFrame.pkt.xtra.tm.pts;
+    pData->curFrame.dbgprevpts = pData->curFrame.pkt.xtra.tm.pts; );
     //avc_dumpHex(stderr, pData->curFrame.pData, pData->curFrame.lenData, 1);
 
     //fprintf(stderr, "xcode_aud tid:0x%x, vid.pip.active:%d, overlay.havePip:%d\n", pthread_self(), pData->piXcode->vid.pip.active, pData->piXcode->vid.overlay.havePip);

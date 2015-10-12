@@ -713,7 +713,8 @@ static int addpkt(PKTQUEUE_T *pQ, const OUTFMT_FRAME_DATA_T *pFrame) {
     idx += len;
   }
 
-  VSX_DEBUG_OUTFMT( LOG(X_DEBUG("OUTFMT - addpkt queue id:%d addpkt data: 0x%x, len:%d"), pQ->cfg.id, p0, idx) );
+  VSX_DEBUG_OUTFMT( LOG(X_DEBUG("OUTFMT - addpkt queue id:%d data: 0x%x, len:%d, pts: %.3f, dts: %.3f"), 
+                       pQ->cfg.id, p0, idx, PTSF(xtra.tm.pts), PTSF(xtra.tm.dts)) );
 
   if(idx > pQ->cfg.growMaxPktLen) {
     LOG(X_WARNING("Output method slot max size slot %d too small for %d"), pQ->cfg.growMaxPktLen, idx);
@@ -790,7 +791,7 @@ static void frameFromQ(const PKTQUEUE_T *pQ, const PKTQUEUE_PKT_T *pPkt, OUTFMT_
   }
 
   VSX_DEBUG_OUTFMT(
-    LOG(X_DEBUG("OUTFMT - read queue id: %d, buf: 0x%x, lenbuf: %d, 0:{0x%x, len:%d}, 1:{0x%x, len:%d}, 2:{0x%x, len:%d}, 3:{0x%x, len:%d}"), pQ->cfg.id, pFrame->xout.outbuf.buf, pFrame->xout.outbuf.lenbuf, pFrame->xout.outbuf.poffsets[0], pFrame->xout.outbuf.lens[0],  pFrame->xout.outbuf.poffsets[1], pFrame->xout.outbuf.lens[1], pFrame->xout.outbuf.poffsets[2], pFrame->xout.outbuf.lens[2],pFrame->xout.outbuf.poffsets[3], pFrame->xout.outbuf.lens[3]);
+    LOG(X_DEBUG("OUTFMT - read queue id: %d, buf: 0x%x, lenbuf: %d, pts: %.3f dts: %.3f, 0:{0x%x, len:%d}, 1:{0x%x, len:%d}, 2:{0x%x, len:%d}, 3:{0x%x, len:%d}"), pQ->cfg.id, pFrame->xout.outbuf.buf, pFrame->xout.outbuf.lenbuf, PTSF(pPkt->xtra.tm.pts), PTSF(pPkt->xtra.tm.dts), pFrame->xout.outbuf.poffsets[0], pFrame->xout.outbuf.lens[0],  pFrame->xout.outbuf.poffsets[1], pFrame->xout.outbuf.lens[1], pFrame->xout.outbuf.poffsets[2], pFrame->xout.outbuf.lens[2],pFrame->xout.outbuf.poffsets[3], pFrame->xout.outbuf.lens[3]);
 
   );
 
@@ -1109,7 +1110,7 @@ static int outfmt_invokeCbsUnbuffured(STREAMER_OUTFMT_LIST_T *pLiveFmts, const O
           }
 
           VSX_DEBUG_OUTFMT( 
-             LOG(X_DEBUG("OUTFMT - write queue id: %d, buf: 0x%x, lenbuf: %d, 0:{0x%x, len:%d}, 1:{0x%x, len:%d}, 2:{0x%x, len:%d}, 3:{0x%x, len:%d}"), pQ->cfg.id, pFrame->xout.outbuf.buf, pFrame->xout.outbuf.lenbuf, pFrame->xout.outbuf.poffsets[0], pFrame->xout.outbuf.lens[0], pFrame->xout.outbuf.poffsets[1], pFrame->xout.outbuf.lens[1], pFrame->xout.outbuf.poffsets[2], pFrame->xout.outbuf.lens[2],pFrame->xout.outbuf.poffsets[3], pFrame->xout.outbuf.lens[3]);
+             LOG(X_DEBUGV("OUTFMT - write queue id: %d, buf: 0x%x, lenbuf: %d, pts: %.3f, dts: %.3f, 0:{0x%x, len:%d}, 1:{0x%x, len:%d}, 2:{0x%x, len:%d}, 3:{0x%x, len:%d}"), pQ->cfg.id, pFrame->xout.outbuf.buf, pFrame->xout.outbuf.lenbuf, PTSF(OUTFMT_PTS(pFrame)), PTSF(OUTFMT_DTS(pFrame)), pFrame->xout.outbuf.poffsets[0], pFrame->xout.outbuf.lens[0], pFrame->xout.outbuf.poffsets[1], pFrame->xout.outbuf.lens[1], pFrame->xout.outbuf.poffsets[2], pFrame->xout.outbuf.lens[2],pFrame->xout.outbuf.poffsets[3], pFrame->xout.outbuf.lens[3]);
           ); 
 
           //

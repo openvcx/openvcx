@@ -128,24 +128,22 @@ static enum STREAM_NET_ADVFR_RC checktiming(STREAM_AV_DATA_T *pData) {
           pData->curPesTm.qtm.pts;
     ptsdelta = tm1 - tm0;
 
-    if((ptsdelta > 0 && ptsdelta > 90000 * 5) ||
-       (ptsdelta < 0 && ptsdelta < -90000 * 5)) {
+    if((ptsdelta > 0 && ptsdelta > 5000 * PTS_HZ_MS) ||
+       (ptsdelta < 0 && ptsdelta < -1 * 5000 * PTS_HZ_MS)) {
 
       LOG(X_WARNING("Large pts %s jump pts:%.3f dts:%.3f -> "
         "pts:%.3f dts:%.3f (%"LL64"d %.3fsec)"), 
          IS_STREAM_PES_DATA_VID(pData) ? "video" : "audio",
-          //(pData == &((STREAM_PES_T *) pData->pPes)->vid ? "vid" : "aud"),
           PTSF(pData->prevPesTm.qtm.pts), PTSF(pData->prevPesTm.qtm.dts), 
           PTSF(pData->curPesTm.qtm.pts), PTSF(pData->curPesTm.qtm.dts), 
           ptsdelta, PTSF(ptsdelta));
 
-      rc = STREAM_NET_ADVFR_RC_RESET;
+      rc = STREAM_NET_ADVFR_RC_RESET_TMGAP;
 
-    //} else if(tm1 < tm0) {
     } else if(pData->curPesTm.qtm.pts < pData->prevPesTm.qtm.pts &&
               ((pData->curPesTm.qtm.dts == 0 && pData->prevPesTm.qtm.dts == 0) ||
               (pData->curPesTm.qtm.dts != 0 && pData->prevPesTm.qtm.dts != 0 &&
-              pData->curPesTm.qtm.dts + 90000 < pData->prevPesTm.qtm.dts))) {
+              pData->curPesTm.qtm.dts + PTS_HZ_SEC < pData->prevPesTm.qtm.dts))) {
 
       LOG(X_WARNING("%s program time went backwards pts: %"LL64"uHz %.3f -> %"LL64"uHz %.3f"
                     ", dts: %.3f -> %.3f"), 
@@ -154,6 +152,7 @@ static enum STREAM_NET_ADVFR_RC checktiming(STREAM_AV_DATA_T *pData) {
          pData->curPesTm.qtm.pts, PTSF(pData->curPesTm.qtm.pts),
          PTSF(pData->prevPesTm.qtm.dts), PTSF(pData->curPesTm.qtm.dts));
 
+      rc = STREAM_NET_ADVFR_RC_RESET_TMBKWD;
     }
   }
 
@@ -314,7 +313,8 @@ enum STREAM_NET_ADVFR_RC stream_net_av_advanceFrame(STREAM_NET_ADVFR_DATA_T *pAr
     *pArg->plen = pData->pXcodeData->curFrame.lenData;
   }
   
-  if((rc = checktiming(pData)) != STREAM_NET_ADVFR_RC_OK) {
+  //if((rc = checktiming(pData)) == STREAM_NET_ADVFR_RC_RESET_TMGAP) {
+  if((rc = checktiming(pData)) == STREAM_NET_ADVFR_RC_RESET_TMGAP || rc == STREAM_NET_ADVFR_RC_RESET_TMBKWD) {
     stream_net_av_reset(pData->pPes);
   }
 

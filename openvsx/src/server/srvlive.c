@@ -405,6 +405,14 @@ static int update_dash_indexfile(CLIENT_CONN_T *pConn,
                   subs, strwidth, strheight, pOut, lenOut);
 }
 
+static int get_token_uriparam(char *tokenstr, unsigned int sztokenstr, const CLIENT_CONN_T *pConn) {
+  int rc = 0;
+
+  rc = srv_write_authtoken(tokenstr, sztokenstr, pConn->pListenCfg->pAuthTokenId, 
+                conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->httpReq.uriPairs, VSX_URI_TOKEN_QUERY_PARAM), 1);
+  return rc;
+}
+
 static int resp_index_file(CLIENT_CONN_T *pConn, 
                            const char *pargfile, 
                            int is_remoteargfile,
@@ -415,6 +423,7 @@ static int resp_index_file(CLIENT_CONN_T *pConn,
   unsigned int idx = 0;
   char rsrcUrl[VSX_MAX_PATH_LEN];
   char tmp[VSX_MAX_PATH_LEN];
+  char tokenstr[16 + META_FILE_TOKEN_LEN];
   char stroutidx[32];
   const char *strerror = NULL;
   unsigned int outidx = 0;
@@ -497,13 +506,31 @@ static int resp_index_file(CLIENT_CONN_T *pConn,
     rc = -1;
   } else {
 
+    //
+    // Append any security token to the media link URL
+    //
+    tokenstr[0] = '\0';
+    get_token_uriparam(tokenstr, sizeof(tokenstr), pConn);
+
     if(pargfile && pargfile[0] != '\0') {
       while(pargfile[idx] == '/') {
         idx++;
       }
-      snprintf(tmp, sizeof(tmp), "%s", &pargfile[idx]);
+      snprintf(tmp, sizeof(tmp), "/%s%s%s", &pargfile[idx], tokenstr[0] != '\0' ? "?" : "", tokenstr);
+
+      if(!strncmp(VSX_MEDIA_URL, tmp, strlen(VSX_MEDIA_URL))) {
+        //
+        // Most likely we're called from mgr context with static file /media context
+        //
+        protoLiveUrl = ""; 
+      } 
+
     } else {
-      snprintf(tmp, sizeof(tmp), "/live%s?%d", fileExt ? fileExt : "", (int) (random() % RAND_MAX));
+
+      // Workaround flashplayer (flv/rtmp) bug where '&' is not handled in query string for key with no value
+      snprintf(tmp, sizeof(tmp), "/live%s?%s%s%d", fileExt ? fileExt : "", tokenstr, 
+              tokenstr[0] != '\0' ? ((urlCap == URL_CAP_RTMPLIVE || urlCap == URL_CAP_FLVLIVE) ? "," : "&") : "",
+              (int) (random() % RAND_MAX));
     }
 
     if(is_remoteargfile) {
@@ -512,6 +539,7 @@ static int resp_index_file(CLIENT_CONN_T *pConn,
       //
       snprintf(rsrcUrl, sizeof(rsrcUrl), "%s", tmp);
     } else {
+
       if(urlCap == URL_CAP_RTMPLIVE) {
         snprintf(rsrcUrl, sizeof(rsrcUrl), URL_RTMP_FMT_STR"%s%s%s",
                URL_HTTP_FMT_ARGS(pListenCfg), protoLiveUrl, stroutidx, tmp);
@@ -526,8 +554,8 @@ static int resp_index_file(CLIENT_CONN_T *pConn,
   }
 
   VSX_DEBUG_LIVE(LOG(X_DEBUG("LIVE - Created media link URL: '%s', proto: '%s', pargfile: '%s', "
-                             "stroutidx: '%s', tmp: '%s', '%s'"), 
-                              rsrcUrl, protoUrl, pargfile, stroutidx, tmp, protoLiveUrl));
+                             "stroutidx: '%s', tmp: '%s', '%s', is_remote: %d"), 
+                              rsrcUrl, protoUrl, pargfile, stroutidx, tmp, protoLiveUrl, is_remoteargfile));
 
   if(rc >= 0 && (rc = cbUpdateProtoIndexFile(pConn, pStreamerCfg, rsrcUrl,  outidx, (char *) buf,
                                  sizeof(buf))) > 0) {
@@ -957,8 +985,7 @@ int srv_ctrl_tslive(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
     queueSz = pLiveQ->qCfg.maxPkts;
   }
 
-  if(rc == 0 && (parg = conf_find_keyval((const KEYVAL_PAIR_T *) 
-                              &pConn->httpReq.uriPairs, "queue"))) {
+  if(rc == 0 && (parg = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->httpReq.uriPairs, "queue"))) {
     if((queueSz = atoi(parg)) > pLiveQ->qCfg.growMaxPkts) {
       queueSz = pLiveQ->qCfg.growMaxPkts;
     }
@@ -1238,6 +1265,7 @@ int srv_ctrl_mooflive(CLIENT_CONN_T *pConn,
   const char *pargrsrc = NULL;
   const char *pargpath  = NULL;
   char hostpath[128];
+  char tokenstr[16 + META_FILE_TOKEN_LEN];
   const char *outdir;
   const char *contentType = NULL;
   const char *ext;
@@ -1336,10 +1364,12 @@ int srv_ctrl_mooflive(CLIENT_CONN_T *pConn,
     //
     // Return the default DASH MPD file, which is stored in the html output directory
     //
-    if(snprintf(url, sizeof(url), "%s%s%s%s"DASH_MPD_DEFAULT_NAME,
-                  hostpath, virtFilePath, virtFilePath[sz - 1] == '/' ? "" : "/", stroutidx) > 0 &&
-     (rc = update_dash_indexfile(pConn, pStreamerCfg, url, outidx,
-                                         (char *) buf, sizeof(buf))) > 0) {
+    if(rc >= 0 &&
+       get_token_uriparam(tokenstr, sizeof(tokenstr), pConn) >= 0 &&
+       snprintf(url, sizeof(url), "%s%s%s%s"DASH_MPD_DEFAULT_NAME"%s%s",
+                hostpath, virtFilePath, virtFilePath[sz - 1] == '/' ? "" : "/", stroutidx,
+                tokenstr[0] != '\0' ? "?" : "", tokenstr) > 0 &&
+       (rc = update_dash_indexfile(pConn, pStreamerCfg, url, outidx, (char *) buf, sizeof(buf))) > 0) {
 
       VSX_DEBUG_LIVE(LOG(X_DEBUG("LIVE - srv_ctrl_mooflive sending substituted index file with media: '%s'"
                                    ", hostpath: '%s', virtFilePath: '%s'"), url, hostpath, virtFilePath));
@@ -1466,7 +1496,7 @@ int srv_ctrl_rtmp(CLIENT_CONN_T *pConn,
   VSX_DEBUG_LIVE(LOG(X_DEBUG("LIVE - srv_ctrl_rtmp file: '%s', is_remoteargfile: %d, outidx: %d"), 
                              pargfile, is_remoteargfile, outidx));
 
-  if(pargfile && pargfile[0] != '\0') {
+  if(0&&pargfile && pargfile[0] != '\0') {
 
     //
     // Return a static file from the html directory
@@ -1506,7 +1536,7 @@ int srv_ctrl_rtmp(CLIENT_CONN_T *pConn,
 int srv_ctrl_rtsp(CLIENT_CONN_T *pConn, 
                   const char *pargfile, 
                   int is_remoteargfile, 
-                  const char *rsrcUrl) {
+                  const SRV_LISTENER_CFG_T *pListenRtsp) {
   int rc = 0;
   char path[VSX_MAX_PATH_LEN];
   size_t sz = 0;
@@ -1514,9 +1544,11 @@ int srv_ctrl_rtsp(CLIENT_CONN_T *pConn,
   STREAMER_CFG_T *pStreamerCfg = NULL;
   unsigned char buf[PREPROCESS_FILE_LEN_MAX];
 
+  VSX_DEBUG_LIVE(LOG(X_DEBUG("LIVE - srv_ctrl_rtsp file: '%s', is_remoteargfile: %d"), pargfile, is_remoteargfile));
+
   pStreamerCfg = GET_STREAMER_FROM_CONN(pConn);
 
-  if(pargfile && pargfile[0] != '\0') {
+  if(0&&pargfile && pargfile[0] != '\0') {
 
     if(mediadb_prepend_dir(pConn->pCfg->pMediaDb->homeDir,
                VSX_RSRC_HTML_PATH, (char *) buf, sizeof(buf)) < 0 ||
@@ -1544,7 +1576,7 @@ int srv_ctrl_rtsp(CLIENT_CONN_T *pConn,
     //
     // Return the rsrc/rtsp_embed.html file with all substitions
     //
-    return resp_index_file(pConn, pargfile, is_remoteargfile, NULL, URL_CAP_RTSPLIVE);
+    return resp_index_file(pConn, pargfile, is_remoteargfile, pListenRtsp, URL_CAP_RTSPLIVE);
   }
 
   return rc;
@@ -1558,7 +1590,7 @@ const SRV_LISTENER_CFG_T *srv_ctrl_findlistener(const SRV_LISTENER_CFG_T *arrCfg
   if(arrCfgs) {
 
     for(idx = 0; idx < maxCfgs; idx++) {
-
+      //VSX_DEBUG_LIVE( LOG(X_DEBUG("SEARCH idx[%d]/%d active: %d urlCap: 0x%x & urlCap: 0x%x"), idx, maxCfgs, arrCfgs[idx].active, arrCfgs[idx].urlCapabilities, urlCap); );
       if(arrCfgs[idx].active && (arrCfgs[idx].urlCapabilities & urlCap)) {
         if(netflagsMask == 0 || (arrCfgs[idx].netflags & netflagsMask) == netflags) {
           return  &arrCfgs[idx];
@@ -1580,7 +1612,8 @@ int srv_ctrl_httplive(CLIENT_CONN_T *pConn,
   int rc = 0;
   const char *pargrsrc = NULL;
   const char *pargpath  = NULL;
-  char hostpath[128];
+  char tokenstr[16 + META_FILE_TOKEN_LEN];
+  char hostpath[256];
   char path[VSX_MAX_PATH_LEN];
   struct stat st;
   unsigned char *presp = NULL;
@@ -1701,8 +1734,11 @@ int srv_ctrl_httplive(CLIENT_CONN_T *pConn,
       // Use html/rsrc/httplive_embed.html
       // 
       if(rc >= 0 && 
-         snprintf(url, sizeof(url), "%s%s%s%s"HTTPLIVE_PL_NAME_EXT,  
-                  hostpath, virtFilePath, virtFilePath[sz - 1] == '/' ? "" : "/", pend) > 0 &&
+         get_token_uriparam(tokenstr, sizeof(tokenstr), pConn) >= 0 &&
+         snprintf(url, sizeof(url), "%s%s%s%s"HTTPLIVE_PL_NAME_EXT"%s%s",  
+                  hostpath, virtFilePath, virtFilePath[sz - 1] == '/' ? "" : "/", pend,
+                  tokenstr[0] != '\0' ? "?" : "", tokenstr) > 0 &&
+
          (rc = update_httplive_indexfile(pConn, pStreamerCfg, url, outidx,
                                          (char *) buf, sizeof(buf))) > 0) {
 
@@ -1832,6 +1868,61 @@ int srv_ctrl_mkv(CLIENT_CONN_T *pConn,
 
 }
 
+static int srv_ctrl_rsrc(CLIENT_CONN_T *pConn,
+                         const char *pargfile,
+                         int is_remoteargfile,
+                         const char *rsrcUrl,
+                         const SRV_LISTENER_CFG_T *pListenRtmp,
+                         unsigned int outidx) {
+  int rc = 0;
+  char path[VSX_MAX_PATH_LEN];
+  size_t sz = 0;
+  const char *contentType = NULL;
+  STREAMER_CFG_T *pStreamerCfg = NULL;
+
+  pStreamerCfg = GET_STREAMER_FROM_CONN(pConn);
+
+  VSX_DEBUG_LIVE(LOG(X_DEBUG("LIVE - srv_ctrl_rsrc file: '%s', is_remoteargfile: %d, outidx: %d"),
+                             pargfile, is_remoteargfile, outidx));
+
+  if(pargfile && pargfile[0] != '\0') {
+
+    //
+    // Return a static file from the html directory
+    //
+
+    if(mediadb_prepend_dir2(pConn->pCfg->pMediaDb->homeDir,
+           VSX_RSRC_HTML_PATH, pargfile, (char *) path, sizeof(path)) < 0) {
+      rc = http_resp_send(&pConn->sd, &pConn->httpReq, HTTP_STATUS_NOTFOUND,
+         (unsigned char *) HTTP_STATUS_STR_NOTFOUND, strlen(HTTP_STATUS_STR_NOTFOUND));
+
+    } else {
+
+      if((sz = strlen(path)) > 5) {
+        if(strncasecmp(&path[sz - 4], ".swf", 4) == 0) {
+          contentType = CONTENT_TYPE_SWF;
+        } else if(strncasecmp(&path[sz - 5], ".html", 5) == 0) {
+          contentType = CONTENT_TYPE_TEXTHTML;
+        }
+      }
+      //fprintf(stderr, "path:'%s' ct:'%s'\n", path, contentType);
+      rc = http_resp_sendfile(pConn, NULL, path, contentType, HTTP_ETAG_AUTO);
+
+    }
+
+    return rc;
+  } else {
+
+    //
+    // Return the rsrc/rtmp_embed.html file with all substitions
+    //
+    return resp_index_file(pConn, pargfile, is_remoteargfile, pListenRtmp, 0);
+  }
+
+  return rc;
+}
+
+
 static STREAM_METHOD_T getBestMethod(const STREAM_DEVICE_T *pdevtype, const CLIENT_CONN_T *pConn) {
   unsigned int idx;
   const STREAMER_CFG_T *pStreamerCfg = NULL;
@@ -1879,6 +1970,7 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
   const STREAM_DEVICE_T *pdevtype = NULL;
   size_t sz = 0;
   char tmp[128];
+  int check_token = 1;
   STREAM_METHOD_T streamMethod = STREAM_METHOD_UNKNOWN;
 
   //rsrcurl[0] = '\0';
@@ -1954,6 +2046,7 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
     if(!accessUri) {
       accessUri = VSX_RSRC_URL;
     }
+    check_token = 0;
 
   } else {
 
@@ -1962,6 +2055,12 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
       accessUri = VSX_LIVE_URL;
     }
 
+  }
+
+  if(check_token && srv_check_authtoken(pConn->pListenCfg, &pConn->httpReq, 
+                                        streamMethod == STREAM_METHOD_FLVLIVE ? 1 : 0) != 0) {
+    *pHttpStatus = HTTP_STATUS_FORBIDDEN;
+    return -1;
   }
 
   if(sz <= strlen(pConn->httpReq.puri)) { 
@@ -2088,17 +2187,20 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
 
     case STREAM_METHOD_PROGDOWNLOAD:
     case STREAM_METHOD_FLASHHTTP:
+
       LOG(X_ERROR("Streaming method '%s' not suitable for live delivery."), devtype_methodstr(streamMethod));
       rc = -1;
       break;
 
     case STREAM_METHOD_RTMP:
+
+      rc = srv_ctrl_rtmp(pConn, pargfile, 0, NULL, NULL, 0);
+      break;
+
     case STREAM_METHOD_NONE:
     default:
 
-      VSX_DEBUG_LIVE(LOG(X_DEBUG("LIVE - srv_ctrl_live calling srv_ctrl_rtmp.. file: '%s' ."), pargfile));
-
-      rc = srv_ctrl_rtmp(pConn, pargfile, 0, NULL, NULL, 0);
+      rc = srv_ctrl_rsrc(pConn, pargfile, 0, NULL, NULL, 0);
       break;
   }
 

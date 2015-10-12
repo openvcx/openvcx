@@ -5552,7 +5552,7 @@ else
 fi
 
 #
-# Set CFG_HAVE_LICENSE in makefiels/vsxconfig.mak
+# Set CFG_HAVE_LICENSE in makefiles/vsxconfig.mak
 #
 # Check whether --enable-license was given.
 if test "${enable_license+set}" = set; then

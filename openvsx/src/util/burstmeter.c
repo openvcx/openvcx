@@ -43,6 +43,31 @@ void burstmeter_dump(const BURSTMETER_SAMPLE_SET_T *pSamples) {
 }
 #endif // 0
 
+int burstmeter_copy(BURSTMETER_SAMPLE_SET_T *pSamples, const BURSTMETER_SAMPLE_SET_T *pFrom) {
+  int rc = 0;
+
+  if(!pSamples || !pFrom || !pFrom->meter.periodMs <= 0 || !pFrom->meter.rangeMs <= 0) {
+    return -1;
+  }
+
+  memset(pSamples, 0, sizeof(BURSTMETER_SAMPLE_SET_T));
+  pSamples->countPeriods = pFrom->meter.rangeMs / pFrom->meter.periodMs;
+  if(pFrom->meter.periodMs * pSamples->countPeriods != pFrom->meter.rangeMs) {
+    return -1;
+  }
+  
+  pSamples->meter.periodMs = pFrom->meter.periodMs;
+  pSamples->meter.rangeMs = pFrom->meter.rangeMs;
+
+  if(!(pSamples->samples = avc_calloc(pSamples->countPeriods + 1, sizeof(BURSTMETER_SAMPLE_T)))) {
+    return -1;
+  }
+
+  pSamples->nolock = 1;
+
+  return rc;
+}
+
 int burstmeter_init(BURSTMETER_SAMPLE_SET_T *pSamples,
                  unsigned int periodMs,
                  unsigned int rangeMs) {
@@ -76,11 +101,14 @@ int burstmeter_init(BURSTMETER_SAMPLE_SET_T *pSamples,
 void burstmeter_close(BURSTMETER_SAMPLE_SET_T *pSamples) {
 
   if(pSamples) {
+
     if(pSamples->samples) {
       avc_free((void *) &pSamples->samples);
     }
 
-    pthread_mutex_destroy(&pSamples->mtx);
+    if(!pSamples->nolock) {
+      pthread_mutex_destroy(&pSamples->mtx);
+    }
   }
 }
 
@@ -215,7 +243,6 @@ static int addSample(BURSTMETER_SAMPLE_SET_T *pSamples, unsigned int sampleLen,
 
   }
 
-
   if(idxOffsetCur > 0) {
 
     pSamples->idxLatest = (pSamples->idxLatest + idxOffsetCur) % (pSamples->countPeriods + 1);
@@ -256,8 +283,7 @@ static int addSample(BURSTMETER_SAMPLE_SET_T *pSamples, unsigned int sampleLen,
   }
 
 //int totB=0, totP=0; for(ui=0; ui<pSamples->countPeriods + 1;ui++) { if(ui!=pSamples->idxLatest) totB+= pSamples->samples[ui].bytes; if(ui!=pSamples->idxLatest) totP+= pSamples->samples[ui].packets; }
-
-  //fprintf(stderr, "INSERTED %d bytes INTO SLOT[%d] %d bytes, %d inserts, cur_byte:%d, cur_pkts:%d, max_bytes:%d, max_pkts:%d, totB:%d, totP:%d\n", sampleLen, pSamples->idxLatest, pSamples->samples[pSamples->idxLatest].bytes, pSamples->samples[pSamples->idxLatest].packets, pSamples->meter.cur.bytes, pSamples->meter.cur.packets, pSamples->meter.max.bytes, pSamples->meter.max.packets, totB, totP);//burstmeter_dump(pSamples);
+//  fprintf(stderr, "INSERTED %d bytes INTO 0x%x SLOT[%d] %d bytes, %d inserts, cur_byte:%d, cur_pkts:%d, max_bytes:%d, max_pkts:%d, totB:%d, totP:%d\n", sampleLen, pSamples, pSamples->idxLatest, pSamples->samples[pSamples->idxLatest].bytes, pSamples->samples[pSamples->idxLatest].packets, pSamples->meter.cur.bytes, pSamples->meter.cur.packets, pSamples->meter.max.bytes, pSamples->meter.max.packets, totB, totP);//burstmeter_dump(pSamples);
 
   return 0;
 }
@@ -272,11 +298,15 @@ int burstmeter_AddSample(BURSTMETER_SAMPLE_SET_T *pSamples,
     return -1;
   }
 
-  pthread_mutex_lock(&pSamples->mtx);
+  if(!pSamples->nolock) {
+    pthread_mutex_lock(&pSamples->mtx);
+  }
 
   rc = addSample(pSamples, sampleLen, pTv);
 
-  pthread_mutex_unlock(&pSamples->mtx);
+  if(!pSamples->nolock) {
+    pthread_mutex_unlock(&pSamples->mtx);
+  }
 
   return rc;
 }
@@ -307,10 +337,16 @@ int burstmeter_AddDecoderSample(BURSTMETER_DECODER_SET_T *pSet,
   return burstmeter_AddSample(&pSet->set, sampleLen, &tv);
 }
 
+int burstmeter_updateCounters2(BURSTMETER_SAMPLE_SET_T *pSamples) {
+  return burstmeter_updateCounters(pSamples, NULL);
+}
+
 int burstmeter_updateCounters(BURSTMETER_SAMPLE_SET_T *pSamples, const struct timeval *pTv) {
   int rc = 0;
+  struct timeval tvnow;
+  int64_t msdiff;
   struct timeval tv;
-  const unsigned int thresholdMs = 50;
+  //const unsigned int thresholdMs = 50;
 
   //
   // This should be called before attempting to read any of the rate based counter stats
@@ -319,14 +355,26 @@ int burstmeter_updateCounters(BURSTMETER_SAMPLE_SET_T *pSamples, const struct ti
 
   if(!pSamples || !pSamples->samples || pSamples->meter.periodMs <= 0) {
     return -1;
+  } else if(pSamples->tmLatestSample.tv_sec == 0) {
+    return 0; 
+  }
+
+  if(!pSamples->nolock) {
+    pthread_mutex_lock(&pSamples->mtx);
   }
 
   if(!pTv) {
-    gettimeofday(&tv, NULL);
+    tv.tv_sec = pSamples->tmLatestSample.tv_sec;
+    tv.tv_usec = pSamples->tmLatestSample.tv_usec;
     pTv = &tv;
   }
+  gettimeofday(&tvnow, NULL);
+  msdiff = (int64_t) TIME_TV_DIFF_MS(tvnow, *pTv);
 
-  pthread_mutex_lock(&pSamples->mtx);
+  if(msdiff <= 0) {
+    pthread_mutex_unlock(&pSamples->mtx);
+    return 0;
+  }
 
   //
   // If a time greater than our threshold has expired between now
@@ -334,11 +382,14 @@ int burstmeter_updateCounters(BURSTMETER_SAMPLE_SET_T *pSamples, const struct ti
   // to roll-up (pop) any sample data, otherwise, the counters will always
   // be stuck at the latest value for each request to get the packet / bit rate.
   //
-  if(TIME_TV_DIFF_MS(*pTv, pSamples->tmLatestSample) > thresholdMs) {
+  //if(TIME_TV_DIFF_MS(*pTv, pSamples->tmLatestSample) > thresholdMs) {
+    //LOG(X_DEBUG("*pTv: %u:%u, tmLatestSample: %u:%u, %lld > thresholdMs"), pTv->tv_sec, pTv->tv_usec, pSamples->tmLatestSample.tv_sec, pSamples->tmLatestSample.tv_usec, msdiff);
     rc = addSample(pSamples, SAMPLE_LEN_ROLLUP, pTv);
-  }
+  //}
 
-  pthread_mutex_unlock(&pSamples->mtx);
+  if(!pSamples->nolock) {
+    pthread_mutex_unlock(&pSamples->mtx);
+  }
 
   return rc;
 }
@@ -373,13 +424,17 @@ float burstmeter_getBitrateBps(const BURSTMETER_SAMPLE_SET_T *pBurstSet) {
     return 0;
   }
 
-  pthread_mutex_lock(&((BURSTMETER_SAMPLE_SET_T *) pBurstSet)->mtx);
+  if(!pBurstSet->nolock) {
+    pthread_mutex_lock(&((BURSTMETER_SAMPLE_SET_T *) pBurstSet)->mtx);
+  }
 
   if(pBurstSet->meter.rangeMs > 0) {
     bps = pBurstSet->meter.cur.bytes * (8000.0f / pBurstSet->meter.rangeMs);
   }
 
-  pthread_mutex_unlock(&((BURSTMETER_SAMPLE_SET_T *) pBurstSet)->mtx);
+  if(!pBurstSet->nolock) {
+    pthread_mutex_unlock(&((BURSTMETER_SAMPLE_SET_T *) pBurstSet)->mtx);
+  }
 
   return bps;
 }
@@ -391,13 +446,17 @@ float burstmeter_getPacketratePs(const BURSTMETER_SAMPLE_SET_T *pBurstSet) {
     return 0;
   }
 
-  pthread_mutex_lock(&((BURSTMETER_SAMPLE_SET_T *) pBurstSet)->mtx);
+  if(!pBurstSet->nolock) {
+    pthread_mutex_lock(&((BURSTMETER_SAMPLE_SET_T *) pBurstSet)->mtx);
+  }
 
   if(pBurstSet->meter.rangeMs > 0) {
     pktps = pBurstSet->meter.cur.packets * (1000.0f / pBurstSet->meter.rangeMs);
   }
 
-  pthread_mutex_unlock(&((BURSTMETER_SAMPLE_SET_T *) pBurstSet)->mtx);
+  if(!pBurstSet->nolock) {
+    pthread_mutex_unlock(&((BURSTMETER_SAMPLE_SET_T *) pBurstSet)->mtx);
+  }
 
   return pktps;
 }
@@ -420,6 +479,11 @@ static int printBitrate(char *buf, unsigned int szbuf, float bps) {
   }
 
   return rc;
+}
+
+char *burstmeter_printBitrateStr(char *buf, unsigned int szbuf, float bps) {
+  printBitrate(buf, szbuf, bps);
+  return buf;
 }
 
 int burstmeter_printThroughput(char *buf, unsigned int szbuf, const BURSTMETER_SAMPLE_SET_T *pBurstSet) {

@@ -146,7 +146,7 @@ static int parse_media_uri(const CLIENT_CONN_T *pConn, SRVMEDIA_RSRC_T *pRsrc) {
 
   size_t sz;
   size_t szprev, sztmp;
-  char *p;
+  const char *p;
   char *pRsrcName = NULL;
   size_t szrsrcname;
   char uri[HTTP_URL_LEN];
@@ -158,9 +158,9 @@ static int parse_media_uri(const CLIENT_CONN_T *pConn, SRVMEDIA_RSRC_T *pRsrc) {
   // < > - Optional element
   // [ ] - Mandatory element
   //
-  // /[streaming method]</[Resource leading path]></id_[unique id]>/[Resource name]</[Extended Resource Name]</prof_[Profile Designation]>
+  // /[streaming method]</[Resource leading path]></id_[unique id]></tk_[auth token]>/[Resource name]</[Extended Resource Name]</prof_[Profile Designation]>
   //
-  // [streaming method] - Eg., /httplive, /flv, /mkv, /rtmp
+  // [streaming method] - Eg., /httplive, /flv, /mkv, /rtmp, /rtsp
   // [Resource leading path] - Eg., /sub-dir/path-to/
   // [unique id] - Dedicated Stream Processor id Eg., id_af415093
   // [Resource name] - Eg., live.sdp, in.mp4
@@ -234,9 +234,6 @@ static int parse_media_uri(const CLIENT_CONN_T *pConn, SRVMEDIA_RSRC_T *pRsrc) {
 
   }
 
-  //
-  // Check for any '/id_[ instance id ]' streaming processor instance id and remove it from the uri
-  //
   sztmp = sz;
   while(sztmp > 0 && uri[sztmp] == '/') {
     sztmp--;
@@ -245,8 +242,33 @@ static int parse_media_uri(const CLIENT_CONN_T *pConn, SRVMEDIA_RSRC_T *pRsrc) {
     sztmp--;
   }
 
-  if(!strncasecmp(&uri[sztmp], "/"VSX_URI_ID_PARAM, 1 + strlen(VSX_URI_ID_PARAM)) && szprev >= 
-      sztmp + 1 + strlen(VSX_URI_ID_PARAM)) {
+  //
+  // Check for any '/tk_[ token id ]' streaming processor instance id and remove it from the uri
+  //
+  if(!strncasecmp(&uri[sztmp], "/"VSX_URI_TOKEN_PARAM, 1 + strlen(VSX_URI_TOKEN_PARAM)) && 
+      szprev >= sztmp + 1 + strlen(VSX_URI_TOKEN_PARAM)) {
+    if((sz = (szprev - sztmp - 4)) >= sizeof(pRsrc->tokenId)) {
+      sz = sizeof(pRsrc->tokenId) - 1;
+    }
+    memcpy(pRsrc->tokenId, &uri[sztmp + 4], sz);
+    szprev = sztmp;
+
+    strncpy(tmp, pRsrcName, sizeof(tmp) - 1);
+    strncpy(&uri[sztmp + 1], tmp, sizeof(uri) - sztmp -1);
+    pRsrcName = &uri[sztmp + 1];
+    while(sztmp > 0 && uri[sztmp] == '/') {
+      sztmp--;
+    }
+    while(sztmp > 0 && uri[sztmp] != '/') {
+      sztmp--;
+    }
+  }
+
+  //
+  // Check for any '/id_[ instance id ]' streaming processor instance id and remove it from the uri
+  //
+  if(!strncasecmp(&uri[sztmp], "/"VSX_URI_ID_PARAM, 1 + strlen(VSX_URI_ID_PARAM)) && 
+      szprev >= sztmp + 1 + strlen(VSX_URI_ID_PARAM)) {
     if((sz = (szprev - sztmp - 4)) >= sizeof(pRsrc->instanceId)) {
       sz = sizeof(pRsrc->instanceId) - 1;
     }
@@ -256,7 +278,15 @@ static int parse_media_uri(const CLIENT_CONN_T *pConn, SRVMEDIA_RSRC_T *pRsrc) {
     strncpy(&uri[sztmp + 1], tmp, sizeof(uri) - sztmp -1);
     pRsrcName = &uri[sztmp + 1];
   }
-    
+
+  //
+  // Try to load any 'tk=' values from the URI query string
+  //
+  if(pRsrc->tokenId[0] == '\0' && 
+    (p = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->httpReq.uriPairs, VSX_URI_TOKEN_QUERY_PARAM))) {
+    strncpy(pRsrc->tokenId, p, sizeof(pRsrc->tokenId) - 1);
+  }
+
   //
   // Get the filepath based on the media resource path in the URI
   //
@@ -277,9 +307,9 @@ static int parse_media_uri(const CLIENT_CONN_T *pConn, SRVMEDIA_RSRC_T *pRsrc) {
   }
 
   VSX_DEBUG_MGR(LOG(X_DEBUG("MGR - parse_media_uri: uri: '%s', virtRsrc: '%s', filepath: '%s', profile: '%s'"
-                 ", instanceId: '%s', name: '%s', ext: '%s', len-virtrsrconly:%d"), 
+                 ", instanceId: '%s', token: '%s' name: '%s', ext: '%s', len-virtrsrconly:%d"), 
                   pConn->httpReq.puri, pRsrc->virtRsrc, pRsrc->filepath, pRsrc->profile, 
-                  pRsrc->instanceId, pRsrc->pRsrcName, pRsrc->rsrcExt, pRsrc->szvirtRsrcOnly));
+                  pRsrc->instanceId, pRsrc->tokenId, pRsrc->pRsrcName, pRsrc->rsrcExt, pRsrc->szvirtRsrcOnly));
 
   return 0;
 
@@ -371,6 +401,10 @@ int srvmgr_check_metafile(META_FILE_T *pMetaFile,
     pMediaRsrc->pUserpass = pMetaFile->userpass;
   }
 
+  if(pMetaFile->tokenId[0] != '\0') {
+    pMediaRsrc->pTokenId = pMetaFile->tokenId;
+  }
+
   pMediaRsrc->pmethodBits = &pMetaFile->methodBits;
   pMediaRsrc->pshared = &pMetaFile->shared;
 
@@ -386,9 +420,9 @@ int srvmgr_check_metafile(META_FILE_T *pMetaFile,
   }
 
   VSX_DEBUG_MGR( LOG(X_DEBUG("MGR - srvmgr_check_metafile done xcodestr:'%s', file:'%s' ('%s'), id:'%s',"
-                            " link:'%s', in:'%s', digestauth: '%s', methods: '%s', shared: %d"), 
-                  pMediaRsrc->pXcodeStr, pMediaRsrc->filepath, pMetaFile->filestr, 
-                  pMediaRsrc->pId, pMediaRsrc->pLinkStr, pMediaRsrc->pInputStr, pMediaRsrc->pUserpass,
+                            " link:'%s', in:'%s', digestauth: '%s', token: '%s', methods: '%s', shared: %d"), 
+                  pMediaRsrc->pXcodeStr, pMediaRsrc->filepath, pMetaFile->filestr, pMediaRsrc->pId, 
+                  pMediaRsrc->pLinkStr, pMediaRsrc->pInputStr, pMediaRsrc->pUserpass, pMetaFile->tokenId, 
                   devtype_dump_methods(pMetaFile->methodBits, pathbuf, sizeof(pathbuf)), pMetaFile->shared));
 
 
@@ -532,17 +566,20 @@ static MEDIA_ACTION_T get_media_action(const MEDIA_DESCRIPTION_T *pMediaDescr,
   char path[VSX_MAX_PATH_LEN];
   MEDIA_ACTION_T action = MEDIA_ACTION_UNKNOWN;
 
-  //
-  // Check if the requested virtual resource actually corresponds to a download
-  // file, such as a .swf, css, .jpg, 
-  //
-  if(methodAuto == STREAM_METHOD_RTMP || 
+  if(pMediaDescr->type == MEDIA_FILE_TYPE_UNKNOWN) {
+    return action;
+
+  } else if(methodAuto == STREAM_METHOD_RTMP || 
      methodAuto == STREAM_METHOD_FLVLIVE ||
      methodAuto == STREAM_METHOD_MKVLIVE ||
      methodAuto == STREAM_METHOD_RTSP ||
      methodAuto == STREAM_METHOD_RTSP_INTERLEAVED ||
      methodAuto == STREAM_METHOD_RTSP_HTTP) {
 
+    //
+    // Check if the requested virtual resource actually corresponds to a download
+    // file, such as a .swf, css, .jpg, 
+    //
     if(is_canned_process(pMediaRsrc)) {
 
       //
@@ -622,7 +659,8 @@ static int process_liveoverhttp(SRV_MGR_CONN_T *pMgrConn,
                                 const SRVMEDIA_RSRC_T *pMediaRsrc, 
                                 const SYS_PROC_T *pProc, 
                                 MEDIA_ACTION_T action, 
-                                STREAM_METHOD_T method) {
+                                STREAM_METHOD_T method,
+                                int startProc) {
   int rc = 0;
   int sz, sz2;
   SRV_CFG_T cfg;
@@ -630,12 +668,14 @@ static int process_liveoverhttp(SRV_MGR_CONN_T *pMgrConn,
   CLIENT_CONN_T *pConn = &pMgrConn->conn;
   SRV_CFG_T *pCfgOrig = pConn->pCfg;
   char rsrcurl[VSX_MAX_PATH_LEN];
+  char tmp[128];
   int is_remoteargfile = 0;
   const char *pvirtRsrc = pMediaRsrc->virtRsrc;
   MEDIA_DESCRIPTION_T mediaDescr;
   const MEDIA_DESCRIPTION_T *pMediaDescr;
-  SRV_LISTENER_CFG_T listenRtmp;
+  SRV_LISTENER_CFG_T listenCfg;
   int appenduri = 1;
+  int useproxy = 0;
 
   VSX_DEBUG_MGR(LOG(X_DEBUG("MGR - liveoverhttp action: %s (%d), method: %s (%d), rsrcName: '%s', "
                             "virtRsrc: '%s', filepath: '%s'"), 
@@ -646,7 +686,7 @@ static int process_liveoverhttp(SRV_MGR_CONN_T *pMgrConn,
     return -1;
   }
 
-  memset(&listenRtmp, 0, sizeof(listenRtmp));
+  memset(&listenCfg, 0, sizeof(listenCfg));
   rsrcurl[0] = '\0';
   pMediaDescr = &pProc->mediaDescr;
  
@@ -654,6 +694,7 @@ static int process_liveoverhttp(SRV_MGR_CONN_T *pMgrConn,
 
     memcpy(&cfg, pConn->pCfg, sizeof(SRV_CFG_T));
     pConn->pCfg = &cfg;
+    pConn->pListenCfg->pAuthTokenId = pMediaRsrc->tokenId;
 
     if(action == MEDIA_ACTION_CANNED_INFLASH || action == MEDIA_ACTION_CANNED_WEBM) {
 
@@ -662,7 +703,8 @@ static int process_liveoverhttp(SRV_MGR_CONN_T *pMgrConn,
       }
       // fprintf(stderr, "FLASH PROFILE:%d %d %s %dx%d\n", mediaDescr.vid.generic.profile, mediaDescr.vid.generic.mediaType, codecType_getCodecDescrStr(mediaDescr.vid.generic.mediaType), mediaDescr.vid.generic.resH, mediaDescr.vid.generic.resV);
 
-      cfg.pListenRtmp = pConn->pListenCfg;
+      //cfg.pListenRtmp = pConn->pListenCfg;
+      cfg.pListenHttp = pConn->pListenCfg;
 
       //
       // The resource is located on a remote server
@@ -688,7 +730,7 @@ static int process_liveoverhttp(SRV_MGR_CONN_T *pMgrConn,
       } else {
 
         //
-        // Return a local URL
+        // Return a local path /media URL
         //
         if((sz = snprintf(rsrcurl, sizeof(rsrcurl), ""VSX_MEDIA_URL"/")) <= 0) {
           rsrcurl[0] = '\0';
@@ -719,30 +761,69 @@ static int process_liveoverhttp(SRV_MGR_CONN_T *pMgrConn,
       //
       if(pMgrConn->cfg.pListenerHttpProxy[0].listenCfg.active && 
          INET_PORT(pMgrConn->cfg.pListenerHttpProxy[0].listenCfg.sa) != 0) { 
-        memcpy(&listenRtmp, &pMgrConn->cfg.pListenerHttpProxy[0].listenCfg, sizeof(listenRtmp));
+        memcpy(&listenCfg, &pMgrConn->cfg.pListenerHttpProxy[0].listenCfg, sizeof(listenCfg));
+        useproxy = 1;
       } else {
-        memcpy(&listenRtmp, pMgrConn->conn.pListenCfg, sizeof(listenRtmp));
-        INET_PORT(listenRtmp.sa) = htons(MGR_GET_PORT_HTTP(pProc->startPort));
+        memcpy(&listenCfg, pMgrConn->conn.pListenCfg, sizeof(listenCfg));
+        INET_PORT(listenCfg.sa) = htons(MGR_GET_PORT_HTTP(pProc->startPort));
       }
-      cfg.pListenRtmp = &listenRtmp; 
+      listenCfg.urlCapabilities |= URL_CAP_MKVLIVE | URL_CAP_FLVLIVE;
+      cfg.pListenHttp = &listenCfg; 
+
+      VSX_DEBUG_MGR(LOG(X_DEBUG("MGR - liveoverhttp set http listen %s:%d for '%s'"), 
+            FORMAT_NETADDR(listenCfg.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(listenCfg.sa)), pMediaRsrc->pRsrcName););
+
+    } else if(method == STREAM_METHOD_RTSP || method == STREAM_METHOD_RTSP_HTTP||
+              method == STREAM_METHOD_RTSP_INTERLEAVED) {
+
+      //
+      // Check if the rtspliveport is set - which should refer to the proxy
+      //
+      if(pMgrConn->cfg.pListenerRtspProxy[0].listenCfg.active &&
+         INET_PORT(pMgrConn->cfg.pListenerRtspProxy[0].listenCfg.sa) != 0) {
+        memcpy(&listenCfg, &pMgrConn->cfg.pListenerRtspProxy[0].listenCfg, sizeof(listenCfg));
+        useproxy = 1;
+      } else {
+        memcpy(&listenCfg, pMgrConn->conn.pListenCfg, sizeof(listenCfg));
+        INET_PORT(listenCfg.sa) = htons(MGR_GET_PORT_RTSP(pProc->startPort));
+      }
+      listenCfg.urlCapabilities |= URL_CAP_RTSPLIVE;
+      cfg.pListenRtsp = &listenCfg; 
+
+      VSX_DEBUG_MGR(LOG(X_DEBUG("MGR - liveoverhttp set rtsp listen %s:%d for '%s'"), 
+            FORMAT_NETADDR(listenCfg.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(listenCfg.sa)), pMediaRsrc->pRsrcName););
+
+      //
+      // This is primitive, but sleep 1.5 sec when the child process was just started
+      // for the first time - to give time for the RTSP listener to start
+      //
+      if(startProc) {
+        usleep(1500000);
+      }
 
     } else {
-
       //
       // Check if the rtmpliveport is set - which should refer to the proxy
       //
       if(pMgrConn->cfg.pListenerRtmpProxy[0].listenCfg.active &&
          INET_PORT(pMgrConn->cfg.pListenerRtmpProxy[0].listenCfg.sa) != 0) {
-        memcpy(&listenRtmp, &pMgrConn->cfg.pListenerRtmpProxy[0].listenCfg, sizeof(listenRtmp));
+        memcpy(&listenCfg, &pMgrConn->cfg.pListenerRtmpProxy[0].listenCfg, sizeof(listenCfg));
+        useproxy = 1;
       } else {
-        memcpy(&listenRtmp, pMgrConn->conn.pListenCfg, sizeof(listenRtmp));
-        INET_PORT(listenRtmp.sa) = htons(MGR_GET_PORT_RTMP(pProc->startPort));
+        memcpy(&listenCfg, pMgrConn->conn.pListenCfg, sizeof(listenCfg));
+        INET_PORT(listenCfg.sa) = htons(MGR_GET_PORT_RTMP(pProc->startPort));
       }
-      cfg.pListenRtmp = &listenRtmp; 
+      listenCfg.urlCapabilities |= URL_CAP_RTMPLIVE;
+      cfg.pListenRtmp = &listenCfg; 
+
+      VSX_DEBUG_MGR(LOG(X_DEBUG("MGR - liveoverhttp set rtmp listen %s:%d for '%s'"), 
+            FORMAT_NETADDR(listenCfg.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(listenCfg.sa)), pMediaRsrc->pRsrcName););
 
     }
 
-    pvirtRsrc = NULL; 
+    if(!useproxy) {
+      //pvirtRsrc = NULL; 
+    }
   
     //
     // Set the video description including the resolution width x height
@@ -755,6 +836,7 @@ static int process_liveoverhttp(SRV_MGR_CONN_T *pMgrConn,
         streamerCfg.action.do_flvlive = 1;
         streamerCfg.action.do_mkvlive = 1;
         streamerCfg.action.do_rtmplive = 1;
+        streamerCfg.action.do_rtsplive = 1;
       //} else {
       //  streamerCfg.action.liveFmts.out[STREAMER_OUTFMT_IDX_RTMP].do_outfmt = 1;
       //}
@@ -794,72 +876,20 @@ static int process_liveoverhttp(SRV_MGR_CONN_T *pMgrConn,
     //
     rc = srv_ctrl_flv(pConn, pvirtRsrc, is_remoteargfile, cfg.pListenRtmp);
 
+  } else if(method == STREAM_METHOD_RTSP || method == STREAM_METHOD_RTSP_HTTP||
+           method == STREAM_METHOD_RTSP_INTERLEAVED) {
+
+    rc = srv_ctrl_rtsp(pConn, pvirtRsrc, is_remoteargfile, cfg.pListenRtsp);
+
   } else {
     rc = srv_ctrl_rtmp(pConn, pvirtRsrc, is_remoteargfile, rsrcurl, cfg.pListenRtmp, 0);
   }
 
   pConn->pCfg = pCfgOrig;
-
+  pConn->pListenCfg->pAuthTokenId = NULL;
   if(pConn->pStreamerCfg0 == &streamerCfg) {
     pConn->pStreamerCfg0 = NULL;
   }
-
-  return rc;
-}
-
-static int process_rtsplive(SRV_MGR_CONN_T *pMgrConn, const SRVMEDIA_RSRC_T *pMediaRsrc, 
-                            const SYS_PROC_T *pProc, MEDIA_ACTION_T action,
-                            int startProc) {
-  int rc = 0;
-  SRV_CFG_T cfg;
-  char rsrcurl[VSX_MAX_PATH_LEN];
-  CLIENT_CONN_T *pConn = &pMgrConn->conn;
-  SRV_CFG_T *pCfgOrig = pConn->pCfg;
-  const char *pvirtRsrc = pMediaRsrc->virtRsrc;
-  //const struct SRV_LISTENER_CFG *pListenerCfg = NULL;
-  SRV_LISTENER_CFG_T listenRtsp;
-
-  if(!check_license(pMgrConn, 1)) {
-    return -1;
-  }
-
-  memset(&listenRtsp, 0, sizeof(listenRtsp));
-  rsrcurl[0] = '\0';
-
-  if(action != MEDIA_ACTION_CANNED_HTML) {
-    memcpy(&cfg, pConn->pCfg, sizeof(SRV_CFG_T));
-    pConn->pCfg = &cfg;
-
-    //pListenerCfg = &pConn->pCfg->pListenRtsp[0];
-
-    //
-    // Check if the rtspliveport is set - which should refer to the proxy
-    //
-    if(pMgrConn->cfg.pListenerRtspProxy[0].listenCfg.active &&
-       INET_PORT(pMgrConn->cfg.pListenerRtspProxy[0].listenCfg.sa) != 0) {
-      memcpy(&listenRtsp, &pMgrConn->cfg.pListenerRtspProxy[0].listenCfg, sizeof(listenRtsp));
-    } else {
-      INET_PORT(listenRtsp.sa) = htons(MGR_GET_PORT_RTSP(pProc->startPort));
-    }
-    cfg.pListenRtsp = &listenRtsp; 
-
-    snprintf(rsrcurl, sizeof(rsrcurl), "rtsp://%s:%d/%s", net_getlocalhostname(),
-           htons(INET_PORT(listenRtsp.sa)), pvirtRsrc ? pvirtRsrc: "live");
-
-    pvirtRsrc = NULL; 
-  }
-
-  //
-  // This is primitive, but sleep 1.5 sec when the child process was just started
-  // for the first time - to give time for the RTSP listener to start
-  //
-  if(startProc) {
-    usleep(1500000);
-  }
-
-  rc = srv_ctrl_rtsp(pConn, pvirtRsrc, 0, rsrcurl);
-
-  pConn->pCfg = pCfgOrig;
 
   return rc;
 }
@@ -871,10 +901,8 @@ static int process_tslive(SRV_MGR_CONN_T *pMgrConn, const SRVMEDIA_RSRC_T *pMedi
   CLIENT_CONN_T *pConn = &pMgrConn->conn;
   const char *pvirtRsrc = pMediaRsrc->virtRsrc;
   SRV_LISTENER_CFG_T listenHttp;
-  //const SRV_LISTENER_CFG_T *pListenerCfg = NULL;
   char rsrcurl[VSX_MAX_PATH_LEN];
 
-  //pListenerCfg = srv_ctrl_findlistener(pConn->pCfg->pListenHttp, SRV_LISTENER_MAX_HTTP, URL_CAP_FLVLIVE);
   memset(&listenHttp, 0, sizeof(listenHttp));
 
   if(pMgrConn->cfg.pListenerHttpProxy[0].listenCfg.active &&
@@ -1055,7 +1083,7 @@ static int process_httplive(SRV_MGR_CONN_T *pMgrConn,
   }
 
   //
-  // The URI should be in the form of: /httplive/leading-dir/id_xyz/pRsrcName/[ any input out.m3u8 ]
+  // The URI should be in the form of: /httplive/leading-dir/id_xyz/pRsrcName/[ any input out.m3u8 ]<?tk=...>
   //
   if(rc >= 0) {
 
@@ -1083,7 +1111,9 @@ static int process_httplive(SRV_MGR_CONN_T *pMgrConn,
           pMediaRsrc->pRsrcName, pMediaRsrc->pXcodeStr));
 
     pConn->httpReq.puri = tmp;
+    pConn->pListenCfg->pAuthTokenId = pMediaRsrc->tokenId;
     rc = srv_ctrl_httplive(pConn, VSX_HTTPLIVE_URL, tmp2, filepath, pHttpStatus);
+    pConn->pListenCfg->pAuthTokenId = NULL;
   }
 
   //
@@ -1195,7 +1225,9 @@ static int process_dash(SRV_MGR_CONN_T *pMgrConn,
           pMediaRsrc->pRsrcName, pMediaRsrc->pXcodeStr));
 
     pConn->httpReq.puri = tmp;
+    pConn->pListenCfg->pAuthTokenId = pMediaRsrc->tokenId;
     rc = srv_ctrl_mooflive(pConn, VSX_DASH_URL, tmp2, filepath, pHttpStatus);
+    pConn->pListenCfg->pAuthTokenId = NULL;
   }
 
   return rc;
@@ -1208,6 +1240,7 @@ static int create_redirect_uri(STREAM_METHOD_T method,
   int rc = 0;
   size_t szvirtRsrcOnly;
   const char *strmethod = "";
+  char tokenstr[16 + META_FILE_TOKEN_LEN];
 
   //
   // Send HTTP 30x redirect
@@ -1227,14 +1260,18 @@ static int create_redirect_uri(STREAM_METHOD_T method,
 
     procdb_create_instanceId(pMediaRsrc->instanceId);
 
+    tokenstr[0] = '\0';
     rc = snprintf(buf, szbuf, "%s/%s", strmethod, pMediaRsrc->virtRsrc);
-    if((szvirtRsrcOnly = strlen(strmethod) + 1 + pMediaRsrc->szvirtRsrcOnly) < szbuf) {
-      rc = snprintf(&buf[szvirtRsrcOnly], szbuf - szvirtRsrcOnly, "/%s%s/%s%s%s",
+
+    if((szvirtRsrcOnly = strlen(strmethod) + 1 + pMediaRsrc->szvirtRsrcOnly) >= szbuf ||
+       (rc = srv_write_authtoken(tokenstr, sizeof(tokenstr), pMediaRsrc->pTokenId, pMediaRsrc->tokenId, 1)) < 0 ||
+       (rc = snprintf(&buf[szvirtRsrcOnly], szbuf - szvirtRsrcOnly, "/%s%s/%s%s%s%s%s",
                VSX_URI_ID_PARAM, pMediaRsrc->instanceId, pMediaRsrc->pRsrcName,
-               pMediaRsrc->profile[0] != '\0' ? "/"VSX_URI_PROFILE_PARAM : "", pMediaRsrc->profile);
-    } else {
+               pMediaRsrc->profile[0] != '\0' ? "/"VSX_URI_PROFILE_PARAM : "", pMediaRsrc->profile,
+               tokenstr[0] != '\0' ? "?" : "", tokenstr)) < 0) {
       rc = -1;
     }
+
   }
 
   return rc;
@@ -1330,7 +1367,7 @@ int srvmgr_check_start_proc(SRV_MGR_CONN_T *pConn,
       //
       if((pProc = procdb_setup(pConn->cfg.pProcList, pMediaRsrc->virtRsrc, 
                            pMediaRsrc->pId, (haveFullMediaDescr ? pMediaDescr : NULL), 
-                           pMediaRsrc->pXcodeStr, pMediaRsrc->instanceId, 0))) {
+                           pMediaRsrc->pXcodeStr, pMediaRsrc->instanceId, pMediaRsrc->tokenId, 0))) {
 
         //if(mediaRsrc.pXcodeStr) {
         //  pProc->isXcoded = 1;
@@ -1439,6 +1476,7 @@ STREAM_METHOD_T findBestMethod(const STREAM_DEVICE_T *pDev, const META_FILE_T *p
 }
 
 const char *srvmgr_authenticate(SRV_MGR_CONN_T *pConn, 
+                                const  SRVMEDIA_RSRC_T *pMediaRsrc, 
                                 const META_FILE_T *pMetaFile, 
                                 char authbuf[], 
                                 HTTP_STATUS_T *phttpStatus) {
@@ -1462,6 +1500,7 @@ const char *srvmgr_authenticate(SRV_MGR_CONN_T *pConn,
     snprintf(authstr, sizeof(authstr), "%s@", pMetaFile->userpass);
     if((rc = capture_parseAuthUrl(&pauthstr, &authStore)) < 0) {
       *phttpStatus = HTTP_STATUS_UNAUTHORIZED;
+      LOG(X_DEBUG("Missing or invalid credentials for '%s'"), pMediaRsrc->virtRsrc);
       return NULL;
     }
     pAuthStore = &authStore;
@@ -1472,6 +1511,11 @@ const char *srvmgr_authenticate(SRV_MGR_CONN_T *pConn,
   //
   if((pauthbuf = srv_check_authorized(pAuthStore, &pConn->conn.httpReq, authbuf))) {
     *phttpStatus = HTTP_STATUS_UNAUTHORIZED;
+  } else if(pMetaFile->tokenId[0] != '\0' && 
+            (pMediaRsrc->tokenId[0] == '\0' || strcmp(pMetaFile->tokenId, pMediaRsrc->tokenId))) {
+    LOG(X_WARNING("Missing or invalid security token for '%s'"), pMediaRsrc->virtRsrc);
+    *phttpStatus = HTTP_STATUS_UNAUTHORIZED; 
+    return NULL;
   }
 
   return pauthbuf;
@@ -1566,13 +1610,13 @@ void srvmgr_client_proc(void *pfuncarg) {
         metafile_close(&metaFile);
       }
 
-
     }
 
     //
     // Validate any server authorization credentials required set on the http listeners
     //
-    if((pauthbuf = srvmgr_authenticate(pConn, &metaFile, authbuf, &httpStatus)) || httpStatus != HTTP_STATUS_OK) {
+    if((pauthbuf = srvmgr_authenticate(pConn, &mediaRsrc, &metaFile, authbuf, &httpStatus)) || 
+        httpStatus != HTTP_STATUS_OK) {
       httpStatus = HTTP_STATUS_UNAUTHORIZED;
     }
 
@@ -1634,7 +1678,6 @@ void srvmgr_client_proc(void *pfuncarg) {
         // Set the preferred streaming type according to 'etc/devices.conf' User-Agent lookup
         //
         if((methodAuto = findBestMethod(pdevtype, &metaFile)) == STREAM_METHOD_UNKNOWN) {
-        //if((methodAuto = pdevtype->methods[0]) == STREAM_METHOD_UNKNOWN) {
           methodAuto = STREAM_METHOD_FLVLIVE;
           LOG(X_DEBUG("Unhandled "HTTP_HDR_USER_AGENT" '%s' default to %s"), 
                     userAgent, devtype_methodstr(methodAuto));
@@ -1724,13 +1767,13 @@ void srvmgr_client_proc(void *pfuncarg) {
     }
 
     VSX_DEBUG_MGR(
-       LOG(X_DEBUG("MGR - path: '%s', UA:'%s' devname:'%s', reqMethod: %s (%d), methodAuto: %s (%d), "
+       LOG(X_DEBUG("MGR - auth: %d, path: '%s', UA:'%s' devname:'%s', reqMethod: %s (%d), methodAuto: %s (%d), "
                    "action: %s (%d), checkAction: %s (%d), virtRsrc:'%s', pRsrcName:'%s', media.type: 0x%x, "
-                   "media.profile: '%s', media.instanceId: '%s', pauthbuf: '%s'"), 
-          mediaRsrc.filepath, userAgent, pdevtype ? pdevtype->name : "", devtype_methodstr(reqMethod), reqMethod, 
-          devtype_methodstr(methodAuto), methodAuto, srvmgr_action_tostr(action), action, 
+                   "media.profile: '%s', media.instanceId: '%s', mediaRsrc.tokenId: '%s', pauthbuf: '%s'"), 
+          httpStatus, mediaRsrc.filepath, userAgent, pdevtype ? pdevtype->name : "", devtype_methodstr(reqMethod), 
+          reqMethod, devtype_methodstr(methodAuto), methodAuto, srvmgr_action_tostr(action), action, 
           srvmgr_action_tostr(checkAction), checkAction, mediaRsrc.virtRsrc, mediaRsrc.pRsrcName, 
-          mediaDescr.type, mediaRsrc.profile, mediaRsrc.instanceId, pauthbuf));
+          mediaDescr.type, mediaRsrc.profile, mediaRsrc.instanceId, mediaRsrc.tokenId, pauthbuf));
 
     if(httpStatus == HTTP_STATUS_OK) {
 
@@ -1757,15 +1800,13 @@ void srvmgr_client_proc(void *pfuncarg) {
                                            action, methodAuto, &startProc)) < 0) {
             if(startProc) {
               httpStatus = HTTP_STATUS_SERVERERROR;
-              //rc = http_resp_error(&pConn->conn.sd, &pConn->conn.httpReq, HTTP_STATUS_SERVERERROR, 1, NULL, NULL);
             } else {
               httpStatus = HTTP_STATUS_SERVICEUNAVAIL;
-              //rc = http_resp_error(&pConn->conn.sd, &pConn->conn.httpReq, HTTP_STATUS_SERVICEUNAVAIL, 1, HTTP_STATUS_STR_SERVERBUSY, NULL);
             }
             break;
           }
           //
-          // Intentional fallt-through
+          // Intentional fall-through
           //
 
         case MEDIA_ACTION_CANNED_HTML:
@@ -1783,13 +1824,13 @@ void srvmgr_client_proc(void *pfuncarg) {
           } else if(methodAuto == STREAM_METHOD_RTMP || methodAuto == STREAM_METHOD_FLASHHTTP ||
                     methodAuto == STREAM_METHOD_FLVLIVE || methodAuto == STREAM_METHOD_MKVLIVE) {
 
-            rc = process_liveoverhttp(pConn, &mediaRsrc, &proc, action, methodAuto);
+            rc = process_liveoverhttp(pConn, &mediaRsrc, &proc, action, methodAuto, startProc);
   
           } else if(methodAuto == STREAM_METHOD_RTSP ||
                     methodAuto == STREAM_METHOD_RTSP_INTERLEAVED ||
                     methodAuto == STREAM_METHOD_RTSP_HTTP) {
 
-            rc = process_rtsplive(pConn, &mediaRsrc, &proc, action, startProc);
+            rc = process_liveoverhttp(pConn, &mediaRsrc, &proc, action, methodAuto, startProc);
 
           } else if(methodAuto == STREAM_METHOD_TSLIVE) {
 
@@ -1838,30 +1879,37 @@ void srvmgr_client_proc(void *pfuncarg) {
 
         case MEDIA_ACTION_INDEX_FILELIST:
 
-          //
-          // Send back a file from the '/html' directory
-          //
+          if(pConn->conn.pListenCfg->pCfg->cfgShared.disable_root_dirlist) {
+            httpStatus = HTTP_STATUS_FORBIDDEN;
+          } else {
 
-          parg = pConn->conn.httpReq.puri;
+            //
+            // Send back a file from the '/html' directory
+            //
 
-          if(!strcmp(pConn->conn.httpReq.puri, "/")) {
+            parg = pConn->conn.httpReq.puri;
 
-            if((pConn->conn.pListenCfg->urlCapabilities & URL_CAP_DIRLIST)) { 
+            if(!strcmp(pConn->conn.httpReq.puri, "/")) {
 
-              if(pdevtype->devtype == STREAM_DEVICE_TYPE_MOBILE ||
-                pdevtype->devtype == STREAM_DEVICE_TYPE_TABLET) {
-                parg = "flist.html";
-              } else if(pdevtype->devtype == STREAM_DEVICE_TYPE_UNSUPPORTED) {
-                parg = "unsupported.html";
-                LOG(X_WARNING("Request from unsupported device '%s'"), userAgent);
+              if((pConn->conn.pListenCfg->urlCapabilities & URL_CAP_DIRLIST)) { 
+  
+                if(pdevtype->devtype == STREAM_DEVICE_TYPE_MOBILE ||
+                  pdevtype->devtype == STREAM_DEVICE_TYPE_TABLET) {
+                  parg = "flist.html";
+                } else if(pdevtype->devtype == STREAM_DEVICE_TYPE_UNSUPPORTED) {
+                  parg = "unsupported.html";
+                  LOG(X_WARNING("Request from unsupported device '%s'"), userAgent);
+                } else {
+                  parg = "main.html";
+                }
+
               } else {
-                parg = "main.html";
+                httpStatus = HTTP_STATUS_FORBIDDEN;
               }
 
-            } else {
-              httpStatus = HTTP_STATUS_FORBIDDEN;
-            }
-          }
+            } // end of if(!strcmp...
+
+          } // end of if(pConn->conn..
 
           if(httpStatus == HTTP_STATUS_OK) {
             mediadb_prepend_dir2(pConn->conn.pCfg->pMediaDb->homeDir,
@@ -1886,24 +1934,6 @@ void srvmgr_client_proc(void *pfuncarg) {
 
           break;
 
-/*
-        case MEDIA_ACTION_CHECK_EXISTS:
-
-//TODO:  call procdb_findName to  remap parg to HTML/[TOKEN]/out.m3u
-// return check if .m3u8 file exists yet or not
-        parg = pConn->conn.httpReq.puri;
-        mediadb_prepend_dir2(pConn->conn.pCfg->pMediaDb->homeDir,
-                             VSX_HTML_PATH, parg, tmpfile, sizeof(tmpfile));
-fprintf(stderr, "TMPFILE:'%s'\n", tmpfile);
-        snprintf(tmpfile, sizeof(tmpfile), "action=%d&method=%d&methodAuto=%d", 
-                 checkAction, reqMethod, methodAuto);
-        rc = http_resp_send(&pConn->conn.sd, &pConn->conn.httpReq,
-                  HTTP_STATUS_OK, (unsigned char *) tmpfile, strlen(tmpfile));
-
-
-          break;
-*/
-
         default:
           httpStatus = HTTP_STATUS_FORBIDDEN;
           break;
@@ -1911,7 +1941,6 @@ fprintf(stderr, "TMPFILE:'%s'\n", tmpfile);
 
     } // end of if(httpStatus == HTTP_STATUS_OK) {
 
-    //if(forbidden || HTTP_STATUS_FORBIDDEN == httpStatus) {
     if(httpStatus != HTTP_STATUS_OK) {
 
       LOG(X_INFO("HTTP %s :%d%s %s from %s:%d"), pConn->conn.httpReq.method,
@@ -1946,13 +1975,14 @@ static void srvmgr_main_proc(void *pArg) {
   int rc;
   struct sockaddr_storage sa;
   int haveAuth = 0;
+  int backlog = 20;
   char buf[SAFE_INET_NTOA_LEN_MAX];
   SRV_MGR_LISTENER_CFG_T *pSrvListen = (SRV_MGR_LISTENER_CFG_T *) pArg;
 
   pSrvListen->listenCfg.urlCapabilities = URL_CAP_LIVE | URL_CAP_FILEMEDIA | 
                                           URL_CAP_TSHTTPLIVE | URL_CAP_MOOFLIVE | URL_CAP_IMG; 
 
-  if(!pSrvListen->pStart->disableDirListing) {
+  if(!pSrvListen->pStart->pCfg->cfgShared.disable_root_dirlist) {
     pSrvListen->listenCfg.urlCapabilities |= (URL_CAP_TMN | URL_CAP_LIST | URL_CAP_DIRLIST);
   }
 
@@ -1960,7 +1990,7 @@ static void srvmgr_main_proc(void *pArg) {
   memcpy(&sa, &pSrvListen->listenCfg.sa, sizeof(sa));
   netsocksrv.flags = pSrvListen->listenCfg.netflags;
 
-  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, 15)) == INVALID_SOCKET) {
+  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, backlog)) == INVALID_SOCKET) {
     return;
   }
 
@@ -1970,11 +2000,12 @@ static void srvmgr_main_proc(void *pArg) {
     haveAuth = 1;
   }
 
-  LOG(X_INFO("Listening for requests on "URL_HTTP_FMT_STR" %s%s%s"),
+  LOG(X_INFO("Listening for requests on "URL_HTTP_FMT_STR" %s%s%s max: %d"),
               URL_HTTP_FMT_ARGS2(&pSrvListen->listenCfg, FORMAT_NETADDR(sa, buf, sizeof(buf))),
             (haveAuth ? " (Using auth)" : ""),
              pSrvListen->pStart->pCfg->cfgShared.uipwd ? " (Using password)" : "",
-            (pSrvListen->pStart->disableDirListing ? " (Directory listing disabled)" : ""));
+            (pSrvListen->pStart->pCfg->cfgShared.disable_root_dirlist ? " (Directory listing disabled)" : ""),
+            pSrvListen->listenCfg.max);
 
   //
   // Service any client connections on the http listening port
@@ -2032,23 +2063,6 @@ static int start_listener(SRV_MGR_LISTENER_CFG_T *pMgrListenCfg, THREAD_FUNC thr
 
 }
 
-/*
-int test() {
-  META_FILE_T mf;
-  char profs[8][META_FILE_PROFILESTR_MAX];
-  int rc;
-
-  memset(&mf, 0, sizeof(mf));
-  sprintf(mf.devicefilterstr,"ipad");
-  sprintf(mf.profilefilterstr,"3");
-  rc = metafile_open("/opt/tmp/testmetafile", &mf, 0, 0);
-
-  rc = metafile_findprofs("/opt/tmp/testmetafile", mf.devicefilterstr, profs, 8);
-
-  return 0;  
-}
-*/
-
 static int init_listener(POOL_T *pPool, 
                          SRV_MGR_START_CFG_T *pStart, 
                          SRV_MGR_LISTENER_CFG_T *pMgrListenerCfg,
@@ -2078,7 +2092,7 @@ static int init_listener(POOL_T *pPool,
     memcpy(&pMgrListenerCfg[idx].listenCfg, &pListenerSrc[idx], sizeof(pMgrListenerCfg[idx].listenCfg));
     //memset(&pListenerSrc[idx], 0, sizeof(SRV_LISTENER_CFG_T));
 
-    pMgrListenerCfg[idx].listenCfg.max = pStart->pCfg->pParams->httpmax;
+    pMgrListenerCfg[idx].listenCfg.max = max;
     pMgrListenerCfg[idx].listenCfg.pConnPool = pPool;
     pMgrListenerCfg[idx].listenCfg.pCfg = pStart->pCfg;
   }
@@ -2165,8 +2179,6 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
     return -1;
   }
 
-//return test();
-
   memset(&start, 0, sizeof(start));
   memset(&lic, 0, sizeof(lic));
   memset(&cfg, 0, sizeof(cfg));
@@ -2187,8 +2199,6 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
   pthread_mutex_init(&g_ssl_mtx, NULL);
 #endif // VSX_HAVE_SSL
 
-  params.httpmax = VSX_CONNECTIONS_DEFAULT;
-
   pParams->pCfg = &cfg;
   cfg.cfgShared.pMediaDb = &mediaDb;
   cfg.pParams = &params;
@@ -2208,7 +2218,7 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
 
   params.logmaxsz = LOGGER_MAX_FILE_SZ;
   params.logrollmax = LOGGER_MAX_FILES;
-  params.disable_root_dirlist = cfg.cfgShared.disable_root_dirlist = pParams->disable_root_dirlist;
+  params.disable_root_dirlist = pParams->disable_root_dirlist;
 
   //
   // Load properties which are common between vsx & vsxmgr
@@ -2219,14 +2229,17 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
                       pParams->curdir, 
                       MGR_RTMPPROXY_MAX, 
                       MGR_RTSPPROXY_MAX, 
+                      MGR_CONNECTIONS_MAX,
                       &cfg, 
                       httpAuthStores))) {
     return -1;
   }
 
-  vsxlib_initlog(cfg.verbosity, cfg.plogfile, cfg.phomedir, params.logmaxsz, params.logrollmax, log_tag);
+  if(params.httpmax == 0) {
+    params.httpmax = MGR_CONNECTIONS_DEFAULT;
+  }
 
-  //LOG(X_DEBUG("LISSSSTTT :%d :%d"), htons(INET_PORT(cfg.listenHttp[0].sa)), htons(INET_PORT(cfg.listenHttp[1].sa))); 
+  vsxlib_initlog(cfg.verbosity, cfg.plogfile, cfg.phomedir, params.logmaxsz, params.logrollmax, log_tag);
 
   LOG(X_INFO("Read configuration from %s"), cfg.pconfpath);
 
@@ -2240,14 +2253,6 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
   //
   // Get config entries specific to the mgr
   //
-
-  if((cfg.cfgShared.enable_symlink = params.enable_symlink)) {
-    LOG(X_DEBUG("Symlink following enabled."));
-  }
-
-  if((cfg.cfgShared.disable_root_dirlist)) {
-    LOG(X_DEBUG("Root level directory listing disabled."));
-  }
 
   if((p = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_LAUNCHMEDIA)) && p[0] != '\0') {
     start.plaunchpath = p;
@@ -2264,9 +2269,9 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
     return -1;
   }
 
-  if((p = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_DISABLE_LISTING)) && p[0] != '\0') {
-    if((start.disableDirListing = atoi(p))) {
-      LOG(X_DEBUG("Media directory listing and disabled"));
+  if(!params.disable_root_dirlist) {
+    if((p = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_DISABLE_LISTING)) && p[0] != '\0') {
+      params.disable_root_dirlist = atoi(p);
     }
   }
 
@@ -2298,6 +2303,14 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
   if(cfg.pdbdir == NULL) {
     mediadb_prepend_dir(cfg.pmediadir, VSX_DB_PATH, buf, sizeof(buf));
     cfg.pdbdir = buf;
+  }
+
+  if((cfg.cfgShared.disable_root_dirlist = params.disable_root_dirlist)) {
+    LOG(X_INFO("Root level directory listing disabled."));
+  }
+
+  if((cfg.cfgShared.enable_symlink = params.enable_symlink)) {
+    LOG(X_DEBUG("Symlink following enabled."));
   }
 
   //
@@ -2387,7 +2400,6 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
 
 #endif //VSX_HAVE_LICENSE
 
-
   //
   // Create and init each available http connection instance
   //
@@ -2425,7 +2437,6 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
     }
   }
 
-  //fprintf(stderr, "TRY RTMP %d '%s' 1:%s:%d\n", params.rtmplivemax ,params.rtmpliveaddr[0], INET_NTOP(cfg.listenRtmp[0].sa, tmp, sizeof(tmp)), ntohs(INET_PORT(cfg.listenRtmp[0].sa)));
   memset(cfg.listenRtmp, 0, sizeof(cfg.listenRtmp));
   if(params.rtmplivemax > 0 && params.rtmpliveaddr[0] &&
      (rc = vsxlib_parse_listener((const char **) params.rtmpliveaddr, SRV_LISTENER_MAX_RTMP,

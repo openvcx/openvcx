@@ -26,12 +26,13 @@
 
 #include "logutil_tid.h"
 
-#define S_DEBUG_VERBOSE 6
-#define S_DEBUG 5
-#define S_INFO 4
-#define S_WARNING 3
-#define S_ERROR 2
-#define S_CRITICAL 1
+#define S_DEBUG_VVERBOSE 7
+#define S_DEBUG_VERBOSE  6
+#define S_DEBUG          5
+#define S_INFO           4
+#define S_WARNING        3
+#define S_ERROR          2
+#define S_CRITICAL       1
 
 
 #define LOGGER_MAX_FILES                  5
@@ -143,6 +144,7 @@ int logger_SetHistory(unsigned int maxFiles, unsigned int maxFileBytes);
 #define X_INFO(fmt) S_INFO, fmt"\n"
 #define X_DEBUG(fmt) S_DEBUG, fmt"\n"
 #define X_DEBUGV(fmt) S_DEBUG_VERBOSE, fmt"\n"
+#define X_DEBUGVV(fmt) S_DEBUG_VVERBOSE, fmt"\n"
 
 
 #define LOGHEX_CRITICAL(data, len) logger_LogHex(S_CRITICAL, data, len, 0)
@@ -157,6 +159,8 @@ int logger_SetHistory(unsigned int maxFiles, unsigned int maxFileBytes);
 #define LOGHEXT_DEBUG(data, len) logger_LogHex(S_DEBUG, data, len, 1)
 #define LOGHEX_DEBUGV(data, len) logger_LogHex(S_DEBUG_VERBOSE, data, len, 0)
 #define LOGHEXT_DEBUGV(data, len) logger_LogHex(S_DEBUG_VERBOSE, data, len, 1)
+#define LOGHEX_DEBUGVV(data, len) logger_LogHex(S_DEBUG_VVERBOSE, data, len, 0)
+#define LOGHEXT_DEBUGVV(data, len) logger_LogHex(S_DEBUG_VVERBOSE, data, len, 1)
 
 #ifndef WIN32
 

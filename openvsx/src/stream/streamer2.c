@@ -507,7 +507,7 @@ int streamer_run_tonet(STREAM_XMIT_NODE_T *pList, double durationSec) {
 
       countIterations = 0;
 
-      VSX_DEBUG_STREAMAV( LOG(X_DEBUGV("stream_readframes slept for %lld ns"), timer_GetTime() - tmnow));
+      VSX_DEBUG_STREAMAV( LOG(X_DEBUGVV("STREAM - stream_readframes slept for %lld ns"), timer_GetTime() - tmnow));
 
       //fprintf(stderr, "%lld --woke up from streamer2 zzz...\n", timer_GetTime() / TIME_VAL_MS);
     } else {

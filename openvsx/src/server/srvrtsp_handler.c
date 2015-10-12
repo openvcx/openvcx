@@ -178,6 +178,10 @@ int rtsp_authenticate(RTSP_REQ_CTXT_T *pRtsp, const RTSP_REQ_T *pReq) {
     }
   }
 
+  if(ok_auth == 0 && pRtsp->pListenCfg->pAuthTokenId && pRtsp->pListenCfg->pAuthTokenId[0]) {
+    LOG(X_DEBUG("AUTH TOKEN: '%s'"), pRtsp->pListenCfg->pAuthTokenId);
+  }
+
   return ok_auth;
 }
 

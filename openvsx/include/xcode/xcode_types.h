@@ -224,7 +224,7 @@ typedef struct FRAME_TIME {
   int                                havestarttm0;
   uint64_t                           starttm0;       // 1st frame ever 
   TIME_VAL                           starttv0;       // wall clock time 1st frame out
-  uint64_t                           durationTot;
+  uint64_t                           durationTotPrior;
 
   //
   // a period is the beginning of the previous reset time

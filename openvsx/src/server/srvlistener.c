@@ -166,8 +166,6 @@ int srvlisten_loop(SRV_LISTENER_CFG_T *pListenCfg, void *thread_func) {
     memcpy(&pConn->sd.sa, &sdclient.sa, INET_SIZE(sdclient));
     pConn->pListenCfg = pListenCfg;
     NETIOSOCK_FD(sdclient.netsocket) = INVALID_SOCKET;
-    //pConn->nonce[0] = '\0';
-    //pConn->opaque[0] = '\0';
 
     wrapArg.thread_func = thread_func;
     wrapArg.pConnPool = pListenCfg->pConnPool;

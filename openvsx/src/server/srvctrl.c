@@ -513,7 +513,7 @@ int srv_start_conf(VSXLIB_STREAM_PARAMS_T *pParams,
   cfg.plogfile = pParams->logfile;
 
   if(!(pConf = srv_init_conf(pParams->inputs[0], pParams->dir, homeDirArg, pParams->confpath, 
-                dbDirArg, usedb, curdir, STREAMER_OUTFMT_MAX, STREAMER_LIVEQ_MAX, &cfg, NULL))) {
+                dbDirArg, usedb, curdir, STREAMER_OUTFMT_MAX, STREAMER_LIVEQ_MAX, VSX_CONNECTIONS_MAX, &cfg, NULL))) {
     return -1;
   }
 

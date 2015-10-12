@@ -443,7 +443,7 @@ ${ARCHIVE_SO}:  ${SUB_LIBS} ${OBJS_LIB}
 	  @cp ${ARCHIVE_SO} ${ARCHIVE_SO_G}
 	  ${STRIP} ${ARCHIVE_SO} 
         else
-          ln -fs lib${PRODNAME}${PRODEXT}.so ${ARCHIVE_SO_G}
+	  ln -fs lib${PRODNAME}${PRODEXT}.so ${ARCHIVE_SO_G}
         endif
 	@${E} ---------------------------------------  ;
 	@if [ -r ${ARCHIVE_SO} ];               \

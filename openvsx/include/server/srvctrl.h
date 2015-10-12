@@ -83,6 +83,8 @@
 
 #define VSX_URI_PROFILE_PARAM     "prof_"
 #define VSX_URI_ID_PARAM          "id_"
+#define VSX_URI_TOKEN_QUERY_PARAM "tk"
+#define VSX_URI_TOKEN_PARAM       VSX_URI_TOKEN_QUERY_PARAM"_"
 
 #if defined(VSX_HAVE_SERVERMODE) 
 
@@ -97,8 +99,9 @@ SRV_CONF_T *srv_init_conf(const char *listenArg, const char *mediaDirArg,
                           const char *homeDirArg, const char *confPathArg,
                           const char *dbDirArg, int usedb,
                           const char *curdir, 
-                          int rtmplivehardlimit, 
-                          int rtsplivehardlimit,
+                          unsigned int rtmphardlimit, 
+                          unsigned int rtsphardlimit,
+                          unsigned int httphardlimit,
                           SRV_START_CFG_T *pCfg,
                           AUTH_CREDENTIALS_STORE_T *ppAuthStores);
 

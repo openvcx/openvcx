@@ -457,7 +457,7 @@ int http_gethttpdash(CAP_ASYNC_DESCR_T *pCfg,
       mpdpl_free(&client.pl);
       memset(&client.pl, 0, sizeof(client.pl));
 
-      VSX_DEBUGLOG("Got DASH mpd contents '%s'", pmpdbuf);
+      VSX_DEBUG_DASH( LOG(X_DEBUG("Got DASH mpd contents '%s'"), pmpdbuf); );
       //fprintf(stderr, "Got DASH mpd contents '%s'\n", pmpdbuf);
 
       pthread_mutex_lock(&client.mtx);

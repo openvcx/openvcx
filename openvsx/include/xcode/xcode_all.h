@@ -43,6 +43,7 @@ int xcode_update(STREAMER_CFG_T *pStreamerCfg, const char *strxcode,
                  enum STREAM_XCODE_FLAGS flags);
 
 int xcode_resetdata(STREAM_XCODE_DATA_T *pXcode); 
+int xcode_checkresetresume(STREAM_XCODE_DATA_T *pXcode);
 uint64_t xcode_getFrameTm(const STREAM_XCODE_DATA_T *pData, int absolute, int64_t tm);
 int xcode_setVidSeqStart(IXCODE_VIDEO_CTXT_T  *pXcode,
                            STREAM_XCODE_DATA_T *pData);

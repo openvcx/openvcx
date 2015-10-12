@@ -858,6 +858,7 @@ static int resp_sendfile(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq,
     }
 
     if(ReadFileStream(&fileStream, buf, lenread) != lenread) {
+      LOG(X_DEBUG("Failed to read %d bytes of '%s' at %d/%d"), lenread, path, idx, lentot);
       return -1;
     }
 

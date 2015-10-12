@@ -58,6 +58,7 @@ typedef struct SRV_LISTENER_CFG {
   POOL_T                         *pConnPool;
   enum URL_CAPABILITY             urlCapabilities;
   struct AUTH_CREDENTIALS_STORE  *pAuthStore;
+  const char                     *pAuthTokenId;
   char                            tid_tag[LOGUTIL_TAG_LENGTH];
   struct SRV_START_CFG           *pCfg;
 } SRV_LISTENER_CFG_T;

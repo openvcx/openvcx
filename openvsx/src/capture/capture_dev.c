@@ -221,7 +221,8 @@ int capture_devCbOnFrame(void *pArg, const unsigned char *pData, unsigned int le
     return -1;
   }
 
-  VSX_DEBUGLOG("capture_devCbOnFrame len:%d %s\n", len, codecType_getCodecDescrStr(pCapDevCfg->pStream->pFilter->mediaType));
+  VSX_DEBUG_INFRAME( LOG(X_DEBUG("INFRAME - capture_devCbOnFrame len:%d %s"), 
+         len, codecType_getCodecDescrStr(pCapDevCfg->pStream->pFilter->mediaType)); );
 
   timer_getPreciseTime(&pktdata.tv);
 

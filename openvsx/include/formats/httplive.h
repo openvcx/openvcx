@@ -60,8 +60,6 @@ typedef struct HTTPLIVE_DATA {
   char                    fileprefix[128];
   float                   duration;
   int                     nodelete;
- 
-  //FILE_HANDLE             fp;
   FILE_STREAM_T           fs;
   struct timeval          tvNextRoll;
   struct timeval          tvPriorRoll;

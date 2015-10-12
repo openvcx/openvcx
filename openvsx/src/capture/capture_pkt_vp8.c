@@ -179,9 +179,8 @@ int cbOnPkt_vp8(void *pUserData, const COLLECT_STREAM_PKTDATA_T *pPkt) {
     return 0;
   }
 
-  VSX_DEBUG(
-    //VSX_DEBUGLOG_TIME
-    LOG(X_DEBUG("rtp-recv-vp8 len:%d seq:%u ts:%u(%.3f) ts0:%u(%.3f, dlta:%.3f), mrk:%d ssrc:0x%x "
+  VSX_DEBUG_RTP(
+    LOG(X_DEBUG("RTP - rtp-recv-vp8 len:%d seq:%u ts:%u(%.3f) ts0:%u(%.3f, dlta:%.3f), mrk:%d ssrc:0x%x "
                    "flags:0x%x pQ:0x%x"),
        PKTCAPLEN(pPkt->payload), pPkt->u.rtp.seq, pPkt->u.rtp.ts, PTSF(pPkt->u.rtp.ts),
        pSp->pStream->ts0,

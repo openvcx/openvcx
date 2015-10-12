@@ -102,31 +102,41 @@ int pktqueue_createstats(PKTQUEUE_T *pQ, unsigned int rangeMs1, unsigned int ran
 }
 */
 
-static int pktqueue_addburstsample(BURSTMETER_SAMPLE_SET_T *pbitrates,  
-                                   THROUGHPUT_STATS_TM_T *pTm,
+static int pktqueue_addburstsample(THROUGHPUT_STATS_T *pT, 
+                                   int rdr, 
                                    unsigned int len,
                                    const PKTQ_EXTRADATA_T *pXtra) {
   struct timeval tv;
   unsigned int idx;
+  THROUGHPUT_STATS_TM_T *pTm = rdr ?  &pT->tmLastRd : &pT->tmLastWr;
+  BURSTMETER_SAMPLE_SET_T *pbitrate = NULL;
 
   if(!pXtra) {
     gettimeofday(&tv, NULL);
     if(pTm) {
-      pTm->tm = (tv.tv_sec * 90000) + (tv.tv_usec * 9 / 100);
+      //pTm->tm = (tv.tv_sec * 90000) + (tv.tv_usec * 9 / 100);
+      pTm->tm = TIME_FROM_TIMEVAL(tv);
     }
   } else {
     tv.tv_sec = pXtra->tm.pts / 90000;
     tv.tv_usec = (pXtra->tm.pts % 90000) * 100 / 9;
     if(pTm) {
-      pTm->tm =  pXtra->tm.pts;
+      //pTm->tm =  pXtra->tm.pts;
+      pTm->tm = timer_GetTime();
     }
   }
 
-  //fprintf(stderr, "ADD SAMPLE pts %lldHz %.6fsec %d:%d\n", pXtra->tm.pts, PTSF(pXtra->tm.pts), tv.tv_sec, tv.tv_usec);
-  for(idx = 0; idx < 2; idx++) {
-    if(pbitrates[idx].meter.rangeMs > 0) {
-      burstmeter_AddSample(&pbitrates[idx], len, &tv);
-     }
+  if(pT->written.slots == 0 && pTm) {
+    //TIME_TV_SET(pT->tvStart, tv);
+    pT->tmStart.tm = pTm->tm;
+  }
+
+  //fprintf(stderr, "ADD SAMPLE len: %d, pts %lldHz %.6fsec %d:%d\n", len, pXtra->tm.pts, PTSF(pXtra->tm.pts), tv.tv_sec, tv.tv_usec);
+  for(idx = 0; idx < THROUGHPUT_STATS_BURSTRATES_MAX; idx++) {
+    pbitrate = rdr ? &pT->bitratesRd[idx] : &pT->bitratesWr[idx];
+    if(pbitrate->meter.rangeMs > 0) {
+      burstmeter_AddSample(pbitrate, len, &tv);
+    }
   }
  
   return 0;
@@ -1043,7 +1053,7 @@ enum PKTQUEUE_RC pktqueue_addpkt(PKTQUEUE_T *pQ,
 
     if(pQ->haveRdr && pQ->pstats) {
       pQ->pstats->written.bytes += len;
-      pktqueue_addburstsample(pQ->pstats->bitratesWr, &pQ->pstats->tmLastWr, len, pXtra);
+      pktqueue_addburstsample(pQ->pstats, 0, len, pXtra);
     }
     if(pXtra) {
       memcpy(&pQ->pkts[pQ->idxWr].xtra, pXtra, sizeof(pQ->pkts[pQ->idxWr].xtra));
@@ -1154,7 +1164,7 @@ const PKTQUEUE_PKT_T *pktqueue_readpktdirect(PKTQUEUE_T *pQ) {
         pQ->pstats->written.slots++;
       }
       pQ->pstats->read.bytes += pPkt->len;
-      pktqueue_addburstsample(pQ->pstats->bitratesRd, &pQ->pstats->tmLastRd, pPkt->len, &pPkt->xtra);
+      pktqueue_addburstsample(pQ->pstats, 1, pPkt->len, &pPkt->xtra);
     }
 
   } else {
@@ -1316,7 +1326,7 @@ int pktqueue_readpkt(PKTQUEUE_T *pQ, unsigned char *pData,
       }
       pQ->pstats->read.bytes += lenPkt;
       pQ->pstats->read.slots++;
-      pktqueue_addburstsample(pQ->pstats->bitratesRd, &pQ->pstats->tmLastRd, lenPkt, pXtra ? &pPkt->xtra : NULL);
+      pktqueue_addburstsample(pQ->pstats, 1, lenPkt, pXtra ? &pPkt->xtra : NULL);
     }
     pPkt->flags = 0;
     pPkt->len = 0;

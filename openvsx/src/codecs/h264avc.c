@@ -607,13 +607,13 @@ static H264_RESULT_T decode_NALHdr(H264_AVC_DESCR_T *pH264, H264_STREAM_CHUNK_T 
           memcmp(&sps, &pH264->ctxt.sps[pH264->ctxt.sps_idx], sizeof(H264_NAL_SPS_T)))) {
            pNal->paramSetChanged = 1;
 
-          VSX_DEBUG(
-            avc_dumpHex(stderr, pH264->spspps.sps_buf, pH264->spspps.sps_len, 1);
+          VSX_DEBUG_CODEC (
+            LOGHEXT_DEBUG(pH264->spspps.sps_buf, pH264->spspps.sps_len);
             VSX_DEBUG2( h264_printSps(stderr, &pH264->ctxt.sps[pH264->ctxt.sps_idx]); )
 
-            avc_dumpHex(stderr, pBufStart, pH264->spspps.sps_len, 1); 
+            LOGHEX_DEBUG(pBufStart, pH264->spspps.sps_len); 
             VSX_DEBUG2( h264_printSps(stderr, &sps); )
-          )
+          );
         }
          
         if(pH264->spspps.sps_len == 0 || pNal->paramSetChanged) {

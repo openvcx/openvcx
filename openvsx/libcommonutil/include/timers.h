@@ -47,6 +47,7 @@ typedef long long TIME_VAL;
                                     (tvto).tv_usec = (tvfrom).tv_usec; 
 #define TV_FROM_TIMEVAL(tv, tm)     (tv).tv_sec = (tm) / TIME_VAL_US; \
                                      (tv).tv_usec = (tm) % TIME_VAL_US; 
+#define TIME_FROM_TIMEVAL(tv)  (((tv).tv_sec * TIME_VAL_US) + (tv).tv_usec)
 #define TV_INCREMENT_MS(tv, ms) (tv).tv_usec += (long) ((ms) * 1000); \
                                 while((tv).tv_usec >= TIME_VAL_US) {\
                                   (tv).tv_sec++; (tv).tv_usec -= TIME_VAL_US; }

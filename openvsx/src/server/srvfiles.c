@@ -974,6 +974,7 @@ int srv_ctrl_loadmedia(CLIENT_CONN_T *pConn, const char *pargfile) {
 int srv_ctrl_loadimg(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
   size_t sz, sz2;
   char path[VSX_MAX_PATH_LEN];
+  int rc = 0;
   const char *contentType = CONTENT_TYPE_TEXTHTML;
 
   sz = strlen(VSX_IMG_URL);
@@ -996,8 +997,11 @@ int srv_ctrl_loadimg(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
     contentType = CONTENT_TYPE_IMAGEPNG;
   }
 
-  return http_resp_sendfile(pConn, pHttpStatus, path, contentType, HTTP_ETAG_AUTO);
+  if((rc = http_resp_sendfile(pConn, pHttpStatus, path, contentType, HTTP_ETAG_AUTO)) < 0) {
+    *pHttpStatus = HTTP_STATUS_SERVERERROR;
+  }
 
+  return rc; 
 }
 
 //

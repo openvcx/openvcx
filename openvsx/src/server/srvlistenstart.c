@@ -33,23 +33,13 @@ static void srvlisten_http_proc(void *pArg) {
   struct sockaddr_storage sa;
   CLIENT_CONN_T *pConn;
   char tmp[128];
+  const int backlog = NET_BACKLOG_DEFAULT;
   unsigned int tsMax = 0;
   unsigned int flvMax = 0;
   unsigned int mkvMax = 0;
-/*
-  int haveMkvAuth = 0; 
-  int haveFlvAuth = 0; 
-  int haveTsliveAuth = 0; 
-  int haveHttpliveAuth = 0; 
-  int haveMoofAuth = 0; 
-  int haveConfigAuth = 0; 
-  int havePipAuth = 0; 
-  int haveStatusAuth = 0; 
-  int haveRootAuth = 0; 
-*/
   int haveAuth = 0;
+  int haveToken = 0;
   int rc = 0;
-  //char buf[SAFE_INET_NTOA_LEN_MAX];
 
   logutil_tid_add(pthread_self(), pListenCfg->tid_tag);
 
@@ -66,7 +56,7 @@ static void srvlisten_http_proc(void *pArg) {
   memcpy(&sa, &pListenCfg->sa, sizeof(pListenCfg->sa));
   netsocksrv.flags = pListenCfg->netflags;
 
-  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, 5)) == INVALID_SOCKET) {
+  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, backlog)) == INVALID_SOCKET) {
     logutil_tid_remove(pthread_self());
     return;
   }
@@ -78,108 +68,75 @@ static void srvlisten_http_proc(void *pArg) {
   if(pListenCfg->pAuthStore && IS_AUTH_CREDENTIALS_SET(pListenCfg->pAuthStore)) {
     haveAuth = 1;
   }
+  if(pListenCfg->pAuthTokenId && pListenCfg->pAuthTokenId[0] != '\0') {
+    haveToken = 1;
+  }
 
   pConn = (CLIENT_CONN_T *) pListenCfg->pConnPool->pElements;
   if(pConn) {
     tsMax = pConn->pStreamerCfg0->liveQs[0].max;
     flvMax = pConn->pStreamerCfg0->action.liveFmts.out[STREAMER_OUTFMT_IDX_FLV].max;
     mkvMax = pConn->pStreamerCfg0->action.liveFmts.out[STREAMER_OUTFMT_IDX_MKV].max;
-
-/*
-    if(IS_AUTH_CREDENTIALS_SET(&pConn->pStreamerCfg0->creds[STREAMER_AUTH_IDX_FLV].stores[pListenCfg->idxCfg])) {
-      haveFlvAuth = 1;
-    }
-    if(IS_AUTH_CREDENTIALS_SET(&pConn->pStreamerCfg0->creds[STREAMER_AUTH_IDX_MKV].stores[pListenCfg->idxCfg])) {
-      haveMkvAuth = 1;
-    }
-    if(IS_AUTH_CREDENTIALS_SET(&pConn->pStreamerCfg0->creds[STREAMER_AUTH_IDX_TSLIVE].stores[pListenCfg->idxCfg])) {
-      haveTsliveAuth = 1;
-    }
-    if(IS_AUTH_CREDENTIALS_SET(&pConn->pStreamerCfg0->creds[STREAMER_AUTH_IDX_HTTPLIVE].stores[pListenCfg->idxCfg])) {
-      haveHttpliveAuth = 1; 
-    }
-    if(IS_AUTH_CREDENTIALS_SET(&pConn->pStreamerCfg0->creds[STREAMER_AUTH_IDX_MOOFLIVE].stores[pListenCfg->idxCfg])) {
-      haveMoofAuth = 1; 
-    }
-    if(IS_AUTH_CREDENTIALS_SET(&pConn->pStreamerCfg0->creds[STREAMER_AUTH_IDX_CONFIG].stores[pListenCfg->idxCfg])) {
-      haveConfigAuth = 1; 
-    }
-    if(IS_AUTH_CREDENTIALS_SET(&pConn->pStreamerCfg0->creds[STREAMER_AUTH_IDX_PIP].stores[pListenCfg->idxCfg])) {
-      havePipAuth = 1; 
-    }
-    if(IS_AUTH_CREDENTIALS_SET(&pConn->pStreamerCfg0->creds[STREAMER_AUTH_IDX_STATUS].stores[pListenCfg->idxCfg])) {
-      haveStatusAuth = 1; 
-    }
-    if(IS_AUTH_CREDENTIALS_SET(&pConn->pStreamerCfg0->creds[STREAMER_AUTH_IDX_ROOT].stores[pListenCfg->idxCfg])) {
-      haveRootAuth = 1; 
-    }
-*/
-
-    //if(IS_AUTH_CREDENTIALS_SET(&pConn->pStreamerCfg0->creds.auths[STREAMER_AUTH_IDX_ROOT])) {
-    //  LOG(X_DEBUG("LIVE/ROOT AUTH ON")); 
-    //}
   }
 
   if((pListenCfg->urlCapabilities & URL_CAP_ROOTHTML)) {
     LOG(X_INFO("broadcast interface available at "URL_HTTP_FMT_STR"%s%s%s max:%d"), 
            URL_HTTP_FMT_ARGS2(pListenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))), VSX_ROOT_URL,
-           //(haveRootAuth ? " (Using auth)" : ""),
            (haveAuth ? " (Using auth)" : ""),
            (pListenCfg->pCfg->cfgShared.livepwd ? " (Using password)" : ""), pListenCfg->max);
   }
 
   if((pListenCfg->urlCapabilities & URL_CAP_LIVE)) {
-    LOG(X_INFO("live available at "URL_HTTP_FMT_STR"%s%s%s max:%d"), 
+    LOG(X_INFO("live available at "URL_HTTP_FMT_STR"%s%s%s%s max:%d"), 
            URL_HTTP_FMT_ARGS2(pListenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))), VSX_LIVE_URL,
-           //(haveRootAuth ? " (Using auth)" : ""),
            (haveAuth ? " (Using auth)" : ""),
+           (haveToken ? " (Using token)" : ""),
            (pListenCfg->pCfg->cfgShared.livepwd ? " (Using password)" : ""), pListenCfg->max);
   }
 
   if((pListenCfg->urlCapabilities & URL_CAP_TSLIVE)) {
-    LOG(X_INFO("tslive available at "URL_HTTP_FMT_STR"%s%s%s max:%d"), 
+    LOG(X_INFO("tslive available at "URL_HTTP_FMT_STR"%s%s%s%s max:%d"), 
            URL_HTTP_FMT_ARGS2(pListenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))), VSX_TSLIVE_URL,
-           //(haveTsliveAuth ? " (Using auth)" : ""),
            (haveAuth ? " (Using auth)" : ""),
+           (haveToken ? " (Using token)" : ""),
            (pListenCfg->pCfg->cfgShared.livepwd ? " (Using password)" : ""), tsMax);
   }
 
   if((pListenCfg->urlCapabilities & URL_CAP_TSHTTPLIVE)) {
-    LOG(X_INFO("httplive available at "URL_HTTP_FMT_STR"%s%s%s max:%d"), 
+    LOG(X_INFO("httplive available at "URL_HTTP_FMT_STR"%s%s%s%s max:%d"), 
            URL_HTTP_FMT_ARGS2(pListenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))), VSX_HTTPLIVE_URL,
-           //(haveHttpliveAuth ? " (Using auth)" : ""),
            (haveAuth ? " (Using auth)" : ""),
+           (haveToken ? " (Using token)" : ""),
            (pListenCfg->pCfg->cfgShared.livepwd ? " (Using password)" : ""), pListenCfg->max);
   }
 
   if((pListenCfg->urlCapabilities & URL_CAP_FLVLIVE)) {
-    LOG(X_INFO("flvlive available at "URL_HTTP_FMT_STR"%s%s%s max:%d"), 
+    LOG(X_INFO("flvlive available at "URL_HTTP_FMT_STR"%s%s%s%s max:%d"), 
            URL_HTTP_FMT_ARGS2(pListenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))), VSX_FLVLIVE_URL,
-           //(haveFlvAuth ? " (Using auth)" : ""),
            (haveAuth ? " (Using auth)" : ""),
+           (haveToken ? " (Using token)" : ""),
            (pListenCfg->pCfg->cfgShared.livepwd ? " (Using password)" : ""), flvMax);
   }
 
   if((pListenCfg->urlCapabilities & URL_CAP_MKVLIVE)) {
-    LOG(X_INFO("mkvlive available at "URL_HTTP_FMT_STR"%s%s%s max:%d"), 
+    LOG(X_INFO("mkvlive available at "URL_HTTP_FMT_STR"%s%s%s%s max:%d"), 
            URL_HTTP_FMT_ARGS2(pListenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))), VSX_MKVLIVE_URL,
-           //(haveMkvAuth ? " (Using auth)" : ""),
            (haveAuth ? " (Using auth)" : ""),
+           (haveToken ? " (Using token)" : ""),
            (pListenCfg->pCfg->cfgShared.livepwd ? " (Using password)" : ""), mkvMax);
   }
 
   if((pListenCfg->urlCapabilities & URL_CAP_MOOFLIVE)) {
-    LOG(X_INFO("dash available at "URL_HTTP_FMT_STR"%s%s%s max:%d"), 
+    LOG(X_INFO("dash available at "URL_HTTP_FMT_STR"%s%s%s%s max:%d"), 
            URL_HTTP_FMT_ARGS2(pListenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))), VSX_DASH_URL,
-           // (haveMoofAuth ? " (Using auth)" : ""),
            (haveAuth ? " (Using auth)" : ""),
+           (haveToken ? " (Using token)" : ""),
            (pListenCfg->pCfg->cfgShared.livepwd ? " (Using password)" : ""), pListenCfg->max);
   }
 
   if((pListenCfg->urlCapabilities & URL_CAP_STATUS)) {
     LOG(X_INFO("status available at "URL_HTTP_FMT_STR"%s%s%s"), 
            URL_HTTP_FMT_ARGS2(pListenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))), VSX_STATUS_URL,
-            //(haveStatusAuth ? " (Using auth)" : ""),
             (haveAuth ? " (Using auth)" : ""),
            (pListenCfg->pCfg->cfgShared.livepwd ? " (Using password)" : ""));
   }
@@ -187,7 +144,6 @@ static void srvlisten_http_proc(void *pArg) {
   if((pListenCfg->urlCapabilities & URL_CAP_PIP)) {
     LOG(X_INFO("pip available at "URL_HTTP_FMT_STR"%s%s%s"), 
            URL_HTTP_FMT_ARGS2(pListenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))), VSX_PIP_URL,
-            //(havePipAuth ? " (Using auth)" : ""),
             (haveAuth ? " (Using auth)" : ""),
            (pListenCfg->pCfg->cfgShared.livepwd ? " (Using password)" : ""));
   }
@@ -195,7 +151,6 @@ static void srvlisten_http_proc(void *pArg) {
   if((pListenCfg->urlCapabilities & URL_CAP_CONFIG)) {
     LOG(X_INFO("config available at "URL_HTTP_FMT_STR"%s%s%s"), 
            URL_HTTP_FMT_ARGS2(pListenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))), VSX_CONFIG_URL,
-            //(haveConfigAuth ? " (Using auth)" : ""),
             (haveAuth ? " (Using auth)" : ""),
            (pListenCfg->pCfg->cfgShared.livepwd ? " (Using password)" : ""));
   }
@@ -258,6 +213,7 @@ static void srv_rtmp_proc(void *pfuncarg) {
     rtmpCtxt.noaud = pStreamerCfg->noaud;
     rtmpCtxt.av.vid.pStreamerCfg = pStreamerCfg;
     rtmpCtxt.av.aud.pStreamerCfg = pStreamerCfg;
+    rtmpCtxt.pAuthTokenId = pConn->pListenCfg->pAuthTokenId;
 
     //
     // Unpause the outfmt callback mechanism now that rtmp_init was called
@@ -311,6 +267,7 @@ static void srvlisten_rtmplive_proc(void *pArg) {
   int haveRtmpAuth = 0;
   struct sockaddr_storage  sa;
   int rc = 0;
+  const int backlog = NET_BACKLOG_DEFAULT;
   char tmp[128];
 
   logutil_tid_add(pthread_self(), pListenCfg->tid_tag);
@@ -319,7 +276,7 @@ static void srvlisten_rtmplive_proc(void *pArg) {
   memcpy(&sa, &pListenCfg->sa, sizeof(sa));
   netsocksrv.flags = pListenCfg->netflags;
 
-  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, 5)) == INVALID_SOCKET) {
+  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, backlog)) == INVALID_SOCKET) {
     logutil_tid_remove(pthread_self());
     return;
   }
@@ -428,6 +385,7 @@ static void srvlisten_rtsplive_proc(void *pArg) {
   int haveRtspAuth = 0;
   char tmp[128];
   char bufses[32];
+  const int backlog = NET_BACKLOG_DEFAULT;
   int rc = 0;
 
   logutil_tid_add(pthread_self(), pListenCfg->tid_tag);
@@ -437,7 +395,7 @@ static void srvlisten_rtsplive_proc(void *pArg) {
   memcpy(&sa, &pListenCfg->sa, sizeof(sa));
   netsocksrv.flags = pListenCfg->netflags;
 
-  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, 5)) == INVALID_SOCKET) {
+  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, backlog)) == INVALID_SOCKET) {
     logutil_tid_remove(pthread_self());
     return;
   }

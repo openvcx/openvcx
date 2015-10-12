@@ -53,10 +53,13 @@ int srv_ctrl_httplive(CLIENT_CONN_T *pConn, const char *uri, const char *virtFil
 int srv_ctrl_mooflive(CLIENT_CONN_T *pConn, const char *uri, const char *virtFilePath, const char *filepath, 
                       HTTP_STATUS_T *pHttpStatus);
 int srv_ctrl_rtmp(CLIENT_CONN_T *pConn, const char *uri, int is_remoteargfile, 
-                      const char *rsrcUrl, const SRV_LISTENER_CFG_T *pListenHttp, unsigned int outidx);
-int srv_ctrl_flv(CLIENT_CONN_T *pConn, const char *uri,  int is_remoteargfile, const SRV_LISTENER_CFG_T *pListenHttp);
-int srv_ctrl_mkv(CLIENT_CONN_T *pConn, const char *uri, int is_remoteargfile, const SRV_LISTENER_CFG_T *pListenHttp);
-int srv_ctrl_rtsp(CLIENT_CONN_T *pConn, const char *uri, int is_remoteargfile, const char *rsrcUrl);
+                  const char *rsrcUrl, const SRV_LISTENER_CFG_T *pListenHttp, unsigned int outidx);
+int srv_ctrl_flv(CLIENT_CONN_T *pConn, const char *uri,  int is_remoteargfile, 
+                 const SRV_LISTENER_CFG_T *pListenHttp);
+int srv_ctrl_mkv(CLIENT_CONN_T *pConn, const char *uri, int is_remoteargfile, 
+                 const SRV_LISTENER_CFG_T *pListenHttp);
+int srv_ctrl_rtsp(CLIENT_CONN_T *pConn, const char *uri, int is_remoteargfile, 
+                  const SRV_LISTENER_CFG_T *pListenRtsp);
 int srv_ctrl_submitdata(CLIENT_CONN_T *pConn);
 int srv_ctrl_islegal_fpath(const char *path);
 int srv_ctrl_initmediafile(HTTP_MEDIA_STREAM_T *pMediaStream, int introspect);

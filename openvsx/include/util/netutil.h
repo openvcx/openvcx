@@ -55,21 +55,13 @@
 #define SOCK_RCVBUFSZ_UDP_DEFAULT      0x2ffff
 #define SOCK_SNDBUFSZ_UDP_DEFAULT      0 
 
+#define NET_BACKLOG_DEFAULT   5
+
 //
 // IPv6 compatibility macros
 //
 #define ADDR_LEN_IPV4               4
 #define ADDR_LEN_IPV6               16
-
-/*
-typedef struct IP_ADDR {
-  sa_family_t             family;
-  union {
-    struct in6_addr       addr6;
-    struct in_addr        addr4;
-  } ip_un;
-} IP_ADDR_T;
-*/
 
 #define INET_NTOP(storage, buf, bufsz)  ((const struct sockaddr_storage *) &(storage))->ss_family == AF_INET6 ? \
                       inet_ntop(AF_INET6, &((const struct sockaddr_in6 *) &(storage))->sin6_addr, (buf), (bufsz)) : \

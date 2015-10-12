@@ -27,30 +27,58 @@
 static int ctrl_status_show_output(STREAMER_CFG_T *pStreamerCfg, char *buf, unsigned int szbuf) {
 
   int rc = 0;
+  unsigned int idx = 0;
   unsigned int outidx;
   unsigned int numRtmp = 0;
   unsigned int numRtsp = 0;
   unsigned int numRtspInterleaved = 0;
   unsigned int numTsLive = 0;
   unsigned int numFlvLive = 0;
+  unsigned int numMkvLive = 0;
+  unsigned int numActive = 0;
+  char bpsdescr[256]; 
 
-  if(pStreamerCfg && pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_RTMP].do_outfmt) {
-    numRtmp = pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_RTMP].numActive;
-    numFlvLive = pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_FLV].numActive;
+  bpsdescr[0] = '\0';
+
+  if(pStreamerCfg) {
+    if(pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_RTMP].do_outfmt) {
+      numActive += (numRtmp = pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_RTMP].numActive);
+    }
+    if(pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_FLV].do_outfmt) {
+      numActive += (numFlvLive = pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_FLV].numActive);
+    }
+    if(pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_MKV].do_outfmt) {
+      numActive += (numMkvLive = pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_MKV].numActive);
+    }
   }
 
   if(pStreamerCfg && pStreamerCfg->running >= 0) {
 
-    numRtsp = pStreamerCfg->pRtspSessions->numActive;
+    numActive += (numRtsp = pStreamerCfg->pRtspSessions->numActive);
 
     for(outidx = 0; outidx < IXCODE_VIDEO_OUT_MAX; outidx++) {
-      numTsLive += pStreamerCfg->liveQs[outidx].numActive;
-      numRtspInterleaved += pStreamerCfg->liveQ2s[outidx].numActive;
+      numActive += (numTsLive += pStreamerCfg->liveQs[outidx].numActive);
+      numActive += (numRtspInterleaved += pStreamerCfg->liveQ2s[outidx].numActive);
     }
   }
 
-  rc = snprintf(buf, szbuf, "status=OK&pid=%d&rtmp=%u&rtspi=%u&rtsp=%u&tslive=%u&flvlive=%u",
-           getpid(), numRtmp, numRtspInterleaved, numRtsp, numTsLive, numFlvLive);
+
+  if((rc = snprintf(&buf[idx], szbuf - idx, "status=OK&pid=%d", getpid())) > 0) {
+    idx += rc;
+  }
+
+  if(numActive > 0 && pStreamerCfg->pMonitor->aggregate.bps > 0) {
+    burstmeter_printBitrateStr(bpsdescr, sizeof(bpsdescr)-1, pStreamerCfg->pMonitor->aggregate.bps);
+    if((rc = snprintf(&buf[idx], szbuf - idx, "&outputRate=%s", bpsdescr)) > 0) {
+      idx += rc;
+    }
+  }
+
+  if((rc = snprintf(&buf[idx], szbuf - idx, "&rtmp=%u&rtspi=%u&rtsp=%u&tslive=%u&flvlive=%u&mkvlive=%u",
+                   numRtmp, numRtspInterleaved, numRtsp, numTsLive, numFlvLive, numMkvLive)) > 0) {
+    idx += rc;
+  }
+
 
   return rc;
 }

@@ -130,7 +130,7 @@ static int rtsp_req_send(RTSP_CLIENT_SESSION_T *pSession,
          "%s: %s\r\n",
          strMethod, uri, (xtraUri ? xtraUri : ""), RTSP_VERSION_DEFAULT,
          RTSP_HDR_CSEQ, pSession->cseq,
-         RTSP_HDR_USER_AGENT, vsxlib_get_appnamewwwstr(tmp, sizeof(tmp)))) < 0) {
+         RTSP_HDR_USER_AGENT, vsxlib_get_useragentstr(tmp, sizeof(tmp)))) < 0) {
     return -1;
   }
   sz += rc;

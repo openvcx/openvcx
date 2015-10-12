@@ -48,7 +48,8 @@ uint64_t xcode_getFrameTm(const STREAM_XCODE_DATA_T *pData, int absolute, int64_
     }
   }
 
-  //fprintf(stderr, "getFrameTm %.3f (frameTmSt:%.3f) (pts:%.3f,dts:%.3f) decr:%d\n", (double)tm/90000.0f, (double)pData->frameTmStartOffset/90000.0f, (double)pData->curFrame.pkt.xtra.tm.pts/90000.0f, (double)pData->curFrame.pkt.xtra.tm.dts/90000.0f, decr);
+  VSX_DEBUG_XCODE( 
+    LOG(X_DEBUGV("xcode_getFrameTm getFrameTm %.3f tmarg: %.3f, absolute: %d, (frameTmSt:%.3f) (pts:%.3f,dts:%.3f) (xout.tm.pts: %.3f) durationTotPrior: %.3f"), PTSF(tm), PTSF(tmarg), absolute, PTSF(pData->frameTmStartOffset), PTSF(pData->curFrame.pkt.xtra.tm.pts), PTSF(pData->curFrame.pkt.xtra.tm.dts), PTSF(pData->curFrame.xout.tms[0].pts), PTSF(pData->curFrame.tm.durationTotPrior)); );
 
   return (uint64_t) tm;
 }
@@ -312,6 +313,36 @@ static void xtime_frame_reset(STREAM_XCODE_DATA_T *pData)  {
 
 }
 
+int xcode_checkresetresume(STREAM_XCODE_DATA_T *pXcode) {
+  int rc = 0;
+
+  if(!pXcode->curFrame.tm.havestarttm0) {
+    //pXcode->curFrame.tm.starttm0 = pXcode->curFrame.pkt.xtra.tm.pts;
+    pXcode->curFrame.tm.starttmperiod = pXcode->curFrame.pkt.xtra.tm.pts;
+    pXcode->curFrame.tm.havestarttm0 = 1;
+    pXcode->curFrame.tm.starttv0 = timer_GetTime();
+  }
+
+  LOG(X_DEBUGV("xcode_checkresetresume waspaused: %d, starttv0: %llu"), 
+       pXcode->curFrame.tm.waspaused, pXcode->curFrame.tm.starttv0);
+
+  if(pXcode->curFrame.tm.waspaused) {
+    pXcode->curFrame.tm.durationTotPrior = (uint64_t)
+                 ((double)(timer_GetTime() - pXcode->curFrame.tm.starttv0) * .09f);
+    LOG(X_DEBUG("xtime_frame was reset, durationTotPrior set to %.3f"),
+                PTSF(pXcode->curFrame.tm.durationTotPrior));
+    if(pXcode->pComplement) {
+      pXcode->pComplement->curFrame.tm.durationTotPrior = pXcode->curFrame.tm.durationTotPrior;
+    }
+    pXcode->curFrame.tm.waspaused = 0;
+    pXcode->curFrame.tm.starttmperiod = pXcode->curFrame.pkt.xtra.tm.pts;
+
+    //pData->curFrame.pkt.xtra.tm.pts = 0; pData->curFrame.pkt.xtra.tm.dts = 0;
+  }
+
+  return rc;
+}
+
 
 int xcode_resetdata(STREAM_XCODE_DATA_T *pXcode) {
 
@@ -327,6 +358,10 @@ int xcode_resetdata(STREAM_XCODE_DATA_T *pXcode) {
   memset(&pXcode->curFrame.pkt, 0, sizeof(pXcode->curFrame.pkt));
   pXcode->curFrame.pData = NULL;
   pXcode->curFrame.lenData = 0;
+#if 1
+  memset(pXcode->curFrame.xout.outbuf.lens, 0, sizeof(pXcode->curFrame.xout.outbuf.lens));
+#endif
+
   memset(&pXcode->curFrame.xout.keyframes, 0, sizeof(pXcode->curFrame.xout.keyframes));
   pXcode->curFrame.upsampleFrIdx = 0;
   pXcode->curFrame.numUpsampled = 0;

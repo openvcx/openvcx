@@ -207,7 +207,7 @@ static enum STREAM_NET_ADVFR_RC load_mp2ts_pkt(STREAM_PES_DATA_T *pData,
       pPes->pDataSrc->cbResetData(pPes->pDataSrc->pCbData);
     }
 
-    //return STREAM_NET_ADVFR_RC_RESET;
+    //return STREAM_NET_ADVFR_RC_RESET_TMGAP;
   }
 
 
@@ -499,7 +499,7 @@ static enum STREAM_NET_ADVFR_RC store_mp2ts_framedata(STREAM_PES_DATA_T *pData) 
             ptsdelta, PTSF(ptsdelta), 
             pPktProgData->pProg->pid.id, pPktProgData->pXcodeData->inStreamType);
 
-          rc = STREAM_NET_ADVFR_RC_RESET;
+          rc = STREAM_NET_ADVFR_RC_RESET_TMGAP;
 
         } else if(tm1 < tm0) {
 
@@ -650,13 +650,13 @@ enum STREAM_NET_ADVFR_RC stream_net_pes_advanceFrame(STREAM_NET_ADVFR_DATA_T *pA
   if( !pktqueue_havepkt(pData->pQueue)) {
 
     if((rc = stream_net_load_frame(pData)) != STREAM_NET_ADVFR_RC_OK) {
-      if(rc == STREAM_NET_ADVFR_RC_NEWPROG || rc == STREAM_NET_ADVFR_RC_RESET) {
+      if(rc == STREAM_NET_ADVFR_RC_NEWPROG || rc == STREAM_NET_ADVFR_RC_RESET_TMGAP) {
         //fprintf(stderr, "load_frame rc:%d , will reset stream_net\n", rc);
         stream_net_reset(pData->pPes);
       } else if(rc == STREAM_NET_ADVFR_RC_OVERWRITE) {
         //fprintf(stderr, "no content for input streamtype: 0x%x, will reset stream_net rc:%d\n", pData->pXcodeData->inStreamType, rc);
         stream_net_reset(pData->pPes);
-        rc = STREAM_NET_ADVFR_RC_RESET;
+        rc = STREAM_NET_ADVFR_RC_RESET_TMGAP;
       }
 
       return rc;

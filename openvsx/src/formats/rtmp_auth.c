@@ -130,6 +130,27 @@ int rtmp_auth_parse_req(const char *url, RTMP_AUTH_PARSE_CTXT_T *pParseCtxt) {
   return rc;
 }
 
+int rtmp_auth_parse_app(const char *app, AUTH_LIST_T *pAuthList) {
+  int rc = 0;
+  const char *p = NULL;
+
+  if(!app || !pAuthList) {
+    return -1;
+  } 
+
+  memset(pAuthList, 0, sizeof(AUTH_LIST_T));
+
+  if(!(p = strchr(app, '?'))) {
+    return rc;
+  }
+  p++;
+
+
+  rc = strutil_parse_delimeted_str(cbparse_authmod_descr_params, pAuthList, p, ',');
+
+  return rc;
+}
+
 static char *rtmp_auth_getrandom_base64(unsigned int lenRaw, char *pOut, unsigned int lenOut) {
   int rc = 0;
   unsigned char buf[128];

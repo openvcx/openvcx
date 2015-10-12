@@ -43,8 +43,14 @@ int OpenMediaReadOnly(FILE_STREAM_T *pStream, const char *path) {
     LOG(X_ERROR("Unable to get file size of '%s'."), path);
     //fileops_Close(pStream->fp);
     //pStream->fp = FILEOPS_INVALID_FP;
+    CloseMediaFile(pStream);
+    return -1;
+  } else if(st.st_mode & S_IFDIR) {
+    LOG(X_ERROR("Refusing to open directory '%s' for reading"), path);
+    CloseMediaFile(pStream);
     return -1;
   }
+
   pStream->size = st.st_size;
 
   if(path != pStream->filename) {

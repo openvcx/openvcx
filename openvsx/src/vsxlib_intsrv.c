@@ -814,6 +814,7 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
         pSrv->startcfg.listenHttp[idx].max = numHttp;
         pSrv->startcfg.listenHttp[idx].pConnPool = &pSrv->poolHttp;
         pSrv->startcfg.listenHttp[idx].pCfg = &pSrv->startcfg;
+        pSrv->startcfg.listenHttp[idx].pAuthTokenId = pParams->tokenid;
         pthread_mutex_init(&pSrv->startcfg.listenHttp[idx].mtx, NULL);
 
         if((rc = vsxlib_ssl_initserver(pParams, &pSrv->startcfg.listenHttp[idx])) < 0 ||
@@ -851,6 +852,7 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
           pSrv->startcfg.listenRtmp[idx].max = maxRtmpLive;
           pSrv->startcfg.listenRtmp[idx].pConnPool = &pSrv->poolRtmp;
           pSrv->startcfg.listenRtmp[idx].pCfg = &pSrv->startcfg;
+          pSrv->startcfg.listenRtmp[idx].pAuthTokenId = pParams->tokenid;
           pthread_mutex_init(&pSrv->startcfg.listenRtmp[idx].mtx, NULL);
 
           if((rc = vsxlib_ssl_initserver(pParams, &pSrv->startcfg.listenRtmp[idx])) < 0 ||
@@ -905,6 +907,7 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
           pSrv->startcfg.listenRtsp[idx].max = maxRtspLiveConn;
           pSrv->startcfg.listenRtsp[idx].pConnPool = &pSrv->poolRtsp;
           pSrv->startcfg.listenRtsp[idx].pCfg = &pSrv->startcfg;
+          pSrv->startcfg.listenRtsp[idx].pAuthTokenId = pParams->tokenid;
           pthread_mutex_init(&pSrv->startcfg.listenRtsp[idx].mtx, NULL);
 
           if((rc = vsxlib_ssl_initserver(pParams, &pSrv->startcfg.listenRtsp[idx])) < 0 ||

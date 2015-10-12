@@ -37,6 +37,7 @@
 #define META_FILE_IDSTR_MAX        16
 #define META_FILE_DESCR_LEN        128 
 #define META_FILE_PROXY_STR_LEN    128
+#define META_FILE_TOKEN_LEN        128
 
 typedef struct ENTRY_IGNORE {
   char                    filename[FILE_LIST_ENTRY_NAME_LEN];
@@ -79,11 +80,14 @@ typedef struct META_FILE {
   // Digest credentials separated by ':'
   char                userpass[AUTH_ELEM_MAXLEN * 2 + 1];
 
+  // security token
+  char                tokenId[META_FILE_TOKEN_LEN];
+
   // id forming unique child proces key 'media rsrc + id' 
-  char                 id[META_FILE_IDSTR_MAX];
+  char                id[META_FILE_IDSTR_MAX];
 
   // boolean flag for shared resource using one common child processor
-  int                  shared;
+  int                 shared;
 
   ENTRY_IGNORE_T            *pignoreList;
   ENTRY_META_DESCRIPTION_T  *pDescriptionList;

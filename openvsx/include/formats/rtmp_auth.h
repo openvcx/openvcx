@@ -90,6 +90,7 @@ int rtmp_auth_compute(RTMP_AUTH_CTXT_T *pAuth, const struct AUTH_CREDENTIALS_STO
 int rtmp_auth_create_challenge(RTMP_AUTH_PERSIST_T *pPersist);
 int rtmp_auth_parse_resp(const char *authDescription, RTMP_AUTH_PARSE_CTXT_T *pCtxt);
 int rtmp_auth_parse_req(const char *url, RTMP_AUTH_PARSE_CTXT_T *pParseCtxt);
+int rtmp_auth_parse_app(const char *app, AUTH_LIST_T *pAuthList);
 RTMP_AUTHMOD_T rtmp_auth_getauthmod(const RTMP_AUTH_PARSE_CTXT_T *pParseCtxt);
 const char *rtmp_auth_getauthmodstr(RTMP_AUTHMOD_T authmod);
 

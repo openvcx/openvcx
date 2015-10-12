@@ -24,6 +24,55 @@
 
 #include "vsx_common.h"
 
+int srv_write_authtoken(char *buf, unsigned int szbuf, const char *pAuthTokenId, 
+                        const char *authTokenFromUri, int querystr) {
+  int rc = 0;
+
+  if(!buf || szbuf <= 0) {
+    return -1;
+  }
+
+  buf[0] = '\0';
+  if(pAuthTokenId && pAuthTokenId[0] != '\0') {
+
+    if(!authTokenFromUri) {
+      authTokenFromUri = pAuthTokenId;
+    }
+    //
+    // Echo the URL query string token value and avoid exposing the token that comes from our running config
+    // to prevent accidental exposure of the real security token
+    //
+    rc = snprintf(buf, szbuf, VSX_URI_TOKEN_QUERY_PARAM"%s%s", querystr ? "=" : "_", authTokenFromUri);
+  }
+  
+  return rc;
+}
+
+int srv_check_authtoken(const SRV_LISTENER_CFG_T *pListenCfg, const HTTP_REQ_T *pReq, int allowcomma) {
+  int rc = 0;
+  const char *parg = NULL;
+  char buf[KEYVAL_MAXLEN];
+  const char *p;
+
+  if(pListenCfg->pAuthTokenId && pListenCfg->pAuthTokenId[0] != '\0') {
+    if(!((parg = conf_find_keyval(pReq->uriPairs, VSX_URI_TOKEN_QUERY_PARAM)))) {
+      rc = -1;
+    } else if(allowcomma && (p = strchr(parg, ','))) {
+      memset(buf, 0, sizeof(buf));
+      strncpy(buf, parg, MIN(sizeof(buf), p - parg));
+      parg = buf;
+    }
+
+    if(rc >= 0 && strcmp(pListenCfg->pAuthTokenId, parg)) {
+      rc = -1;
+    }
+  }
+
+  if(rc < 0) {
+    LOG(X_WARNING("Missing or invalid HTTP security token for '%s'"), pReq->url);
+  }
+  return rc;
+}
 
 const char *srv_check_authorized(const AUTH_CREDENTIALS_STORE_T *pAuthStore,
                                  const HTTP_REQ_T *pReq, 

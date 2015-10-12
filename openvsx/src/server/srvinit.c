@@ -121,8 +121,9 @@ SRV_CONF_T *srv_init_conf(const char *listenArg, const char *mediaDirArg,
                           const char *homeDirArg, const char *confPathArg, 
                           const char *dbDirArg, int usedb, 
                           const char *curdir, 
-                          int rtmphardlimit, 
-                          int rtsphardlimit,
+                          unsigned int rtmphardlimit, 
+                          unsigned int rtsphardlimit,
+                          unsigned int httphardlimit,
                           SRV_START_CFG_T *pCfg,
                           AUTH_CREDENTIALS_STORE_T *ppAuthStores) {
   int rc = 0;
@@ -221,7 +222,8 @@ SRV_CONF_T *srv_init_conf(const char *listenArg, const char *mediaDirArg,
     pCfg->pdbdir = dbDirArg;
   }
 
-  vsxlib_setsrvconflimits(pCfg->pParams, rtmphardlimit, rtsphardlimit, rtmphardlimit, rtmphardlimit, 0);
+  vsxlib_setsrvconflimits(pCfg->pParams, rtmphardlimit, rtsphardlimit, 
+                          rtmphardlimit, rtmphardlimit, httphardlimit);
 
   pCfg->outiface = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_INTERFACE);
   pCfg->pavcthumb = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_AVCTHUMB);

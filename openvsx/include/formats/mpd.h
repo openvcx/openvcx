@@ -65,6 +65,7 @@ typedef struct DASH_INIT_CTXT {
   const char             *uriprefix;
   int                     nodelete_expired;
   DASH_MPD_TYPE_T         dash_mpd_type;
+  const char              *pAuthTokenId;
 } DASH_INIT_CTXT_T;
 
 typedef struct MPD_MEDIA_FILE {

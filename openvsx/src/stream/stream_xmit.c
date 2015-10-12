@@ -284,7 +284,6 @@ static int sendPktUdpRtp(STREAM_XMIT_NODE_T *pStream, unsigned int idxDest,
 #define DUMP_RTP_XMIT_FMT "RTP - rtp-xmit(0x%lx:%d): pt:%3d len:%4d, ts:%9u, seq:%5u, marker:%d, keyfr:%d"
 #define DUMP_RTP_XMIT_ARGS  (long unsigned int) (long unsigned int *) pStream, idxDest, pStream->pRtpMulti->init.pt, len, htonl(pStream->pRtpMulti->pRtp->timeStamp), htons(pStream->pRtpMulti->pRtp->sequence_num), (pStream->pRtpMulti->pRtp->pt &RTP_PT_MARKER_MASK) ? 1 : 0, pStream->cur_iskeyframe
 
-  //VSX_DEBUGLOG(DUMP_RTP_XMIT);
   VSX_DEBUG_RTP( LOG(X_DEBUG(DUMP_RTP_XMIT_FMT), DUMP_RTP_XMIT_ARGS));
 
 #if defined(DUMP_RTP)

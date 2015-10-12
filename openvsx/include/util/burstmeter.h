@@ -50,8 +50,10 @@ typedef struct BURSTMETER_SAMPLE_SET {
   uint16_t                         offsetBoundary;
   uint16_t                         padding;
   uint32_t                         idxLatest;
-  BURSTMETER_SAMPLE_T             *samples;
   BURSTMETER_METER_T               meter;  // default meter of rangeMs duration 
+
+  BURSTMETER_SAMPLE_T             *samples;
+  int                              nolock;
   pthread_mutex_t                  mtx;
 } BURSTMETER_SAMPLE_SET_T;
 
@@ -62,6 +64,7 @@ typedef struct BURSTMETER_DECODER_SET {
 } BURSTMETER_DECODER_SET_T;
 
 int burstmeter_init(BURSTMETER_SAMPLE_SET_T *pSamples, unsigned int periodMs, unsigned int rangeMs);
+int burstmeter_copy(BURSTMETER_SAMPLE_SET_T *pSamples, const BURSTMETER_SAMPLE_SET_T *pFrom);
 void burstmeter_close(BURSTMETER_SAMPLE_SET_T *pSamples);
 int burstmeter_reset(BURSTMETER_SAMPLE_SET_T *pSamples);
 int burstmeter_AddSample(BURSTMETER_SAMPLE_SET_T *pSamples, 
@@ -70,13 +73,15 @@ int burstmeter_AddSample(BURSTMETER_SAMPLE_SET_T *pSamples,
 
 int burstmeter_AddDecoderSample(BURSTMETER_DECODER_SET_T *pSet, unsigned int sampleLen,
                                unsigned int frameId);
-int burstmeter_updateCounters(BURSTMETER_SAMPLE_SET_T *pSamples, const struct timeval *pTv);
+int burstmeter_updateCounters2(BURSTMETER_SAMPLE_SET_T *pSamples);
+int burstmeter_updateCounters(BURSTMETER_SAMPLE_SET_T *pSamples, const struct timeval *ptv);
 float burstmeter_getBitrateBps(const BURSTMETER_SAMPLE_SET_T *pBurstSet);
 float burstmeter_getPacketratePs(const BURSTMETER_SAMPLE_SET_T *pBurstSet);
 int burstmeter_printBytes(char *buf, unsigned int szbuf, int64_t b);
 char *burstmeter_printBytesStr(char *buf, unsigned int szbuf, int64_t b);
 int burstmeter_printThroughput(char *buf, unsigned int szbuf, const BURSTMETER_SAMPLE_SET_T *pBurstSet);
 char *burstmeter_printThroughputStr(char *buf, unsigned int szbuf, const BURSTMETER_SAMPLE_SET_T *pBurstSet);
+char *burstmeter_printBitrateStr(char *buf, unsigned int szbuf, float bps);
 
 
 #endif // __BURST_METER_H__

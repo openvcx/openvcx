@@ -187,12 +187,14 @@ static int httplive_delete(HTTPLIVE_DATA_T *pLive) {
 static int httplive_writepl(const char *path, int idxmin, int idxmax, HTTPLIVE_DATA_T *pLive) {
   FILE_HANDLE fp;
   int idx;
-  int sz = 0;
+  size_t sz = 0;
   int rc = 0;
-  char filename[128];
+  char filename[256];
+  char tokenstr[16 + META_FILE_TOKEN_LEN];
   char buf[4096];
   const char *uriprfxdelimeter = "";
   unsigned int duration = (unsigned int) pLive->duration;
+  STREAMER_CFG_T *pStreamerCfg = (STREAMER_CFG_T *) pLive->pStreamerCfg;
   
   if(pLive->duration > (float) duration) {
     duration++;
@@ -222,14 +224,14 @@ static int httplive_writepl(const char *path, int idxmin, int idxmax, HTTPLIVE_D
       uriprfxdelimeter = "/";
     } 
 
+
     for(idx = idxmin; idx <= idxmax; idx++) {
-
-      httplive_format_path(filename, sizeof(filename), pLive->fileprefix, idx);
-
-      if((rc = snprintf(&buf[sz], sizeof(buf) - sz, "#EXTINF:%d,\r\n%s%s%s\r\n"
-          ,duration, 
-          (pLive->uriprefix ? pLive->uriprefix : ""), 
-          uriprfxdelimeter, filename)) < 0) {
+      tokenstr[0] = '\0';
+      if((rc = httplive_format_path(filename, sizeof(filename), pLive->fileprefix, idx)) < 0 ||
+        srv_write_authtoken(tokenstr, sizeof(tokenstr), pStreamerCfg->pAuthTokenId, NULL, 1) < 0 ||
+         (rc = snprintf(&buf[sz], sizeof(buf) - sz, "#EXTINF:%d,\r\n%s%s%s%s%s\r\n"
+          ,duration, (pLive->uriprefix ? pLive->uriprefix : ""), uriprfxdelimeter, filename, 
+          tokenstr[0] != '\0' ? "?" : "", tokenstr)) < 0) {
         break;
       } else {
         sz += rc;
@@ -308,11 +310,13 @@ static int httplive_writepl_multibr(const char *path, const HTTPLIVE_DATA_T *pLi
   int sz = 0;
   int rc = 0;
   char buf[4096];
-  char tmp[32];
+  char tokenstr[16 + META_FILE_TOKEN_LEN];
+  char tmp[64];
   int progId = 1;
   unsigned int bitrate;
   const char *uriprfxdelimeter = "";
   const HTTPLIVE_DATA_T *pLive = pLiveArg;
+  STREAMER_CFG_T *pStreamerCfg = (STREAMER_CFG_T *) pLive->pStreamerCfg;
 
   if((rc = snprintf(&buf[sz], sizeof(buf) - sz, "#EXTM3U\r\n")) > 0) {
     sz += rc; 
@@ -350,12 +354,15 @@ static int httplive_writepl_multibr(const char *path, const HTTPLIVE_DATA_T *pLi
       tmp[0] = '\0';
     }
 
-    if((rc = snprintf(&buf[sz], sizeof(buf) - sz, "%s%s%s%s%s\r\n",
+    tokenstr[0] = '\0';
+    if(srv_write_authtoken(tokenstr, sizeof(tokenstr), pStreamerCfg->pAuthTokenId, NULL, 1) < 0 ||
+       (rc = snprintf(&buf[sz], sizeof(buf) - sz, "%s%s%s%s%s%s%s\r\n",
           (pLive->uriprefix[0] != '\0' ? pLive->uriprefix : ""), 
           uriprfxdelimeter,
           tmp,
           //&pLive->fileprefix[pLive->outidx > 0 ? 1 : 0], HTTPLIVE_PL_NAME_EXT)) < 0) {
-          HTTPLIVE_TS_NAME_PRFX, HTTPLIVE_PL_NAME_EXT)) < 0) {
+          HTTPLIVE_TS_NAME_PRFX, HTTPLIVE_PL_NAME_EXT,
+          tokenstr[0] != '\0' ? "?" : "", tokenstr)) < 0) {
       break;
     } else {
       sz += rc;

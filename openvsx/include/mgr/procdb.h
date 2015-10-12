@@ -57,6 +57,7 @@ typedef struct SYS_PROC {
   int                         numActive;    // active clients repored in '/status'
   int                         isXcoded;
   char                        instanceId[SYS_PROC_INSTANCE_ID_LEN + 1];
+  char                        tokenId[META_FILE_TOKEN_LEN]; 
   char                        name[SYS_PROC_NAME_MAX];      // resource name
   char                        id[META_FILE_IDSTR_MAX];
   int                         profileId;
@@ -90,7 +91,7 @@ SYS_PROC_T *procdb_findInstanceId(SYS_PROCLIST_T *pProcs, const char *instanceId
 int procdb_delete(SYS_PROCLIST_T *pProcs, const char *name, const char *id, int lock);
 SYS_PROC_T *procdb_setup(SYS_PROCLIST_T *pProcs, const char *virtPath, const char *id, 
                          const MEDIA_DESCRIPTION_T *pMediaDescr, const char *pXcodeStr, 
-                         const char *pInstanceId, int lock);
+                         const char *pInstanceId, const char *pTokenId, int lock);
 int procdb_start(SYS_PROCLIST_T *pProcs, SYS_PROC_T *pProc, const char *filePath,
                  const STREAM_DEVICE_T *pDev, const char *launchpath, 
                  const char *xcodestr, const char *incapturestr, 

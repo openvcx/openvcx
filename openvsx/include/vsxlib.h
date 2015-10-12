@@ -50,7 +50,9 @@ typedef enum VSX_STREAMFLAGS {
   VSX_STREAMFLAGS_DEFAULT           = 0x00,
   VSX_STREAMFLAGS_AV_SAME_START_TM  = 0x02,
   VSX_STREAMFLAGS_RTPMUX            = 0x04,
-  VSX_STREAMFLAGS_RTCPMUX           = 0x08
+  VSX_STREAMFLAGS_RTCPMUX           = 0x08,
+  VSX_STREAMFLAGS_RTCPDISABLE       = 0x10, // not implemented
+  VSX_STREAMFLAGS_RTCPIGNOREBYE     = 0x20
 } VSX_STREAMFLAGS_T;
 
 typedef enum HTTP_AUTH_TYPE {
@@ -680,7 +682,6 @@ typedef struct PIP_CFG {
    *
    */
   int apprembRtcpSendVideoForceAdjustment;
-
 
   /**
    * PIP output flag enabling duplicate PIP insertion matching the 
@@ -1892,6 +1893,14 @@ typedef struct VSXLIB_STREAM_PARAMS {
    *
    */
   int promisc;
+
+  /**
+   *
+   *
+   * Authentication token id
+   *
+   */
+  const char *tokenid;
 
   /**
    *

@@ -271,6 +271,7 @@ typedef struct STREAMER_CFG {
   struct STREAM_STORAGE        *pStorageBuf;          // points back to STREAM_STORAGE_T
   STREAMER_SHARED_CTXT_T        sharedCtxt;           // utulized when cfgrtp.rtp_useCaptureSrcPort is enabled
   STREAMER_AUTH_LIST_T          creds[STREAMER_AUTH_IDX_MAX];
+  const char                   *pAuthTokenId;
   STREAM_RTSP_ANNOUNCE_T        rtspannounce;
   STREAM_RTMP_PUBLISH_T         rtmppublish;
   unsigned int                  frvidqslots;

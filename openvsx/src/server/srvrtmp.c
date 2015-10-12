@@ -464,6 +464,8 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
   int rc = 0;
   long idlems = 0;
   struct timeval tv;
+  AUTH_LIST_T authList;
+  const char *p = NULL;
   char tmp[128];
 
   pRtmp->state = RTMP_STATE_CLI_START;
@@ -497,12 +499,26 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
   // Create server response
   //
   pRtmp->out.idx = 0;
+
+  if(pRtmp->pAuthTokenId && pRtmp->pAuthTokenId[0] != '\0') {
+    if(rtmp_auth_parse_app(pRtmp->connect.app, &authList) < 0 || 
+       !(p = conf_find_keyval(authList.list,  VSX_URI_TOKEN_QUERY_PARAM)) ||
+      strcmp(pRtmp->pAuthTokenId, p)) {
+
+      rtmp_create_error(pRtmp, 1, RTMP_NETCONNECT_REJECTED, HTTP_STATUS_STR_FORBIDDEN);
+      rtmp_send(pRtmp, "rtmp_handle_conn server initial response");
+      LOG(X_WARNING("Missing or invalid RTSP security token for app: '%s'"), pRtmp->connect.app);
+      return -1;
+    }
+  }
+
   rtmp_create_serverbw(pRtmp, 2500000);
   rtmp_create_clientbw(pRtmp, 2500000);
   rtmp_create_ping(pRtmp, 0, 0);
   pRtmp->chunkSzOut = RTMP_CHUNK_SZ_OUT;
   rtmp_create_chunksz(pRtmp);
   rtmp_create_result_invoke(pRtmp);
+
   if((rc = rtmp_send(pRtmp, "rtmp_handle_conn server initial response")) < 0) {
     return -1;
   }

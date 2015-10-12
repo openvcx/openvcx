@@ -32,11 +32,14 @@
 
 #define SRV_CONF_KEY_LAUNCHMEDIA        "launchMedia"
 #define SRV_CONF_KEY_PORTRANGE          "portRange"
-#define SRV_CONF_KEY_MAX_MEDIA          "maxprocesses"
+#define SRV_CONF_KEY_MAX_MEDIA          "maxProcesses"
 #define SRV_CONF_KEY_MAX_MEDIA_XCODE    "maxXcoders"
 #define SRV_CONF_KEY_MAX_MBPS           "maxMacroBlocks"
 #define SRV_CONF_KEY_EXPIRE_CHILD_SEC   "expireSec"
 #define SRV_CONF_KEY_DISABLE_LISTING    "disableListing"
+
+#define MGR_CONNECTIONS_MAX        500 
+#define MGR_CONNECTIONS_DEFAULT    50 
 
 
 #if defined(WIN32)
@@ -56,6 +59,7 @@
 #define MGR_GET_PORT_RTSP(port)      ((port)+2)
 #define MGR_GET_PORT_STATUS(port)    ((port)+1)
 #define MGR_GET_PORT_HTTP(port)      (port)
+
 
 typedef enum MEDIA_ACTION {
   MEDIA_ACTION_UNKNOWN           = 0,
@@ -97,7 +101,6 @@ typedef struct SRV_MGR_START_CFG {
   SYS_PROCLIST_T               *pProcList;
   TIME_VAL                     *ptmstart;
   LIC_INFO_T                   *plic;
-  int                           disableDirListing;
 
   struct SRV_MGR_LISTENER_CFG  *pListenerRtmpProxy;
   struct SRV_MGR_LISTENER_CFG  *pListenerRtspProxy;
@@ -122,6 +125,7 @@ typedef struct SRVMEDIA_RSRC {
   int              *pshared;        // 'shared=' metafile value
   char             *pXcodeStr;      // 'xcodeargs=' metafile value
   char             *pUserpass;      // 'digestauth=' metafile value
+  char             *pTokenId;       // 'token=' metafile value
   char             *pLinkStr;       // 'httplink=' metafile value
   char             *pInputStr;      // 'input=' metafile value
   char             *pId;            // 'id=' metafile value
@@ -131,6 +135,7 @@ typedef struct SRVMEDIA_RSRC {
                                     // within virtRsrc
   char              profile[16];    // 'prof_' URI value
   char              instanceId[SYS_PROC_INSTANCE_ID_LEN + 1]; // 'id_' URI value
+  char              tokenId[META_FILE_TOKEN_LEN]; // 'tk_' URI value
   char              virtRsrc[VSX_MAX_PATH_LEN]; // Virtual resource path + name as extracted from the request URI
   size_t            szvirtRsrcOnly;             // length of virtual resource path excluding name
   char              filepath[VSX_MAX_PATH_LEN]; // Resource filepath on local storage

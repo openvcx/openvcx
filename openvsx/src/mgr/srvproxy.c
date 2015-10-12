@@ -675,7 +675,8 @@ static int mgr_rtmp_handle_conn(RTMP_CTXT_T *pRtmp, SRV_MGR_CONN_T *pConn) {
   SOCKET_DESCR_T sdSrv;
   RTMP_CTXT_CLIENT_T rtmpCli;
   PROXY_CONNECTION_T proxyConn;
-  char path[RTMP_PARAM_LEN_MAX];
+  char buf[RTMP_PARAM_LEN_MAX];
+  char *path = NULL;
   char tmp[128];
   int rc = 0;
 
@@ -708,13 +709,15 @@ static int mgr_rtmp_handle_conn(RTMP_CTXT_T *pRtmp, SRV_MGR_CONN_T *pConn) {
   memset(&sdSrv, 0, sizeof(sdSrv));
 
   // Expecting app <dir>/<resource name>
-  strncpy(path, pRtmp->connect.app, sizeof(path));
+  path = strncpy(buf, pRtmp->connect.app, sizeof(buf));
   //
   // Strip RTMP filename from 'app' string only leaving the FMS connect param
   //
-  //if((sz = mediadb_getdirlen(path)) > 0) {
-  //  path[sz - 1] = '\0';
-  //}
+  if(!strncmp(buf, "live/", 5)) {
+    path += 5;
+  }
+
+  VSX_DEBUG_MGR( LOG(X_DEBUG("MGR RTMP received connect.app: '%s', path: '%s'"), pRtmp->connect.app, path); );
 
   //
   // Use the 'app' parameter as the unique resource name
@@ -878,6 +881,7 @@ void srvmgr_rtmpproxy_proc(void *pArg) {
   NETIO_SOCK_T netsocksrv;  
   int rc;
   struct sockaddr_storage sa;
+  int backlog = 10;
   char tmp[128];
   SRV_MGR_LISTENER_CFG_T *pSrvListen = (SRV_MGR_LISTENER_CFG_T *) pArg;
 
@@ -887,15 +891,15 @@ void srvmgr_rtmpproxy_proc(void *pArg) {
   memcpy(&sa, &pSrvListen->listenCfg.sa, sizeof(sa));
   netsocksrv.flags = pSrvListen->listenCfg.netflags;
 
-  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, 10)) == INVALID_SOCKET) {
+  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, backlog)) == INVALID_SOCKET) {
     return;
   }
 
   pSrvListen->listenCfg.pnetsockSrv = &netsocksrv;
 
-  LOG(X_INFO("Listening for RTMP (proxy) requests on rtmp%s://%s:%d"),
+  LOG(X_INFO("Listening for RTMP (proxy) requests on rtmp%s://%s:%d max: %d"),
      ((pSrvListen->listenCfg.netflags & NETIO_FLAG_SSL_TLS) ? "s" : ""),
-     FORMAT_NETADDR(sa, tmp, sizeof(tmp)), ntohs(INET_PORT(sa)));
+     FORMAT_NETADDR(sa, tmp, sizeof(tmp)), ntohs(INET_PORT(sa)), pSrvListen->listenCfg.max);
 
   //
   // Service any client connections on the http listening port
@@ -915,6 +919,7 @@ void srvmgr_rtspproxy_proc(void *pArg) {
   NETIO_SOCK_T netsocksrv;
   int rc;
   struct sockaddr_storage sa;
+  int backlog = 10;
   char tmp[128];
   SRV_MGR_LISTENER_CFG_T *pSrvListen = (SRV_MGR_LISTENER_CFG_T *) pArg;
 
@@ -924,15 +929,15 @@ void srvmgr_rtspproxy_proc(void *pArg) {
   memcpy(&sa, &pSrvListen->listenCfg.sa, sizeof(sa));
   netsocksrv.flags = pSrvListen->listenCfg.netflags;
 
-  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, 10)) == INVALID_SOCKET) {
+  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, backlog)) == INVALID_SOCKET) {
     return;
   }
 
   pSrvListen->listenCfg.pnetsockSrv = &netsocksrv;
 
-  LOG(X_INFO("Listening for RTSP (proxy) requests on rtmp%s://%s:%d"),
+  LOG(X_INFO("Listening for RTSP (proxy) requests on rtmp%s://%s:%d max: %d"),
      ((pSrvListen->listenCfg.netflags & NETIO_FLAG_SSL_TLS) ? "s" : ""),
-     FORMAT_NETADDR(sa, tmp, sizeof(tmp)), ntohs(INET_PORT(sa)));
+     FORMAT_NETADDR(sa, tmp, sizeof(tmp)), ntohs(INET_PORT(sa)), pSrvListen->listenCfg.max);
 
   //
   // Service any client connections on the http listening port
@@ -952,6 +957,7 @@ void srvmgr_httpproxy_proc(void *pArg) {
   NETIO_SOCK_T netsocksrv;
   int rc;
   struct sockaddr_storage sa;
+  int backlog = 10;
   char tmp[128];
   SRV_MGR_LISTENER_CFG_T *pSrvListen = (SRV_MGR_LISTENER_CFG_T *) pArg;
 
@@ -961,15 +967,15 @@ void srvmgr_httpproxy_proc(void *pArg) {
   memcpy(&sa, &pSrvListen->listenCfg.sa, sizeof(sa));
   netsocksrv.flags = pSrvListen->listenCfg.netflags;
 
-  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, 10)) == INVALID_SOCKET) {
+  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, backlog)) == INVALID_SOCKET) {
     return;
   }
 
   pSrvListen->listenCfg.pnetsockSrv = &netsocksrv;
 
-  LOG(X_INFO("Listening for HTTP (proxy) requests on "URL_HTTP_FMT_STR),
+  LOG(X_INFO("Listening for HTTP (proxy) requests on "URL_HTTP_FMT_STR" max: %d"),
       URL_HTTP_FMT_ARGS2(&pSrvListen->listenCfg, FORMAT_NETADDR(sa, tmp, sizeof(tmp))),
-            ntohs(INET_PORT(sa)));
+             pSrvListen->listenCfg.max);
 
   //
   // Service any client connections on the http listening port

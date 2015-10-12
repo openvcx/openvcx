@@ -980,10 +980,12 @@ static int process_rtcp_pkt(STREAMER_CFG_T *pStreamerCfg,
              capture_log_format_pkt(buf, sizeof(buf), pSaSrc, pSaDst));
         return -1;
       }
-
-      pStream->haveRtcpBye = 1;
-      LOG(X_DEBUG("Got RTCP BYE for ssrc: 0x%x %s"), pStream->hdr.key.ssrc,
-             capture_log_format_pkt(buf, sizeof(buf), pSaSrc, pSaDst));
+     
+      if(!(pStreamerCfg->streamflags & VSX_STREAMFLAGS_RTCPIGNOREBYE)) {
+        pStream->haveRtcpBye = 1;
+        LOG(X_DEBUG("Got RTCP BYE for ssrc: 0x%x %s"), pStream->hdr.key.ssrc,
+               capture_log_format_pkt(buf, sizeof(buf), pSaSrc, pSaDst));
+      }
 
       rc = RTCP_PT_BYE;
       break;
@@ -1947,7 +1949,7 @@ int capture_socketStart(CAP_ASYNC_DESCR_T *pCfg) {
   }
 
   // TODO, unify rtp jtbuf params between sock capture & pcap
-  if((pState = rtp_captureCreate(CAPTURE_DB_MAX_STREAMS_LOCAL, 
+  if((pState = rtp_captureCreate(MIN(pCfg->pcommon->filt.numFilters, CAPTURE_DB_MAX_STREAMS_LOCAL),
                                  jtBufSzInPktsVid, 
                                  jtBufSzInPktsAud, 
                                  jtBufPktBufSz,

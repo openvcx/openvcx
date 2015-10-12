@@ -106,9 +106,8 @@ void srv_cmd_proc(void *pfuncarg) {
       break;
     }
 
-    VSX_DEBUG_HTTP( LOG(X_DEBUG("HTTP - srv_cmd_proc method: '%s', rc:%d, URI: %s%s"), 
-           pConn->httpReq.method, rc, pConn->httpReq.puri, http_req_dump_uri(&pConn->httpReq, buf, sizeof(buf))));
-
+     LOG(X_DEBUG("HTTP - request method: '%s', rc:%d, URI: %s%s"),
+           pConn->httpReq.method, rc, pConn->httpReq.puri, http_req_dump_uri(&pConn->httpReq, buf, sizeof(buf)));
 
 /*
     if(!(phdrcookie = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->httpReq.reqPairs, "Cookie"))) {
@@ -286,7 +285,8 @@ fprintf(stderr, "COOKIE: '%s' 0x%x\n", phdrcookie, pSession);
     //
     if(!strncasecmp(pConn->httpReq.puri, VSX_TSLIVE_URL, MAX(urilen, strlen(VSX_TSLIVE_URL)))) {
 
-      if(capability & URL_CAP_TSLIVE) {
+      if((capability & URL_CAP_TSLIVE) &&
+         (rc = srv_check_authtoken(pConn->pListenCfg, &pConn->httpReq, 0) == 0)) {
         rc = srv_ctrl_tslive(pConn, &httpStatus);
       } else {
         httpStatus = HTTP_STATUS_FORBIDDEN;
@@ -301,7 +301,8 @@ fprintf(stderr, "COOKIE: '%s' 0x%x\n", phdrcookie, pSession);
     //
     } else if(!strncasecmp(pConn->httpReq.puri, VSX_HTTPLIVE_URL, MAX(urilen, strlen(VSX_HTTPLIVE_URL)))) {
 
-      if(capability & (URL_CAP_TSHTTPLIVE | URL_CAP_LIVE)) {
+      if((capability & (URL_CAP_TSHTTPLIVE | URL_CAP_LIVE)) &&
+         (rc = srv_check_authtoken(pConn->pListenCfg, &pConn->httpReq, 0) == 0)) {
         rc = srv_ctrl_httplive(pConn, VSX_HTTPLIVE_URL, NULL, NULL, &httpStatus);
       } else {
         httpStatus = HTTP_STATUS_FORBIDDEN;
@@ -315,7 +316,8 @@ fprintf(stderr, "COOKIE: '%s' 0x%x\n", phdrcookie, pSession);
     //
     } else if(!strncasecmp(pConn->httpReq.puri, VSX_DASH_URL, MAX(urilen, strlen(VSX_DASH_URL)))) {
 
-      if(capability & (URL_CAP_MOOFLIVE | URL_CAP_LIVE)) {
+      if((capability & (URL_CAP_MOOFLIVE | URL_CAP_LIVE)) &&
+         (rc = srv_check_authtoken(pConn->pListenCfg, &pConn->httpReq, 0) == 0)) {
         rc = srv_ctrl_mooflive(pConn, VSX_DASH_URL, NULL, NULL, &httpStatus);
       } else {
         httpStatus = HTTP_STATUS_FORBIDDEN;
@@ -329,7 +331,8 @@ fprintf(stderr, "COOKIE: '%s' 0x%x\n", phdrcookie, pSession);
     //
     } else if(!strncasecmp(pConn->httpReq.puri, VSX_FLVLIVE_URL, MAX(urilen, strlen(VSX_FLVLIVE_URL)))) {
 
-      if(capability & URL_CAP_FLVLIVE) {
+      if((capability & URL_CAP_FLVLIVE) &&
+         (rc = srv_check_authtoken(pConn->pListenCfg, &pConn->httpReq, 1) == 0)) {
         rc = srv_ctrl_flvlive(pConn);
       } else {
         httpStatus = HTTP_STATUS_FORBIDDEN;
@@ -343,7 +346,8 @@ fprintf(stderr, "COOKIE: '%s' 0x%x\n", phdrcookie, pSession);
     //
     } else if(!strncasecmp(pConn->httpReq.puri, VSX_MKVLIVE_URL, MAX(urilen, strlen(VSX_MKVLIVE_URL)))) {
 
-      if(capability & URL_CAP_MKVLIVE) {
+      if((capability & URL_CAP_MKVLIVE) &&
+         (rc = srv_check_authtoken(pConn->pListenCfg, &pConn->httpReq, 0) == 0)) {
         rc = srv_ctrl_mkvlive(pConn);
       } else {
         httpStatus = HTTP_STATUS_FORBIDDEN;
@@ -364,6 +368,9 @@ fprintf(stderr, "COOKIE: '%s' 0x%x\n", phdrcookie, pSession);
           !strncasecmp(pConn->httpReq.puri, VSX_MKV_URL, MAX(urilen, strlen(VSX_MKV_URL)))) {
 
       if(capability & URL_CAP_LIVE) {
+        //
+        // srv_check_authtoken is called from within srv_ctrl_live
+        //
         rc = srv_ctrl_live(pConn, &httpStatus, NULL);
       } else {
         LOG(X_ERROR("%s requires the Automatic Format Adaptation Server.  Use '--live' "), pConn->httpReq.puri);

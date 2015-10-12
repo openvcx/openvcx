@@ -615,22 +615,7 @@ static enum STREAM_NET_ADVFR_RC xcode_vid_seqhdr(STREAM_XCODE_DATA_T *pData,
 
 static void xtime_frame_seq(STREAM_XCODE_DATA_T *pData)  {
 
-  if(!pData->curFrame.tm.havestarttm0) {
-    //pData->curFrame.tm.starttm0 = pData->curFrame.pkt.xtra.tm.pts;
-    pData->curFrame.tm.starttmperiod = pData->curFrame.pkt.xtra.tm.pts;
-    pData->curFrame.tm.havestarttm0 = 1;
-    pData->curFrame.tm.starttv0 = timer_GetTime();
-  }
-
-  if(pData->curFrame.tm.waspaused) {
-    pData->curFrame.tm.durationTot = (uint64_t) 
-                 ((double)(timer_GetTime() - pData->curFrame.tm.starttv0) * .09f);
-    LOG(X_DEBUG("xtime_frame was reset, durationTot set to %.3f"), 
-                PTSF(pData->curFrame.tm.durationTot));
-    pData->pComplement->curFrame.tm.durationTot = pData->curFrame.tm.durationTot;
-    pData->curFrame.tm.waspaused = 0;
-    pData->curFrame.tm.starttmperiod = pData->curFrame.pkt.xtra.tm.pts;
-  }
+  xcode_checkresetresume(pData);
 
   if(pData->curFrame.tm.haveseqstart) {
     if(!pData->curFrame.tm.prevhaveseqstart) {
@@ -1769,7 +1754,7 @@ enum STREAM_NET_ADVFR_RC xcode_vid(STREAM_XCODE_DATA_T *pData) {
   } else if(lenpassthru >= 0 && pXcode->out[xcodeidx].active) {
 
   VSX_DEBUG_XCODE( 
-    LOG(X_DEBUG("XCODE - calling xcode_frame_vid tid:0x%x pip:%d 0x%x -> 0x%x %s / %d xcode pts:%.3f %.3f len:%d"),
+    LOG(X_DEBUGV("XCODE - calling xcode_frame_vid tid:0x%x pip:%d 0x%x -> 0x%x %s / %d xcode pts:%.3f %.3f len:%d"),
      pthread_self(), pXcode->pip.active, pData->curFrame.pData, pData->curFrame.xout.outbuf.buf, pData->curFrame.useTmpFrameOut ? "tmpFrame" : "capslot", pData->curFrame.xout.outbuf.lenbuf, PTSF(pXcode->common.inpts90Khz), PTSF(pXcode->common.outpts90Khz), pData->curFrame.lenData));
 
     if((len = xcode_frame_vid(pXcode, 
@@ -1784,8 +1769,10 @@ enum STREAM_NET_ADVFR_RC xcode_vid(STREAM_XCODE_DATA_T *pData) {
  
   }
 
-  //LOG(X_DEBUG("called xcode_frame_vid tid: 0x%x pip.active:%d, overlay.havePip:%d, len:%d, lenpassthru:%d, lens[0]:%d, lens[1]:%d"), pthread_self(), pData->piXcode->vid.pip.active, pXcode->overlay.havePip, len, lenpassthru, pData->curFrame.xout.outbuf.lens[0], pData->curFrame.xout.outbuf.lens[1]); LOGHEX_DEBUG(pData->curFrame.xout.outbuf.buf, MIN(16, pData->curFrame.xout.outbuf.lens[0]));
+  VSX_DEBUG_XCODE(
+    LOG(X_DEBUGV("XCODE - called xcode_frame_vid tid: 0x%x pip.active:%d, overlay.havePip:%d, len:%d, lenpassthru:%d, lens[0]:%d, lens[1]:%d"), pthread_self(), pData->piXcode->vid.pip.active, pXcode->overlay.havePip, len, lenpassthru, pData->curFrame.xout.outbuf.lens[0], pData->curFrame.xout.outbuf.lens[1]); LOGHEX_DEBUGV(pData->curFrame.xout.outbuf.buf, MIN(16, pData->curFrame.xout.outbuf.lens[0]));
 //if((pData->curFrame.xout.outbuf.buf[2]==0x01&&pData->curFrame.xout.outbuf.buf[3]==0x06) || (pData->curFrame.xout.outbuf.buf[3]==0x01&&pData->curFrame.xout.outbuf.buf[4]==0x06)) avc_dumpHex(stderr,pData->curFrame.xout.outbuf.buf, MIN(2048, pData->curFrame.xout.outbuf.lens[0]), 1); else if(pData->curFrame.xout.outbuf.buf[3]==0x01&&pData->curFrame.xout.outbuf.buf[4]==0x67) avc_dumpHex(stderr,pData->curFrame.xout.outbuf.buf, MIN(2048, pData->curFrame.xout.outbuf.lens[0]), 1);
+  );
 
   if(pData->curFrame.pData != pData->curFrame.xout.outbuf.buf) {
     pData->curFrame.pData = pData->curFrame.xout.outbuf.buf;
@@ -2212,7 +2199,7 @@ enum STREAM_NET_ADVFR_RC xcode_vid(STREAM_XCODE_DATA_T *pData) {
 
 
   VSX_DEBUG_XCODE(
-    LOG(X_DEBUGV("xcode - xout.outbuf.buf: 0x%x, lenbuf:%d, { [0].p:0x%x, len:%d, 0x%x 0x%x 0x%x 0x%x ... 0x%x 0x%x 0x%x 0x%x}"), pData->curFrame.xout.outbuf.buf, pData->curFrame.xout.outbuf.lenbuf, pData->curFrame.xout.outbuf.poffsets[0], pData->curFrame.xout.outbuf.lens[0], pData->curFrame.xout.outbuf.poffsets[0][0], pData->curFrame.xout.outbuf.poffsets[0][1], pData->curFrame.xout.outbuf.poffsets[0][2], pData->curFrame.xout.outbuf.poffsets[0][3], pData->curFrame.xout.outbuf.poffsets[0][12], pData->curFrame.xout.outbuf.poffsets[0][13], pData->curFrame.xout.outbuf.poffsets[0][14], pData->curFrame.xout.outbuf.poffsets[0][15]);
+    LOG(X_DEBUGV("XCODE - xout.outbuf.buf: 0x%x, lenbuf:%d, { [0].p:0x%x, len:%d, 0x%x 0x%x 0x%x 0x%x ... 0x%x 0x%x 0x%x 0x%x}"), pData->curFrame.xout.outbuf.buf, pData->curFrame.xout.outbuf.lenbuf, pData->curFrame.xout.outbuf.poffsets[0], pData->curFrame.xout.outbuf.lens[0], pData->curFrame.xout.outbuf.poffsets[0][0], pData->curFrame.xout.outbuf.poffsets[0][1], pData->curFrame.xout.outbuf.poffsets[0][2], pData->curFrame.xout.outbuf.poffsets[0][3], pData->curFrame.xout.outbuf.poffsets[0][12], pData->curFrame.xout.outbuf.poffsets[0][13], pData->curFrame.xout.outbuf.poffsets[0][14], pData->curFrame.xout.outbuf.poffsets[0][15]);
     if(pData->curFrame.xout.outbuf.poffsets[1]) LOG(X_DEBUG("xcode - [1]..p:0x%x, len:%d, 0x%x 0x%x 0x%x 0x%x ... 0x%x 0x%x 0x%x 0x%x"), pData->curFrame.xout.outbuf.poffsets[1], pData->curFrame.xout.outbuf.lens[1], pData->curFrame.xout.outbuf.poffsets[1][0],pData->curFrame.xout.outbuf.poffsets[1][1],pData->curFrame.xout.outbuf.poffsets[1][2],pData->curFrame.xout.outbuf.poffsets[1][3], pData->curFrame.xout.outbuf.poffsets[1][12],pData->curFrame.xout.outbuf.poffsets[1][13], pData->curFrame.xout.outbuf.poffsets[1][14], pData->curFrame.xout.outbuf.poffsets[1][15]);
     if(pData->curFrame.xout.outbuf.poffsets[2]) LOG(X_DEBUG("xcode - [2]..p:0x%x, len:%d, 0x%x 0x%x 0x%x 0x%x ... 0x%x 0x%x 0x%x 0x%x"), pData->curFrame.xout.outbuf.poffsets[2], pData->curFrame.xout.outbuf.lens[2], pData->curFrame.xout.outbuf.poffsets[2][0],pData->curFrame.xout.outbuf.poffsets[2][1],pData->curFrame.xout.outbuf.poffsets[2][2],pData->curFrame.xout.outbuf.poffsets[2][3], pData->curFrame.xout.outbuf.poffsets[2][12],pData->curFrame.xout.outbuf.poffsets[2][13], pData->curFrame.xout.outbuf.poffsets[2][14], pData->curFrame.xout.outbuf.poffsets[2][15]);
 

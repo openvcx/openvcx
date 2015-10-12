@@ -165,6 +165,7 @@ static int check_status(SYS_PROC_T *pProc) {
   int numActiveRtspInterleaved = -1;
   int numActiveTsLive = -1;
   int numActiveFlvLive = -1;
+  int numActiveMkvLive = -1;
   const char *host = "127.0.0.1";
 
   pProc->numActive = 0;
@@ -192,6 +193,10 @@ static int check_status(SYS_PROC_T *pProc) {
         numActiveTsLive = atoi(kv.val);
       } else if(!strncasecmp(kv.key, "flvlive", 7)) {
         numActiveFlvLive = atoi(kv.val);
+      } else if(!strncasecmp(kv.key, "mkvlive", 7)) {
+        numActiveMkvLive = atoi(kv.val);
+      } else if(!strncasecmp(kv.key, "outputRate", 10)) {
+       // output stream bps data rate 
       }
 
       //fprintf(stderr, "key:'%s' val:'%s'\n", kv.key , kv.val);
@@ -203,23 +208,27 @@ static int check_status(SYS_PROC_T *pProc) {
   }
 
 
-  if(numActiveRtmp >= 0) {
+  if(numActiveRtmp > 0) {
     pProc->numActive += numActiveRtmp;
   }
-  if(numActiveRtsp >= 0) {
+  if(numActiveRtsp > 0) {
     pProc->numActive += numActiveRtsp;
   }
-  if(numActiveTsLive >= 0) {
+  if(numActiveTsLive > 0) {
     pProc->numActive += numActiveTsLive;
   }
-  if(numActiveTsLive >= 0) {
+  if(numActiveFlvLive > 0) {
     pProc->numActive += numActiveFlvLive;
   }
+  if(numActiveMkvLive > 0) {
+    pProc->numActive += numActiveMkvLive;
+  }
  
-  VSX_DEBUGLOG("Status for %s (%s, profile:%s) %s:%d rtmp:%d rtsp:%d (interleaved:%d) ts:%d flv: %d"
-                " (rc:%d '%s')\n", 
+  VSX_DEBUG_MGR( LOG(X_DEBUG("Status for %s (%s, profile:%s) %s:%d rtmp:%d rtsp:%d (interleaved:%d) ts:%d flv: %d mkv:%d"
+                " (rc:%d '%s')"), 
      pProc->name, pProc->instanceId, pProc->id, host, MGR_GET_PORT_STATUS(pProc->startPort), 
-     numActiveRtmp, numActiveRtsp, numActiveRtspInterleaved, numActiveTsLive, numActiveFlvLive, rc, buf);
+     numActiveRtmp, numActiveRtsp, numActiveRtspInterleaved, numActiveTsLive, numActiveFlvLive, 
+     numActiveMkvLive, rc, buf););
 
   return rc;
 }
@@ -551,6 +560,7 @@ SYS_PROC_T *procdb_setup(SYS_PROCLIST_T *pProcs,
                          const MEDIA_DESCRIPTION_T *pMediaDescr, 
                          const char *pXcodeStr, 
                          const char *pInstanceId,
+                         const char *pTokenId,
                          int lock) {
 
   SYS_PROC_T *pProc = NULL;
@@ -585,6 +595,10 @@ SYS_PROC_T *procdb_setup(SYS_PROCLIST_T *pProcs,
     if(pXcodeStr) { 
       pProc->mbbps = procdb_getMbbps(pMediaDescr);
     }
+  }
+
+  if(pTokenId && pTokenId[0] != '\0') {
+    strncpy(pProc->tokenId, pTokenId, sizeof(pProc->tokenId));
   }
 
   if(pInstanceId && pInstanceId[0] != '\0') {
@@ -665,6 +679,7 @@ static char *get_methods_str(int methodBits,
   unsigned int idxMethod;
   unsigned int idxbuf = 0;
   int lastHttpPort = -1;
+  int lastPort = -1;
   int rc;
 
   if(userpass && userpass[0] == '\0') {
@@ -690,43 +705,48 @@ static char *get_methods_str(int methodBits,
 
     switch(methodBits & (1 << idxMethod)) {
       case (1 << STREAM_METHOD_DASH):
-        if((rc = write_listener(&lastHttpPort, MGR_GET_PORT_HTTP(startPort), ssl, "dash", HTTP_PROTO_STR,
+        if((rc = write_listener(&lastPort, MGR_GET_PORT_HTTP(startPort), ssl, "dash", HTTP_PROTO_STR,
                         userpass, NULL, idxbuf > 0 ? 1 : 0, &buf[idxbuf], szbuf - idxbuf)) > 0) {
           idxbuf += rc;
         }
+        lastHttpPort = lastPort;
         break;
       case (1 << STREAM_METHOD_HTTPLIVE):
-        if((rc = write_listener(&lastHttpPort, MGR_GET_PORT_HTTP(startPort), ssl, "httplive", HTTP_PROTO_STR, 
+        if((rc = write_listener(&lastPort, MGR_GET_PORT_HTTP(startPort), ssl, "httplive", HTTP_PROTO_STR, 
                         userpass, NULL, idxbuf > 0 ? 1 : 0, &buf[idxbuf], szbuf - idxbuf)) > 0) {
           idxbuf += rc;
         }
+        lastHttpPort = lastPort;
         break;
       case (1 << STREAM_METHOD_FLVLIVE):
-        if((rc = write_listener(&lastHttpPort, MGR_GET_PORT_HTTP(startPort), ssl, "flvlive", HTTP_PROTO_STR, 
+        if((rc = write_listener(&lastPort, MGR_GET_PORT_HTTP(startPort), ssl, "flvlive", HTTP_PROTO_STR, 
                         userpass, NULL, idxbuf > 0 ? 1 : 0, &buf[idxbuf], szbuf - idxbuf)) > 0) {
           idxbuf += rc;
         }
+        lastHttpPort = lastPort;
         break;
       case (1 << STREAM_METHOD_MKVLIVE):
-        if((rc = write_listener(&lastHttpPort, MGR_GET_PORT_HTTP(startPort), ssl, "mkvlive", HTTP_PROTO_STR, 
+        if((rc = write_listener(&lastPort, MGR_GET_PORT_HTTP(startPort), ssl, "mkvlive", HTTP_PROTO_STR, 
                         userpass, NULL, idxbuf > 0 ? 1 : 0, &buf[idxbuf], szbuf - idxbuf)) > 0) {
           idxbuf += rc;
         }
+        lastHttpPort = lastPort;
         break;
       case (1 << STREAM_METHOD_TSLIVE):
-        if((rc = write_listener(&lastHttpPort, MGR_GET_PORT_HTTP(startPort), ssl, "tslive", HTTP_PROTO_STR, 
+        if((rc = write_listener(&lastPort, MGR_GET_PORT_HTTP(startPort), ssl, "tslive", HTTP_PROTO_STR, 
                         userpass, NULL, idxbuf > 0 ? 1 : 0, &buf[idxbuf], szbuf - idxbuf)) > 0) {
           idxbuf += rc;
         }
+        lastHttpPort = lastPort;
         break;
       case (1 << STREAM_METHOD_RTMP):
-        if((rc = write_listener(NULL, MGR_GET_PORT_RTMP(startPort), ssl, "rtmp", RTMP_PROTO_STR, 
+        if((rc = write_listener(&lastPort, MGR_GET_PORT_RTMP(startPort), ssl, "rtmp", RTMP_PROTO_STR, 
                             userpass, NULL, idxbuf > 0 ? 1 : 0, &buf[idxbuf], szbuf - idxbuf)) > 0) {
           idxbuf += rc;
         }
         break;
       case (1 << STREAM_METHOD_RTSP):
-        if((rc = write_listener(NULL, MGR_GET_PORT_RTSP(startPort), ssl, "rtsp", RTSP_PROTO_STR, 
+        if((rc = write_listener(&lastPort, MGR_GET_PORT_RTSP(startPort), ssl, "rtsp", RTSP_PROTO_STR, 
                             userpass, NULL, idxbuf > 0 ? 1 : 0, &buf[idxbuf], szbuf - idxbuf)) > 0) {
           idxbuf += rc;
         }
@@ -783,10 +803,10 @@ int procdb_start(SYS_PROCLIST_T *pProcs,
 
   get_methods_str(methodBits, ssl, methodsbuf, sizeof(methodsbuf), pProc->startPort, userpass);
 
-  snprintf(cmd, sizeof(cmd), " %s %s \"%s\" %s \"%s\" \"%s\" \"%s\" &",
+  snprintf(cmd, sizeof(cmd), " %s %s \"%s\" %s \"%s\" \"%s\" \"%s\" \"%s\" &",
           launchpath, pProc->instanceId, filePath, 
           pDev->name, methodsbuf, xcodestr ? xcodestr : "",
-          incapturestr ? incapturestr: "");
+          incapturestr ? incapturestr: "", pProc->tokenId);
 
   LOG(X_DEBUG("Starting '%s'"), cmd);
 
