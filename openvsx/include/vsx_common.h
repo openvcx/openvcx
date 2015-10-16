@@ -227,7 +227,7 @@ typedef uint32_t in_addr_t;
 extern int g_proc_exit;
 extern int g_proc_exit_flags;
 extern int g_verbosity;
-extern int g_usehttplog;
+extern const char *g_http_log_path;
 extern TIME_VAL g_debug_ts;
 extern int g_debug_flags;
 extern const char *vsxlib_get_appnamestr( char *buf, unsigned int len);

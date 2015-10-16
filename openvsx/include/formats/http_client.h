@@ -47,11 +47,31 @@ int httpcli_gethdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttPesp,
                      unsigned int range1, const char *host,
                      HTTPCLI_AUTH_CTXT_T *pAuthCliCtxt);
 
-int httpcli_connect(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa, const char *descr);
+int httpcli_connect(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa, int tmtms, const char *descr);
 
 int httpcli_req_queryhdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttpResp,
                           const struct sockaddr *psa, HTTPCLI_AUTH_CTXT_T *pAuthCliCtxt, 
                           const char *descr);
+
+unsigned char *httpcli_get_contentlen_start(HTTP_RESP_T *pHttpResp, 
+                                            HTTP_PARSE_CTXT_T *pHdrCtxt,
+                                            unsigned char *pbuf, unsigned int szbuf,
+                                            int verifybufsz,
+                                            unsigned int *pcontentLen);
+
+unsigned char *httpcli_loadpagecontent(const char *puri,
+                                       unsigned char *pbuf,
+                                       unsigned int *plen,
+                                       NETIO_SOCK_T *pnetsock,
+                                       const struct sockaddr *psa,
+                                       unsigned int tmtms,
+                                       HTTP_RESP_T *pHttpResp,
+                                       HTTP_PARSE_CTXT_T *pHdrCtxt,
+                                       const char *hdrhost);
+
+const unsigned char *httpcli_getpage(const char *location, const char *puri, 
+                                     unsigned char *pbuf, unsigned int *pszbuf,
+                                     HTTP_STATUS_T *phttpStatus, unsigned int tmtms);
 
 /**
  * Process a HTTP/RTSP 401 Unauthorized response

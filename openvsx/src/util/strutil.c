@@ -340,7 +340,8 @@ const char *strutil_skip_key(const char *p0, unsigned int len) {
   return p;
 }
 
-int strutil_parse_delimeted_str(STRUTIL_PARSE_CSV_TOKEN cbToken, void *pCbTokenArg, const char *line, char delimeter) {
+int strutil_parse_delimeted_str(STRUTIL_PARSE_CSV_TOKEN cbToken, void *pCbTokenArg, 
+                                const char *line, char delimeter) {
   const char *p, *p2;
   unsigned int sz;
   int rc = 0;

@@ -161,8 +161,7 @@ SRV_CONF_T *srv_init_conf(const char *listenArg, const char *mediaDirArg,
     return NULL;
   }
 
-  pCfg->pParams->confpath = pCfg->confpath;
-
+  pCfg->pParams->confpath = pCfg->pconfpath;
   //
   // Parse the configuration file
   //

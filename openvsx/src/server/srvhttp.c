@@ -487,13 +487,20 @@ int http_format_date(char *buf, unsigned int len, int logfmt) {
 }
 
 
+int http_log_setfile(const char *path) {
+  int rc = 0;
+
+  g_http_log_path = path;
+
+  return rc;
+}
+
 int http_log(const SOCKET_DESCR_T *pSd, const HTTP_REQ_T *pReq,
              enum HTTP_STATUS statusCode, FILE_OFFSET_T len) {
   int rc = 0;
   char dateStr[96];
   char tmp[128];
   char buf[1024];
-  const char *path = "log/access_log";
   const char *userAgent = NULL;
   const char *referer = NULL;
   struct stat st;
@@ -501,11 +508,7 @@ int http_log(const SOCKET_DESCR_T *pSd, const HTTP_REQ_T *pReq,
   static int g_http_log_mtx_init;
   static FILE_HANDLE g_http_log_fp;
 
-  //
-  // If vsx is called via vsxmgr (default), prevent overwriting
-  // 'access_log'
-  //
-  if(!g_usehttplog) {
+  if(!g_http_log_path ||  g_http_log_path[0] == '\0') {
     return 0;
   }
 
@@ -533,7 +536,7 @@ int http_log(const SOCKET_DESCR_T *pSd, const HTTP_REQ_T *pReq,
 
     pthread_mutex_lock(&g_http_log_mtx);
 
-    if(fileops_stat(path, &st) != 0) {
+    if(fileops_stat(g_http_log_path, &st) != 0) {
       if(g_http_log_fp != FILEOPS_INVALID_FP) {
         fileops_Close(g_http_log_fp);
       }
@@ -542,7 +545,7 @@ int http_log(const SOCKET_DESCR_T *pSd, const HTTP_REQ_T *pReq,
 
     if(g_http_log_fp == FILEOPS_INVALID_FP) {
       //TODO: don't hardcode log dir relative path
-      if((g_http_log_fp = fileops_Open(path, O_CREAT | O_APPEND | O_RDWR)) == 
+      if((g_http_log_fp = fileops_Open(g_http_log_path, O_CREAT | O_APPEND | O_RDWR)) == 
          FILEOPS_INVALID_FP) {
         rc = -1;
       }

@@ -117,6 +117,7 @@ SOCKET net_listen(const struct sockaddr *psa, int backlog);
 void net_closesocket(SOCKET *psock);
 int net_setsocknonblock(SOCKET sock, int on);
 int net_connect(SOCKET sock, const struct sockaddr *psa);
+int net_connect_tmt(SOCKET sock, const struct sockaddr *psa, unsigned int mstmt);
 //int net_bindlistener(SOCKET sock, struct sockaddr *psa);
 int net_getlocalmediaport(int numpairs);
 //int net_setqos4(SOCKET sock, const struct sockaddr *psa, uint8_t dscp);

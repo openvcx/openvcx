@@ -63,6 +63,7 @@ typedef struct CONNECT_RETRY_CTXT {
   const char                *connectDescr;
   const int                 *pconnectretrycntminone;
   const int                 *prunning;
+  unsigned int               tmtms;
 } CONNECT_RETRY_CTXT_T;
 
 /**
@@ -105,6 +106,7 @@ int http_recvloop(CAP_ASYNC_DESCR_T *pCfg,
                   unsigned char *pbuf,
                   unsigned int szbuf);
 
+/*
 unsigned char *http_get_contentlen_start(HTTP_RESP_T *pHttpResp,
                                     HTTP_PARSE_CTXT_T *pHdrCtxt,
                                     unsigned char *pbuf, unsigned int szbuf,
@@ -117,6 +119,7 @@ const char *http_get_doc(CAP_ASYNC_DESCR_T *pCfg,
                          HTTP_PARSE_CTXT_T *pHdrCtxt,
                          unsigned char *pbuf, 
                          unsigned int szbuf);
+*/
 
 #define CAPTURE_HTTP_HOSTBUF_MAXLEN    128
 

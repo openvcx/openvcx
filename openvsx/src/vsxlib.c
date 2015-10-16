@@ -30,7 +30,8 @@
 //
 int g_proc_exit;
 int g_verbosity;
-int g_usehttplog;
+//int g_usehttplog;
+const char *g_http_log_path;
 int g_proc_exit_flags;
 TIME_VAL g_debug_ts;
 int g_debug_flags = 0;
@@ -611,6 +612,7 @@ VSX_RC_T vsxlib_captureNet(VSXLIB_STREAM_PARAMS_T *pParams) {
   memset(&capCfg, 0, sizeof(capCfg));
 
   vsxlib_initlog(pParams->verbosity, pParams->logfile, NULL, pParams->logmaxsz, pParams->logrollmax, NULL);
+  http_log_setfile(pParams->httpaccesslogfile);
 
   vsxlib_stream_setupcap_params(pParams, &capCfg);
 
@@ -1824,6 +1826,7 @@ VSX_RC_T vsxlib_stream(VSXLIB_STREAM_PARAMS_T *pParams) {
   } else {
     vsxlib_initlog(pParams->verbosity, pParams->logfile, NULL, pParams->logmaxsz, pParams->logrollmax, log_tag);
   }  
+  http_log_setfile(pParams->httpaccesslogfile);
 
   if(inputs[0] && !strcasecmp(FILETYPE_CONFERENCE, inputs[0])) {
     pParams->mixerCfg.conferenceInputDriver = 1;

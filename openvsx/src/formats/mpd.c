@@ -133,7 +133,7 @@ static int writepath(const MPD_CREATE_CTXT_T *pCtxt,
                      char *buf, 
                      unsigned int szbuf, 
                      const char *adaptationtag) {
-  int rc;
+  int rc = 0;
   const char *uriprfxdelimeter = "";
   char tmp[VSX_MAX_PATH_LEN];
   char tokenstr[16 + META_FILE_TOKEN_LEN];

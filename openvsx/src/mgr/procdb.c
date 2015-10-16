@@ -30,114 +30,6 @@
 
 #define PROCUTIL_PID_DIR               "tmp/"
 
-
-//TODO: move this to http files
-int http_getpage(const char *addr, uint16_t port, const char *uri,
-                 char *buf, unsigned int szbuf, unsigned int tmtms) {
-  int rc = 0;
-  NETIO_SOCK_T netsock;
-  struct sockaddr_storage sa;
-  HTTP_PARSE_CTXT_T hdrCtxt;
-  HTTP_RESP_T httpResp;
-  unsigned int contentLen = 0;
-  const char *p;
-  unsigned int consumed = 0;
-  struct timeval tv0, tv1;
-  char hdr[1024];
-
-  if(!addr || !buf || szbuf <= 0) {
-    return -1;
-  }
-  if(!uri) {
-    uri = "/";
-  }
-
-  //TODO: does not resolve host!
-  memset(&sa, 0, sizeof(sa));
-  if((rc = net_getaddress(addr, &sa)) < 0) {
-    return rc;
-  }
-  INET_PORT(sa) = htons(port);
-
-  //TODO: this will not work for ipv6 socket with current function prototype
-  memset(&netsock, 0, sizeof(netsock));
-  if((NETIOSOCK_FD(netsock) = net_opensocket(SOCK_STREAM, 0, 0, NULL)) == INVALID_SOCKET) {
-    return -1;
-  }
-
-  if((rc = net_connect(NETIOSOCK_FD(netsock), (const struct sockaddr *) &sa)) != 0) {
-    net_closesocket(&NETIOSOCK_FD(netsock));
-    return rc;
-  }
-
-  gettimeofday(&tv0, NULL);
-
-  memset(&hdrCtxt, 0, sizeof(hdrCtxt));
-  memset(&httpResp, 0, sizeof(httpResp));
-  hdrCtxt.pnetsock = &netsock;
-  hdrCtxt.pbuf = hdr;
-  hdrCtxt.szbuf = sizeof(hdr);
-  hdrCtxt.tmtms = tmtms;
-
-  VSX_DEBUG_MGR(LOG(X_DEBUG("MGR - Sending local status command: '%s' to: %d"), uri, htons(INET_PORT(sa))));
-
-  if((httpcli_gethdrs(&hdrCtxt, &httpResp, (const struct sockaddr *) &sa, uri, NULL, 0, 0, NULL, NULL)) < 0) {
-    return -1;
-  }
-
-  if(rc >= 0 && (p = conf_find_keyval(httpResp.hdrPairs, HTTP_HDR_CONTENT_LEN))) {
-    contentLen = atoi(p);  
-  } 
-
-  if(rc >= 0) {
-    if(contentLen <= 0) {
-      LOG(X_ERROR("Content-Length not found in response"));
-      rc = -1;
-    } else if(contentLen > szbuf) {
-      LOG(X_ERROR("Input buffer size too small %d / %d"), szbuf, contentLen);
-      rc = -1;
-    } else if(hdrCtxt.idxbuf > hdrCtxt.hdrslen) {
-      if((consumed = hdrCtxt.idxbuf - hdrCtxt.hdrslen) < szbuf) {
-        memcpy(buf, &hdr[hdrCtxt.hdrslen], consumed);
-      } else {
-        LOG(X_ERROR("Input buffer size too small %d / %d"), szbuf, contentLen);
-        rc = -1;
-      }
-    }
-  }
-
-  if(rc >= 0 && net_setsocknonblock(NETIOSOCK_FD(netsock), 1) < 0) {
-    rc = -1;
-  } 
-
-    //fprintf(stderr, "GET PAGE OK idx:%d hdrs:%d conentlen:%d\n", hdrCtxt.idxbuf, hdrCtxt.hdrslen, contentLen);
-
-  while(rc >= 0 && consumed < contentLen) {
-    if((rc = netio_recvnb(&netsock, (unsigned char *) &buf[consumed], 
-                          contentLen - consumed, 500)) > 0) {
-      consumed += rc;
-    } 
-
-    gettimeofday(&tv1, NULL);
-    if(tmtms > 0 && consumed < contentLen && TIME_TV_DIFF_MS(tv1, tv0) > tmtms) {
-      LOG(X_WARNING("HTTP %s:%d%s timeout %d ms exceeded"), FORMAT_NETADDR(sa, hdr, sizeof(hdr)), 
-           ntohs(INET_PORT(sa)), uri, tmtms);
-      break;
-      rc = -1;
-    }
-  }
-
-  if(contentLen > 0 && consumed >= contentLen) {
-    rc = consumed;
-  } else {
-    rc = -1;
-  }
-
-  netio_closesocket(&netsock);
-
-  return rc;
-}
-
 static int get_pid(SYS_PROC_T *pProc) {
   char path[VSX_MAX_PATH_LEN];
   snprintf(path, sizeof(path), "%s%s.pid", PROCUTIL_PID_DIR, pProc->instanceId);
@@ -155,82 +47,89 @@ static void procdb_dump(SYS_PROCLIST_T *pProcs) {
   pthread_mutex_unlock(&pProcs->mtx);
 }
 
-static int check_status(SYS_PROC_T *pProc) {
-  int rc;
-  char *p, *p2;
+typedef struct PROC_STATUS_RESP_DATA {
+  int numActiveRtmp;
+  int numActiveRtsp;
+  int numActiveRtspInterleaved;
+  int numActiveTsLive;
+  int numActiveFlvLive;
+  int numActiveMkvLive;
+} PROC_STATUS_RESP_DATA_T;
+
+int cbparse_procstatus_resp(void *pArg, const char *p) {
+  int rc = 0;
+  PROC_STATUS_RESP_DATA_T *pResp = (PROC_STATUS_RESP_DATA_T *) pArg;
   KEYVAL_PAIR_T kv;
-  char buf[1024];
-  int numActiveRtmp = -1;
-  int numActiveRtsp = -1;
-  int numActiveRtspInterleaved = -1;
-  int numActiveTsLive = -1;
-  int numActiveFlvLive = -1;
-  int numActiveMkvLive = -1;
-  const char *host = "127.0.0.1";
+
+  memset(&kv, 0, sizeof(kv));
+  if((rc = conf_parse_keyval(&kv, p, 0, '=', 0)) == 2) {
+    if(!strncasecmp(kv.key, "rtmp", 4)) {
+      pResp->numActiveRtmp = atoi(kv.val);
+    } else if(!strncasecmp(kv.key, "rtspi", 5)) {
+      pResp->numActiveRtspInterleaved = atoi(kv.val);
+    } else if(!strncasecmp(kv.key, "rtsp", 4)) {
+      pResp->numActiveRtsp = atoi(kv.val);
+    } else if(!strncasecmp(kv.key, "tslive", 6)) {
+      pResp->numActiveTsLive = atoi(kv.val);
+    } else if(!strncasecmp(kv.key, "flvlive", 7)) {
+      pResp->numActiveFlvLive = atoi(kv.val);
+    } else if(!strncasecmp(kv.key, "mkvlive", 7)) {
+      pResp->numActiveMkvLive = atoi(kv.val);
+    } else if(!strncasecmp(kv.key, "outputRate", 10)) {
+     // output stream bps data rate 
+    }
+  }
+
+  return rc;
+}
+
+#define PROC_STATUS_REQ_TIMEOUT_MS          2000
+
+static int check_status(SYS_PROC_T *pProc) {
+  HTTP_STATUS_T httpStatus;
+  unsigned char buf[2048];
+  unsigned int szdata = sizeof(buf);
+  const char *page = NULL;
+  char host[256];
+  PROC_STATUS_RESP_DATA_T status;
 
   pProc->numActive = 0;
 
-  if((rc = http_getpage(host, MGR_GET_PORT_STATUS(pProc->startPort), VSX_STATUS_URL, buf, sizeof(buf), 2000)) < 0) {
-    LOG(X_ERROR("Failed to load "VSX_STATUS_URL" for %s:%d"), host, MGR_GET_PORT_STATUS(pProc->startPort));
-    return rc;
+  snprintf(host, sizeof(host), "http://127.0.0.1:%d", MGR_GET_PORT_STATUS(pProc->startPort));
+
+  VSX_DEBUG_MGR( LOG(X_DEBUG("MGR - Sending local status command: '%s' to: %s"), VSX_STATUS_URL, host); );
+  if(!(page = (const char *) httpcli_getpage(host, VSX_STATUS_URL, (unsigned char *) buf, &szdata, 
+                                             &httpStatus, PROC_STATUS_REQ_TIMEOUT_MS))) {
+    LOG(X_ERROR("Failed to load "VSX_STATUS_URL" for %s (%d)"), host, httpStatus);
+    return -1;
   }
 
-  p = buf;
-  while(p - buf < rc) {
-    p2 = p;
-    while(p2 - buf < rc && *p2 != '&') {
-      p2++;
-    }
-    //fprintf(stderr, "--%c%c%c len:%d, rc:%d\n", p[0], p[1], p[2], p2 - p, rc);
-    if(conf_parse_keyval(&kv, p, p2 - p, '=', 0) == 2) {
-      if(!strncasecmp(kv.key, "rtmp", 4)) {
-        numActiveRtmp = atoi(kv.val);
-      } else if(!strncasecmp(kv.key, "rtspi", 5)) {
-        numActiveRtspInterleaved = atoi(kv.val);
-      } else if(!strncasecmp(kv.key, "rtsp", 4)) {
-        numActiveRtsp = atoi(kv.val);
-      } else if(!strncasecmp(kv.key, "tslive", 6)) {
-        numActiveTsLive = atoi(kv.val);
-      } else if(!strncasecmp(kv.key, "flvlive", 7)) {
-        numActiveFlvLive = atoi(kv.val);
-      } else if(!strncasecmp(kv.key, "mkvlive", 7)) {
-        numActiveMkvLive = atoi(kv.val);
-      } else if(!strncasecmp(kv.key, "outputRate", 10)) {
-       // output stream bps data rate 
-      }
+  memset(&status, 0, sizeof(status));
+  strutil_parse_delimeted_str(cbparse_procstatus_resp, &status, page, '&');
 
-      //fprintf(stderr, "key:'%s' val:'%s'\n", kv.key , kv.val);
-    }
-    p = p2;
-    while(p - buf < rc && *p == '&') {
-      p++;
-    }
+  if(status.numActiveRtmp > 0) {
+    pProc->numActive += status.numActiveRtmp;
+  }
+  if(status.numActiveRtsp > 0) {
+    pProc->numActive += status.numActiveRtsp;
+  }
+  if(status.numActiveTsLive > 0) {
+    pProc->numActive += status.numActiveTsLive;
+  }
+  if(status.numActiveFlvLive > 0) {
+    pProc->numActive += status.numActiveFlvLive;
+  }
+  if(status.numActiveMkvLive > 0) {
+    pProc->numActive += status.numActiveMkvLive;
   }
 
-
-  if(numActiveRtmp > 0) {
-    pProc->numActive += numActiveRtmp;
-  }
-  if(numActiveRtsp > 0) {
-    pProc->numActive += numActiveRtsp;
-  }
-  if(numActiveTsLive > 0) {
-    pProc->numActive += numActiveTsLive;
-  }
-  if(numActiveFlvLive > 0) {
-    pProc->numActive += numActiveFlvLive;
-  }
-  if(numActiveMkvLive > 0) {
-    pProc->numActive += numActiveMkvLive;
-  }
- 
-  VSX_DEBUG_MGR( LOG(X_DEBUG("Status for %s (%s, profile:%s) %s:%d rtmp:%d rtsp:%d (interleaved:%d) ts:%d flv: %d mkv:%d"
-                " (rc:%d '%s')"), 
+  VSX_DEBUG_MGR( LOG(X_DEBUG("Status for %s (%s, profile:%s) %s:%d rtmp:%d rtsp:%d (interleaved:%d) ts:%d flv: %d "
+                             "mkv:%d (szdata:%d '%s')"), 
      pProc->name, pProc->instanceId, pProc->id, host, MGR_GET_PORT_STATUS(pProc->startPort), 
-     numActiveRtmp, numActiveRtsp, numActiveRtspInterleaved, numActiveTsLive, numActiveFlvLive, 
-     numActiveMkvLive, rc, buf););
+     status.numActiveRtmp, status.numActiveRtsp, status.numActiveRtspInterleaved, status.numActiveTsLive, 
+     status.numActiveFlvLive, status.numActiveMkvLive, szdata, page););
 
-  return rc;
+  return szdata;
 }
 
 static void procdb_monitor_proc(void *pArg) {
@@ -242,6 +141,8 @@ static void procdb_monitor_proc(void *pArg) {
   char logstr[128];
   struct timeval *ptvlatest;
   struct timeval tvnow;
+
+  logutil_tid_add(pthread_self(), pProcs->tid_tag);
 
   while(pProcs->runMonitor) {
 
@@ -340,6 +241,8 @@ static void procdb_monitor_proc(void *pArg) {
 
   } // end of while(runMonitor
 
+  logutil_tid_remove(pthread_self());
+
 }
 
 int procdb_create(SYS_PROCLIST_T *pProcs) {
@@ -367,6 +270,7 @@ int procdb_create(SYS_PROCLIST_T *pProcs) {
   }
   LOG(X_DEBUG("Using Port range %d - %d"), pProcs->minStartPort, pProcs->maxStartPort);
 
+  snprintf(pProcs->tid_tag, sizeof(pProcs->tid_tag), "proc-monitor");
   pProcs->priorStartPort = pProcs->maxStartPort; 
   pProcs->pollIntervalMs = 5000;
 

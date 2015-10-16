@@ -50,7 +50,8 @@ extern void _print_alloc_stats(int verbose, FILE * fp);
 //
 int g_proc_exit;
 int g_verbosity;
-int g_usehttplog;
+//int g_usehttplog = 0;
+const char *g_http_log_path;
 TIME_VAL g_debug_ts;
 int g_debug_flags = 0;
 pthread_cond_t *g_proc_exit_cond;
@@ -134,17 +135,21 @@ enum CMD_OPT {
   CMD_OPT_DIR,
   CMD_OPT_DEBUG,
   CMD_OPT_DEBUG_AUTH,
+  CMD_OPT_DEBUG_DASH,
   CMD_OPT_DEBUG_HTTP,
   CMD_OPT_DEBUG_LIVE,
   CMD_OPT_DEBUG_METAFILE,
   CMD_OPT_DEBUG_MGR,
+  CMD_OPT_DEBUG_NET,
   CMD_OPT_DEBUG_SSL,
   CMD_OPT_DEBUG_RTMP,
   CMD_OPT_DEBUG_RTSP,
   CMD_OPT_HOME,
+  CMD_OPT_HTTPLOG,
   CMD_OPT_DBDIR,
   CMD_OPT_LOGTIME,
   CMD_OPT_LOGPATH,
+  CMD_OPT_LBNODESFILE,
 };
 
 int main(int argc, char *argv[]) {
@@ -162,7 +167,7 @@ int main(int argc, char *argv[]) {
   //
   // Enable 'access_log'
   //
-  g_usehttplog = 1;
+  //g_usehttplog = 1;
 
   struct option longopt[] = {
                  { "help",        no_argument,             NULL, 'h' },
@@ -171,17 +176,22 @@ int main(int argc, char *argv[]) {
                  { "dbdir",       required_argument,       NULL, CMD_OPT_DBDIR },
                  { "debug",       required_argument,       NULL, CMD_OPT_DEBUG },
                  { "debug-auth",  optional_argument,       NULL, CMD_OPT_DEBUG_AUTH },
+                 { "debug-dash",  optional_argument,       NULL, CMD_OPT_DEBUG_DASH},
                  { "debug-http",  optional_argument,       NULL, CMD_OPT_DEBUG_HTTP },
                  { "debug-live",  optional_argument,       NULL, CMD_OPT_DEBUG_LIVE },
                  { "debug-metafile", optional_argument,    NULL, CMD_OPT_DEBUG_METAFILE },
                  { "debug-mgr",   optional_argument,       NULL, CMD_OPT_DEBUG_MGR },
+                 { "debug-net",   optional_argument,       NULL, CMD_OPT_DEBUG_NET },
                  { "debug-ssl",   optional_argument,       NULL, CMD_OPT_DEBUG_SSL },
                  { "debug-rtmp",  optional_argument,       NULL, CMD_OPT_DEBUG_RTMP },
                  { "debug-rtsp",  optional_argument,       NULL, CMD_OPT_DEBUG_RTSP },
                  { "home",        required_argument,       NULL, CMD_OPT_HOME },
+                 { "httplog",     optional_argument,       NULL, CMD_OPT_HTTPLOG },
                  { "listen",      required_argument,       NULL, CMD_OPT_LISTEN},
                  //{ "logtime",     no_argument,             NULL, CMD_OPT_LOGTIME },
                  { "logfile",     required_argument,       NULL, CMD_OPT_LOGPATH },
+                 { "load-balancer",required_argument,      NULL, CMD_OPT_LBNODESFILE },
+                 { "lb-config",   required_argument,       NULL, CMD_OPT_LBNODESFILE },
                  { "log",         required_argument,       NULL, CMD_OPT_LOGPATH },
                  { "media",       required_argument,       NULL, CMD_OPT_DIR },
                  { "nodb",        no_argument,             NULL, CMD_OPT_NODB },
@@ -239,20 +249,31 @@ int main(int argc, char *argv[]) {
       case CMD_OPT_DEBUG:
         if(!strcasecmp("auth", optarg)) {
           g_debug_flags |= VSX_DEBUG_FLAG_AUTH;
+        } else if(!strcasecmp("dash", optarg)) {
+          g_debug_flags |= VSX_DEBUG_FLAG_DASH;
         } else if(!strcasecmp("http", optarg)) {
           g_debug_flags |= VSX_DEBUG_FLAG_HTTP;
         } else if(!strcasecmp("live", optarg)) {
           g_debug_flags |= VSX_DEBUG_FLAG_LIVE;
         } else if(!strcasecmp("mgr", optarg)) {
           g_debug_flags |= VSX_DEBUG_FLAG_MGR;
+        } else if(!strcasecmp("net", optarg)) {
+          g_debug_flags |= VSX_DEBUG_FLAG_NET;
         } else if(!strcasecmp("metafile", optarg)) {
           g_debug_flags |= VSX_DEBUG_FLAG_METAFILE;
+        } else if(!strcasecmp("rtmp", optarg)) {
+          g_debug_flags |= VSX_DEBUG_FLAG_RTMP;
+        } else if(!strcasecmp("rtsp", optarg)) {
+          g_debug_flags |= VSX_DEBUG_FLAG_RTSP;
         } else if(!strcasecmp("ssl", optarg)) {
           g_debug_flags |= VSX_DEBUG_FLAG_SSL;
         }
         break;
       case CMD_OPT_DEBUG_AUTH:
         g_debug_flags |= VSX_DEBUG_FLAG_AUTH;
+        break;
+      case CMD_OPT_DEBUG_DASH:
+        g_debug_flags |= VSX_DEBUG_FLAG_DASH;
         break;
       case CMD_OPT_DEBUG_HTTP:
         g_debug_flags |= VSX_DEBUG_FLAG_HTTP;
@@ -262,6 +283,9 @@ int main(int argc, char *argv[]) {
         break;
       case CMD_OPT_DEBUG_MGR:
         g_debug_flags |= VSX_DEBUG_FLAG_MGR;
+        break;
+      case CMD_OPT_DEBUG_NET:
+        g_debug_flags |= VSX_DEBUG_FLAG_NET;
         break;
       case CMD_OPT_DEBUG_METAFILE:
         g_debug_flags |= VSX_DEBUG_FLAG_METAFILE;
@@ -278,6 +302,9 @@ int main(int argc, char *argv[]) {
       case CMD_OPT_HOME:
         params.homedir = optarg;
         break;
+      case CMD_OPT_HTTPLOG:
+        params.httpaccesslogfile = optarg ? optarg : DEFAULT_HTTPACCESS_LOGPATH;;
+        break;
       case CMD_OPT_LISTEN:
         if(idxListen < sizeof(params.listenaddr) / sizeof(params.listenaddr[0])) {
           params.listenaddr[idxListen] = optarg;
@@ -289,6 +316,9 @@ int main(int argc, char *argv[]) {
       //  break;
       case CMD_OPT_LOGPATH:
         params.logfile = optarg;
+        break;
+      case CMD_OPT_LBNODESFILE:
+        params.lbnodesfile = optarg;
         break;
       case CMD_OPT_NODB:
         params.nodb = 1;

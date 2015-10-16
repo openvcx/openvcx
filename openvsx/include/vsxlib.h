@@ -781,6 +781,12 @@ typedef struct VSXLIB_STREAM_PARAMS {
    */
   unsigned int logrollmax;
 
+  /**
+   *
+   * http access log file path
+   *
+   */
+  const char *httpaccesslogfile;
 
   /**
    *

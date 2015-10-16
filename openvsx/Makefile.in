@@ -303,9 +303,11 @@ OBJS_MGR= \
           ${BUILD_DIR}/xcode/xcode_vid_h264_util.o \
           ${BUILD_DIR}/xcode/xcode_parse.o \
 	  ${BUILD_DIR}/mgr/srvmgr.o \
+	  ${BUILD_DIR}/mgr/srvstart.o \
 	  ${BUILD_DIR}/mgr/srvproxy.o \
 	  ${BUILD_DIR}/mgr/procdb.o \
 	  ${BUILD_DIR}/mgr/procutil.o \
+	  ${BUILD_DIR}/mgr/mgrnode.o \
           ${BUILD_DIR}/mgr/dummy_symbols.o
 
 LIBS_MGR= ${LIBS} 
@@ -477,7 +479,7 @@ ${PRODNAME}-wp: ${MGR}
 
 ${MGR}: ${SUB_LIBS} ${BUILD_DIR}/mgr/mainmgr.o  ${OBJS_MGR} ${OBJS_LICENSE} 
 	${CC} ${LDFLAGS} ${LIBS_MGR} -o ${EXEPATH_MGR} ${BUILD_DIR}/mgr/mainmgr.o \
-	      ${OBJS_MGR} ${OBJS_MGR_DEP} ${OBJS_LICENSE} ${LIBS_MGR_EXT}
+	      ${OBJS_MGR} ${OBJS_MGR_DEP} ${OBJS_LICENSE} ${LIBS_DBGMALLOC} ${LIBS_MGR_EXT}
             ifneq ($(CFG_GDB),1)
 	      @cp ${EXEPATH_MGR} ${EXEPATH_MGR}_g 
 	      ${STRIP} ${EXEPATH_MGR} 

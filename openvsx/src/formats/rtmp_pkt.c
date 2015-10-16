@@ -980,7 +980,7 @@ int rtmp_send_chunkdata(RTMP_CTXT_T *pRtmp, const uint8_t rtmpStreamIdx,
 
     VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_send_chunkdata [%d]/%d, chunksz: %d, send len:%d"), 
                         idxData, lenData, pRtmp->chunkSzOut, lenXmit);
-                    LOGHEXT_DEBUGV(&pData[idxData], lenXmit); );
+                    LOGHEXT_DEBUGVV(&pData[idxData], lenXmit); );
 
     if((rc = rtmp_sendbuf(pRtmp, &pData[idxData], lenXmit, "rtmp_send_chunkdata")) < 0) {
       return rc;
@@ -1008,7 +1008,7 @@ int rtmp_cbReadDataNet(void *pArg, unsigned char *pData, unsigned int len) {
   }
 
   VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_read len:%d/%d"), rc, len);
-                  LOGHEXT_DEBUG(pData, rc); );
+                  LOGHEXT_DEBUGV(pData, rc); );
 
   pRtmp->bytesRead += len;
 
@@ -1049,7 +1049,7 @@ int rtmp_parse_readpkt_full(RTMP_CTXT_T *pRtmp, int needpacket, FLV_AMF_T *pAmfL
     case RTMP_CONTENT_TYPE_INVOKE:
     case RTMP_CONTENT_TYPE_MSG:
     case RTMP_CONTENT_TYPE_NOTIFY:
-      //VSX_DEBUG_RTMP( LOGHEXT_DEBUG(pRtmp->in.buf, pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt) );
+      //VSX_DEBUG_RTMP( LOGHEXT_DEBUGVV(pRtmp->in.buf, pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt) );
       rtmp_parse_invoke(pRtmp, pAmfList);
       rc = 1;
       break;
@@ -1070,7 +1070,7 @@ int rtmp_parse_readpkt_full(RTMP_CTXT_T *pRtmp, int needpacket, FLV_AMF_T *pAmfL
       break;
     default:
       VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - contentType: 0x%x"), pRtmp->pkt[pRtmp->streamIdx].hdr.contentType);
-                      LOGHEXT_DEBUG(pRtmp->in.buf, pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt) );
+                      LOGHEXT_DEBUGV(pRtmp->in.buf, pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt) );
       break;
   }
 
@@ -1089,7 +1089,7 @@ int rtmp_sendbuf(RTMP_CTXT_T *pRtmp, const unsigned char *buf, unsigned int sz, 
   }
 
   VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - %s send: %d"), descr ? descr : "", sz);
-                  LOGHEXT_DEBUG(buf, sz); );
+                  LOGHEXT_DEBUGV(buf, sz); );
 
   if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, buf, sz)) < 0) {
     return -1;

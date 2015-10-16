@@ -297,7 +297,7 @@ int rtmp_parse_readpkt(RTMP_CTXT_T *pRtmp) {
        pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt, pRtmp->pkt[pRtmp->streamIdx].hdr.contentType,
        pRtmp->pkt[pRtmp->streamIdx].hdr.id, pRtmp->pkt[pRtmp->streamIdx].hdr.ts,
        pRtmp->pkt[pRtmp->streamIdx].tsAbsolute, pRtmp->pkt[pRtmp->streamIdx].hdr.dest, pRtmp->pkt[pRtmp->streamIdx].szHdr0);
-    LOGHEXT_DEBUGV(pRtmp->in.buf, pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt > 16 ? 16 : pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt);
+    LOGHEXT_DEBUGVV(pRtmp->in.buf, pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt > 16 ? 16 : pRtmp->pkt[pRtmp->streamIdx].hdr.szPkt);
   );
 
   //

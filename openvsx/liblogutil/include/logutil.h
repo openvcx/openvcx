@@ -48,7 +48,7 @@
 
 #define LOG_OUTPUT_PRINT_DATE               0x0100
 #define LOG_OUTPUT_PRINT_SEV                0x0200
-#define LOG_OUTPUT_PRINT_SEV_ERROR          0x0400
+#define LOG_OUTPUT_PRINT_SEV_WARNING        0x0400
 #define LOG_OUTPUT_PRINT_PID                0x0800
 #define LOG_OUTPUT_PRINT_TID                0x1000
 #define LOG_OUTPUT_PRINT_DATE_STDERR        0x2000

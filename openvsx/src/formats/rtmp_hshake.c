@@ -351,7 +351,7 @@ static int verifydigest(const unsigned char *pIn, RTMP_OFFSET_TYPES_T *pTypes,
   } else {
 
   VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - verifydigest client signature offset: %d"), offset);
-                  LOGHEXT_DEBUG(&pIn[offset], 30) );
+                  LOGHEXT_DEBUGV(&pIn[offset], 30) );
 
     if((rc = rtmp_sign(offset, pIn, key, lenKey, digest)) < 0) {
       return rc;
@@ -373,7 +373,7 @@ static int verifydigest(const unsigned char *pIn, RTMP_OFFSET_TYPES_T *pTypes,
     }
 
     VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - verifydigest client secondary signature offset: %d"), offset);
-                    LOGHEXT_DEBUG(&pIn[offset], 30) );
+                    LOGHEXT_DEBUGV(&pIn[offset], 30) );
 
     if((rtmp_sign(offset, pIn, key, lenKey, digest)) < 0) {
       return rc;
@@ -580,7 +580,7 @@ int rtmp_handshake_srv(RTMP_CTXT_T *pRtmp) {
   }
 
   VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - handshake_srv recv: %d/%d"), rc, RTMP_HANDSHAKE_SZ + 1);
-                  LOGHEXT_DEBUG(buf, RTMP_HANDSHAKE_SZ + 1) );
+                  LOGHEXT_DEBUGVV(buf, RTMP_HANDSHAKE_SZ + 1) );
 
   if(buf[0] != RTMP_HANDSHAKE_HDR) {
     if(!memcmp("POST /fcs/ident2", buf, 16)) {
@@ -614,7 +614,7 @@ int rtmp_handshake_srv(RTMP_CTXT_T *pRtmp) {
   }
 
   VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - handshake_srv recv: %d/%d"), rc, RTMP_HANDSHAKE_SZ);
-                  LOGHEXT_DEBUG(buf, RTMP_HANDSHAKE_SZ) );
+                  LOGHEXT_DEBUGVV(buf, RTMP_HANDSHAKE_SZ) );
 
   //TODO: verify client handshake
   // memcmp(&buf[1], &pRtmp->in.buf[1], RTMP_HANDSHAKE_SZ);
@@ -698,7 +698,7 @@ int rtmp_handshake_cli(RTMP_CTXT_T *pRtmp, int fp9) {
   }
 
   VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - handshake_cli recv: %d/%d"), rc, RTMP_HANDSHAKE_SZ * 2 + 1);
-                  LOGHEXT_DEBUG(pRtmp->in.buf, rc) );
+                  LOGHEXT_DEBUGVV(pRtmp->in.buf, rc) );
 
   if(pRtmp->in.buf[0] != RTMP_HANDSHAKE_HDR) {
     LOG(X_ERROR("RTMP Invalid server handshake header byte 0x%x"), pRtmp->in.buf[0]);

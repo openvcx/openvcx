@@ -85,6 +85,7 @@
 #define VSX_URI_ID_PARAM          "id_"
 #define VSX_URI_TOKEN_QUERY_PARAM "tk"
 #define VSX_URI_TOKEN_PARAM       VSX_URI_TOKEN_QUERY_PARAM"_"
+#define VSX_URI_CHECK_PARAM       "check"
 
 #if defined(VSX_HAVE_SERVERMODE) 
 

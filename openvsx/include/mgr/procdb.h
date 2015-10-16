@@ -67,6 +67,7 @@ typedef struct SYS_PROC {
 
 typedef struct SYS_PROCLIST {
   SYS_PROC_T           *procs;
+  char                  tid_tag[LOGUTIL_TAG_LENGTH];
   int                   runMonitor;
   unsigned int          pollIntervalMs;
   pthread_mutex_t       mtx;

@@ -1745,7 +1745,7 @@ int main(int argc, char *argv[]) {
         streamParams.logmaxsz = (unsigned int) strutil_read_numeric(optarg, 0, 0, 0);
         break;
       case CMD_OPT_HTTPLOG:
-        g_usehttplog = 1;
+        streamParams.httpaccesslogfile = optarg ? optarg : DEFAULT_HTTPACCESS_LOGPATH;
         break;
       case CMD_OPT_LOOP:
         streamParams.loop = 1;

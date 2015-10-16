@@ -97,6 +97,7 @@
 #define SRV_CONF_KEY_LOGFILE               "logFile"
 #define SRV_CONF_KEY_LOGFILE_MAXSZ         "logFileMaxSize"
 #define SRV_CONF_KEY_LOGFILE_COUNT         "logFileMaxCount"
+#define SRV_CONF_KEY_HTTPACCESSLOGFILE     "httpAccessLogFile"
 #define SRV_CONF_KEY_MAXCONN               "maxConn"
 #define SRV_CONF_KEY_MEDIADIR              "media"
 #define SRV_CONF_KEY_MKVLIVEMAX            "MKVLiveMax"

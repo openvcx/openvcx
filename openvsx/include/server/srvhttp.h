@@ -91,6 +91,7 @@ const char *http_lookup_statuscode(enum HTTP_STATUS statusCode);
 int http_format_date(char *buf, unsigned int len, int logfmt);
 int http_log(const SOCKET_DESCR_T *pSd, const HTTP_REQ_T *pReq,
              enum HTTP_STATUS statusCode, FILE_OFFSET_T len);
+int http_log_setfile(const char *p);
 char *http_make_etag(const char *filepath, char *etagbuf, unsigned int szetagbuf);
 
 int http_check_symlink(const struct CLIENT_CONN *pConn, const char *path);

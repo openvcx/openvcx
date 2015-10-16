@@ -42,125 +42,18 @@ typedef struct HTTPLIVE_CLIENT {
   int                     running;
 } HTTPLIVE_CLIENT_T;
 
-unsigned char *http_get_contentlen_start(HTTP_RESP_T *pHttpResp, 
-                                    HTTP_PARSE_CTXT_T *pHdrCtxt,
-                                    unsigned char *pbuf, unsigned int szbuf,
-                                    int verifybufsz,
-                                    unsigned int *pcontentLen) {
-  const char *p;
-  int contentLen = 0;
-  unsigned int consumed = 0;
-  unsigned char *pdata = NULL;
-
-  if((p = conf_find_keyval(pHttpResp->hdrPairs, HTTP_HDR_CONTENT_LEN))) {
-    contentLen = atoi(p);
-  }
-
-  if(contentLen <= 0) {
-    LOG(X_ERROR("%s not found in response"), HTTP_HDR_CONTENT_LEN);
-  } else if(verifybufsz && (unsigned int) contentLen >= szbuf) {
-    LOG(X_ERROR("Input buffer size too small %d / %d"), szbuf, contentLen);
-  } else if(pHdrCtxt->idxbuf > pHdrCtxt->hdrslen) {
-
-    if((consumed = pHdrCtxt->idxbuf - pHdrCtxt->hdrslen) < szbuf) {
-      if((char *) pbuf != pHdrCtxt->pbuf) {
-        memcpy(pbuf, &pHdrCtxt->pbuf[pHdrCtxt->hdrslen], consumed);
-        pdata = pbuf;
-      } else {
-        pdata = &pbuf[pHdrCtxt->hdrslen];
-      }
-    } else {
-      LOG(X_ERROR("Input buffer size too small %d / %d"), szbuf, contentLen);
-    }
-
-  } else if(pHdrCtxt->idxbuf == pHdrCtxt->hdrslen) {
-    pdata = pbuf;
-  }
-
-  if(pdata && pcontentLen) {
-    *pcontentLen = contentLen;
-  }
-
-  return pdata;
-}
-
+/*
 static const char *get_m3u8(CAP_ASYNC_DESCR_T *pCfg,
                          const char *puri,
                          HTTP_RESP_T *pHttpResp,
                          HTTP_PARSE_CTXT_T *pHdrCtxt,
                          unsigned char *pbuf, unsigned int szbuf) {
-  int sz = 0;
-  struct timeval tv0, tv1;
-  unsigned int consumed = 0;
-  unsigned int contentLen = 0;
-  unsigned int tmtms = 0;
-  unsigned char *pdata = NULL;
-  char tmp[128];
 
-  gettimeofday(&tv0, NULL);
-
-  //fprintf(stderr, "GET M3U... puri:'%s', hdrslen:%d\n", puri, pHdrCtxt->hdrslen);
-
-  if(pHdrCtxt->hdrslen == 0) {
-
-    if((httpcli_gethdrs(pHdrCtxt, pHttpResp, (const struct sockaddr *) &pCfg->pSockList->salist[0], puri,
-          http_getConnTypeStr(HTTP_CONN_TYPE_CLOSE), 0, 0, pCfg->pcommon->addrsExtHost[0], NULL)) < 0) {
-      return NULL;
-    }
-
-  }
-
-  if((pdata = http_get_contentlen_start(pHttpResp, pHdrCtxt, pbuf, szbuf, 1, &contentLen))) {
-    consumed = pHdrCtxt->idxbuf - pHdrCtxt->hdrslen;
-  }
-
-  if(pdata && net_setsocknonblock(NETIOSOCK_FD(pCfg->pSockList->netsockets[0]), 1) < 0) {
- 
-    pdata = NULL;
-  }
-
-//fprintf(stderr, "NET_RECV in m3u... %d < %d idxbuf:%d hdrslen:%d pdata:0x%x\n", consumed, contentLen, pHdrCtxt->idxbuf, pHdrCtxt->hdrslen, pdata);
-
-  while(pdata && consumed < contentLen && !g_proc_exit) {
-
-    if((sz = netio_recvnb(&pCfg->pSockList->netsockets[0],
-                          (unsigned char *) &pdata[consumed],
-                          contentLen - consumed, 500)) > 0) {
-      consumed += sz;
-    }
-//fprintf(stderr, "NET REceiving... %d < %d, %d tmtms:%d\n", consumed, contentLen, sz, tmtms);
-    gettimeofday(&tv1, NULL);
-    if(tmtms > 0 && consumed < contentLen && TIME_TV_DIFF_MS(tv1, tv0) > (unsigned int) tmtms) {
-      LOG(X_WARNING("HTTP %s:%d%s timeout %d ms exceeded"),
-           FORMAT_NETADDR(pCfg->pSockList->salist[0], tmp, sizeof(tmp)),
-           ntohs(INET_PORT(pCfg->pSockList->salist[0])), puri, tmtms);
-      pdata = NULL;
-      break;
-    }
-  }
-
-  if(pdata && contentLen > 0 && consumed >= contentLen) {
-    pdata[consumed] = '\0';
-  } else {
-    pdata = NULL;
-  }
-
-  //fprintf(stderr, "GOT m3u...0x%x %d < %d\n", pdata, consumed, contentLen);avc_dumpHex(stderr, pdata, consumed, 1);
-  return (const char *) pdata;
+  return (const char *) httpcli_loadpage(puri, pbuf, &szbuf, &pCfg->pSockList->netsockets[0], 
+                                         (const struct sockaddr *) &pCfg->pSockList->salist[0], 0, 
+                                         pHttpResp, pHdrCtxt, pCfg->pcommon->addrsExtHost[0]);
 }
-
-const char *http_get_doc(CAP_ASYNC_DESCR_T *pCfg,
-                         const char *puri,
-                         HTTP_RESP_T *pHttpResp,
-                         HTTP_PARSE_CTXT_T *pHdrCtxt,
-                         unsigned char *pbuf, unsigned int szbuf) {
-
-  if(!pCfg || !pCfg->pSockList || !puri || !pHttpResp || !pHdrCtxt || !pbuf) {
-    return NULL;
-  }
-
-  return get_m3u8(pCfg, puri, pHttpResp, pHdrCtxt, pbuf, szbuf);
-}
+*/
 
 static int get_index(const char *path) {
   unsigned int idx = 0;
@@ -276,7 +169,7 @@ static int get_ts(HTTPLIVE_CLIENT_T *pClient, const char *puri) {
     rc = -1;
   }
 
-  if(!(pdata = http_get_contentlen_start(&httpResp, &hdrCtxt, buf, sizeof(buf), 
+  if(!(pdata = httpcli_get_contentlen_start(&httpResp, &hdrCtxt, buf, sizeof(buf), 
                                     0, &contentLen))) {
     rc = -1;
   }
@@ -321,6 +214,7 @@ static void httplive_mediaproc(void *pArg) {
   const char *p;
   const char *puri = NULL;
   char path[VSX_MAX_PATH_LEN];
+  unsigned int tmtms = 0;
 
   pClient->running = 0;
 
@@ -366,7 +260,7 @@ static void httplive_mediaproc(void *pArg) {
       //fprintf(stderr, "----MEDIA GET for '%s' '%s'\n", path, puri);
 
         if((rc = httpcli_connect(&pClient->netsock, (const struct sockaddr *) &pClient->sa, 
-                                "HTTPLive media thread")) < 0) {
+                                tmtms, "HTTPLive media thread")) < 0) {
           break;
         }
 
@@ -408,11 +302,13 @@ int http_gethttplive(CAP_ASYNC_DESCR_T *pCfg,
   char *path;
   const char *pbuf = pHdrCtxt->pbuf;
   unsigned int szbuf = pHdrCtxt->szbuf;
+  unsigned int szcontent;
   const char *pm3ubuf;
   pthread_t ptd;
   pthread_attr_t attr;
   HTTPLIVE_CLIENT_T client;
   int highestIdx, lowestIdx, firstIdx;
+  unsigned int tmtms = 0;
 
   memset(&client, 0, sizeof(client));
   client.pCfg = pCfg;
@@ -431,8 +327,8 @@ int http_gethttplive(CAP_ASYNC_DESCR_T *pCfg,
     if(NETIOSOCK_FD(pCfg->pSockList->netsockets[0]) == INVALID_SOCKET) {
 
 //fprintf(stderr, "GOING TO CONNECT FOR M3U...\n");
-      if((rc = httpcli_connect(&pCfg->pSockList->netsockets[0], 
-                     (const struct sockaddr *) &pCfg->pSockList->salist[0], "HTTPLive playlist thread")) < 0) {
+      if((rc = httpcli_connect(&pCfg->pSockList->netsockets[0], (const struct sockaddr *) 
+                               &pCfg->pSockList->salist[0], tmtms, "HTTPLive playlist thread")) < 0) {
         break;
       }
 
@@ -441,7 +337,7 @@ int http_gethttplive(CAP_ASYNC_DESCR_T *pCfg,
       pHdrCtxt->pnetsock = &pCfg->pSockList->netsockets[0];
       pHdrCtxt->pbuf = pbuf;
       pHdrCtxt->szbuf = szbuf;
-      pHdrCtxt->tmtms = 0;
+      pHdrCtxt->tmtms = tmtms;
     }
 
     if((rc = mediadb_getdirlen(puri)) > 0) {
@@ -451,8 +347,17 @@ int http_gethttplive(CAP_ASYNC_DESCR_T *pCfg,
       memcpy(client.uriprefix, puri, rc);
     }
 
-    if((pm3ubuf = get_m3u8(pCfg, puri, pHttpResp, pHdrCtxt, (unsigned char *) pbuf, 
-                           szbuf))) {
+    //if((pm3ubuf = get_m3u8(pCfg, puri, pHttpResp, pHdrCtxt, (unsigned char *) pbuf, szbuf))) {
+
+    //
+    // Get m3u8
+    //
+    szcontent = szbuf;
+    if((pm3ubuf = (const char *) httpcli_loadpagecontent(puri, (unsigned char *) pbuf, &szcontent, 
+                                                  &pCfg->pSockList->netsockets[0], 
+                                                  (const struct sockaddr *) &pCfg->pSockList->salist[0], 0, 
+                                                  pHttpResp, pHdrCtxt, (const char *) pCfg->pcommon->addrsExtHost[0]))) {
+
       m3u_free(&client.pl, 0);
       memset(&client.pl, 0, sizeof(client.pl));
 

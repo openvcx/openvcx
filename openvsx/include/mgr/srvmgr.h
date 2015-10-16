@@ -27,6 +27,7 @@
 
 #include "unixcompat.h"
 #include "mgr/procdb.h"
+#include "mgr/mgrnode.h"
 
 #define MGR_CONF_FILE                   "vsxwp.conf"
 
@@ -37,6 +38,7 @@
 #define SRV_CONF_KEY_MAX_MBPS           "maxMacroBlocks"
 #define SRV_CONF_KEY_EXPIRE_CHILD_SEC   "expireSec"
 #define SRV_CONF_KEY_DISABLE_LISTING    "disableListing"
+#define SRV_CONF_KEY_LBNODES_CONF       "LBNodesConfig"
 
 #define MGR_CONNECTIONS_MAX        500 
 #define MGR_CONNECTIONS_DEFAULT    50 
@@ -78,6 +80,7 @@ typedef enum MEDIA_ACTION {
   MEDIA_ACTION_INDEX_FILELIST    = 11,  // '/' index html file for '/list'
   MEDIA_ACTION_CHECK_TYPE        = 12,  // web service call to query properties about resource
   MEDIA_ACTION_CHECK_EXISTS      = 13,
+  MEDIA_ACTION_STATUS            = 14,
 } MEDIA_ACTION_T;
 
 
@@ -89,6 +92,8 @@ typedef struct SRV_MGR_PARAMS {
   char                    *dbdir;
   char                    *curdir;
   char                    *logfile;
+  const char              *lbnodesfile;
+  const char              *httpaccesslogfile;
   int                      nodb;
   int                      disable_root_dirlist;
   SRV_START_CFG_T         *pCfg;
@@ -100,6 +105,7 @@ typedef struct SRV_MGR_START_CFG {
   const char                   *plaunchpath;
   SYS_PROCLIST_T               *pProcList;
   TIME_VAL                     *ptmstart;
+  MGR_NODE_LIST_T              *pLbNodes;
   LIC_INFO_T                   *plic;
 
   struct SRV_MGR_LISTENER_CFG  *pListenerRtmpProxy;

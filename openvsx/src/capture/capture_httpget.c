@@ -88,7 +88,7 @@ int connect_with_retry(CONNECT_RETRY_CTXT_T *pRetryCtxt) {
     rccb = 0;
 
     if((rcconn = httpcli_connect(pRetryCtxt->pnetsock, (const struct sockaddr *) pRetryCtxt->psa, 
-                                 pRetryCtxt->connectDescr)) < 0) {
+                                 pRetryCtxt->tmtms, pRetryCtxt->connectDescr)) < 0) {
 
       if(pRetryCtxt->pAuthCliCtxt && consecunauth > 0) {
         pRetryCtxt->pAuthCliCtxt->authorization[0] = '\0';

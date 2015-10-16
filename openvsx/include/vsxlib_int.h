@@ -74,6 +74,7 @@
 #define STREAM_IDX_AUD              1
 
 #define DEFAULT_VSX_LOGPATH              "log/vsx.log"
+#define DEFAULT_HTTPACCESS_LOGPATH       "log/access.log"
 
 //
 // Startup parameter config values

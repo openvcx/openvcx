@@ -31,9 +31,9 @@ static int parseIpPortStr(const char *localAddrStr,
 
   size_t numPortsAdded = 0; 
   int rc = 0;
-  char host[256];
-  char ports[256];
-  char uri[256];
+  char host[512];
+  char ports[128];
+  char uri[512];
 
   host[0] = '\0';
   ports[0] = '\0';

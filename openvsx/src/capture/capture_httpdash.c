@@ -44,7 +44,7 @@ typedef struct HTTPDASH_CLIENT {
   pthread_mutex_t         mtx;
 } HTTPDASH_CLIENT_T;
 
-static int get_moof(HTTPDASH_CLIENT_T *pClient, const char *puri, const char *pathOut) {
+static int get_moof(HTTPDASH_CLIENT_T *pClient, const char *puri, const char *pathOut, unsigned int tmtms) {
   int rc = 0;
   HTTP_PARSE_CTXT_T hdrCtxt;
   HTTP_RESP_T httpResp;
@@ -60,29 +60,13 @@ static int get_moof(HTTPDASH_CLIENT_T *pClient, const char *puri, const char *pa
     snprintf(fulluri, sizeof(fulluri), "%s%s", pClient->uriprefix, puri);
     puri = fulluri;
   }
-/*
-  if(http_req_send(&pClient->netsock, &pClient->sa, puri,
-       http_getConnTypeStr(HTTP_CONN_TYPE_KEEPALIVE), 0, 0, pClient->hostbuf) < 0) {
-    return -1;
-  }
 
   memset(&hdrCtxt, 0, sizeof(hdrCtxt));
   memset(&httpResp, 0, sizeof(httpResp));
   hdrCtxt.pnetsock = &pClient->netsock;
   hdrCtxt.pbuf = (char *) buf;
   hdrCtxt.szbuf = sizeof(buf);
-  hdrCtxt.tmtms = 0;
-
-  if((rc = http_req_queryhdrs(&hdrCtxt, &httpResp)) < 0) {
-    return -1;
-  }
-*/
-  memset(&hdrCtxt, 0, sizeof(hdrCtxt));
-  memset(&httpResp, 0, sizeof(httpResp));
-  hdrCtxt.pnetsock = &pClient->netsock;
-  hdrCtxt.pbuf = (char *) buf;
-  hdrCtxt.szbuf = sizeof(buf);
-  hdrCtxt.tmtms = 0;
+  hdrCtxt.tmtms = tmtms;
 
   if((httpcli_gethdrs(&hdrCtxt, &httpResp, (const struct sockaddr *) &pClient->sa, puri,
           http_getConnTypeStr(HTTP_CONN_TYPE_KEEPALIVE), 0, 0, pClient->hostbuf, NULL)) < 0) {
@@ -98,7 +82,7 @@ static int get_moof(HTTPDASH_CLIENT_T *pClient, const char *puri, const char *pa
     rc = -1;
   }
 
-  if(!(pdata = http_get_contentlen_start(&httpResp, &hdrCtxt, buf, sizeof(buf),
+  if(!(pdata = httpcli_get_contentlen_start(&httpResp, &hdrCtxt, buf, sizeof(buf),
                                     0, &contentLen))) {
     rc = -1;
   }
@@ -232,6 +216,7 @@ static void httpdash_mediaproc(void *pArg) {
   char stridx[32];
   char urlpath[VSX_MAX_PATH_LEN];
   char fileoutpath[VSX_MAX_PATH_LEN];
+  unsigned int tmtms = 0;
   CAP_HTTP_MP4_STREAM_T  *pCapHttpMp4Stream = NULL;
 
   pClient->running = 0;
@@ -298,44 +283,14 @@ static void httpdash_mediaproc(void *pArg) {
         fprintf(stderr, "----DASH MEDIA GET for '%s' '%s'\n", urlpath, puri);
 
         if((rc = httpcli_connect(&pClient->netsock, (const struct sockaddr *) &pClient->sa, 
-                                  "DASH media thread")) < 0) {
+                                 tmtms, "DASH media thread")) < 0) {
           break;
         }
-/*
-        if((NETIOSOCK_FD(pClient->netsock) = net_opensocket(SOCK_STREAM,
-                          SOCK_RCVBUFSZ_DEFAULT, 0, NULL)) == INVALID_SOCKET) {
-          rc = -1;
-          break;
-        }
-
-        LOG(X_DEBUG("DASH media thread connecting to %s:%d"), inet_ntoa(pClient->sa.sin_addr),
-                  ntohs(pClient->sa.sin_port));
-
-        if((rc = net_connect(NETIOSOCK_FD(pClient->netsock) , &pClient->sa)) < 0) {
-          rc = -1;
-          break;
-        }
-
-        //
-        // Handle SSL client connection
-        //
-        if(rc == 0 && (pClient->netsock.flags & NETIO_FLAG_SSL_TLS)){
-          if((rc = vsxlib_ssl_initclient(&pClient->netsock)) < 0 ||
-             (rc = netio_connectssl(&pClient->netsock)) < 0) {
-            netio_closesocket(&pClient->netsock);
-            break;
-          }
-        }
-
-        LOG(X_DEBUG("DASH media thread connected %sto %s:%d"),
-           (pClient->netsock.flags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : "",
-           inet_ntoa(pClient->sa.sin_addr), ntohs(pClient->sa.sin_port));
-*/
       }
 
       //fprintf(stderr, "will call get_moof puri:'%s', idx:%d, next:%d\n", puri, pClient->curidx, pClient->nextidx);
 
-      if((rc = get_moof(pClient, puri, fileoutpath)) >= 0) {
+      if((rc = get_moof(pClient, puri, fileoutpath, tmtms)) >= 0) {
 
         if(getInitializer) {
           haveInitializer = 1;
@@ -379,12 +334,14 @@ int http_gethttpdash(CAP_ASYNC_DESCR_T *pCfg,
   char *path;
   const char *pbuf = pHdrCtxt->pbuf;
   unsigned int szbuf = pHdrCtxt->szbuf;
+  unsigned int szcontent;
   const char *pmpdbuf;
   pthread_t ptd;
   pthread_attr_t attr;
   HTTPDASH_CLIENT_T client;
   SOCKET_LIST_T sockList;
   int highestIdx, lowestIdx, firstIdx;
+  unsigned int tmtms = 0;
 
   if(!pCfg || !pCfg->pUserData || !puri || !pHttpResp || !pHdrCtxt) {
     return -1;
@@ -407,39 +364,16 @@ int http_gethttpdash(CAP_ASYNC_DESCR_T *pCfg,
 //fprintf(stderr, "GOING TO CONNECT FOR DASH PLAYLIST...\n");
 
       if((rc = httpcli_connect(&pCfg->pSockList->netsockets[0], (const struct sockaddr *) 
-                               &pCfg->pSockList->salist[0], "DASH playlist thread")) < 0) {
+                               &pCfg->pSockList->salist[0], tmtms, "DASH playlist thread")) < 0) {
         break;
       }
-
-/*
-      if((NETIOSOCK_FD(pCfg->pSockList->netsockets[0]) = net_opensocket(SOCK_STREAM,
-                        SOCK_RCVBUFSZ_DEFAULT, 0, NULL)) == INVALID_SOCKET) {
-        rc = -1;
-        break;
-      }
-
-      if((rc = net_connect(NETIOSOCK_FD(pCfg->pSockList->netsockets[0]) , &pCfg->pSockList->salist[0])) < 0) {
-        break;
-      }
-
-      //
-      // Handle SSL client connection
-      //
-      if((pCfg->pSockList->netsockets[0].flags & NETIO_FLAG_SSL_TLS)){
-        if((rc = vsxlib_ssl_initclient(&pCfg->pSockList->netsockets[0])) < 0 ||
-           (rc = netio_connectssl(&pCfg->pSockList->netsockets[0])) < 0) {
-          netio_closesocket(&pCfg->pSockList->netsockets[0]);
-          break;
-        }
-      }
-*/
 
       memset(pHdrCtxt, 0, sizeof(HTTP_PARSE_CTXT_T));
       memset(pHttpResp, 0, sizeof(HTTP_RESP_T));
       pHdrCtxt->pnetsock = &pCfg->pSockList->netsockets[0];
       pHdrCtxt->pbuf = pbuf;
       pHdrCtxt->szbuf = szbuf;
-      pHdrCtxt->tmtms = 0;
+      pHdrCtxt->tmtms = tmtms;
     }
 
     if((rc = mediadb_getdirlen(puri)) > 0) {
@@ -452,7 +386,12 @@ int http_gethttpdash(CAP_ASYNC_DESCR_T *pCfg,
     //fprintf(stderr, "calling http_get_doc '%s'\n", puri);
 
     // TODO: this may need to be a bigger buffer for large XML mpd files
-    if((pmpdbuf = http_get_doc(pCfg, puri, pHttpResp, pHdrCtxt, (unsigned char *) pbuf, szbuf))) {
+    //if((pmpdbuf = http_get_doc(pCfg, puri, pHttpResp, pHdrCtxt, (unsigned char *) pbuf, szbuf))) {
+    szcontent = szbuf;
+    if((pmpdbuf = (const char *) httpcli_loadpagecontent(puri, (unsigned char *) pbuf, &szcontent, 
+                                   &pCfg->pSockList->netsockets[0], 
+                                   (const struct sockaddr *) &pCfg->pSockList->salist[0], 0, 
+                                   pHttpResp, pHdrCtxt, pCfg->pcommon->addrsExtHost[0]))) {
 
       mpdpl_free(&client.pl);
       memset(&client.pl, 0, sizeof(client.pl));
@@ -524,7 +463,7 @@ int http_gethttpdash(CAP_ASYNC_DESCR_T *pCfg,
     netio_closesocket(&pCfg->pSockList->netsockets[0]);
 
     if(rc >= 0) {
-fprintf(stderr, "MPD SLEEPING FOR %d\n", client.pl.targetDuration);
+      //fprintf(stderr, "MPD SLEEPING FOR %d\n", client.pl.targetDuration);
       if(client.pl.targetDuration > 0) {
         sleep(client.pl.targetDuration);
       } else {

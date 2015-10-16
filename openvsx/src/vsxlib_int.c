@@ -116,7 +116,7 @@ int vsxlib_initlog(int verbosity, const char *logfile, const char *homedir,
     //
     logger_AddStderr(S_INFO, 0);
   } else {
-    flags |= LOG_FLAG_USESTDERR | LOG_FLAG_FLUSHOUTPUT | LOG_OUTPUT_PRINT_SEV_ERROR | LOG_FLAG_USELOCKING;
+    flags |= LOG_FLAG_USESTDERR | LOG_FLAG_FLUSHOUTPUT | LOG_OUTPUT_PRINT_SEV_WARNING | LOG_FLAG_USELOCKING;
     logger_Init(NULL, NULL, 0, 0, flags); 
     logger_AddStderr(loglevel, 0);
   }
@@ -635,6 +635,9 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
     pParams->logrollmax = atoi(parg);
   }
 
+  if(pParams->httpaccesslogfile == NULL) {
+    pParams->httpaccesslogfile = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_HTTPACCESSLOGFILE);
+  }
 
   //
   // Get any xcoder args

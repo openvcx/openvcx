@@ -215,7 +215,7 @@ int logger_SetFile(const char *fileDir,
   pLogProperties->g_maxFileSz = maxFileSz;
   // XOR with flags suitable for fileoutput 
   pLogProperties->g_log_flags |= LOG_FLAG_USEFILEOUTPUT | (outputFlags & 
-         (LOG_FLAG_USELOCKING | LOG_OUTPUT_PRINT_DATE | LOG_OUTPUT_PRINT_SEV | LOG_OUTPUT_PRINT_SEV_ERROR | 
+         (LOG_FLAG_USELOCKING | LOG_OUTPUT_PRINT_DATE | LOG_OUTPUT_PRINT_SEV | LOG_OUTPUT_PRINT_SEV_WARNING | 
           LOG_OUTPUT_PRINT_PID | LOG_OUTPUT_PRINT_TID | LOG_OUTPUT_PRINT_TAG));
   
 
@@ -430,7 +430,7 @@ static void logger_write_stderr(LOG_PROPERTIES_T *pLogProperties, int sev,
   }
 
   if((pLogProperties->g_log_flags & LOG_OUTPUT_PRINT_SEV) ||
-     ((pLogProperties->g_log_flags & LOG_OUTPUT_PRINT_SEV_ERROR) && sev <= S_ERROR)) {
+     ((pLogProperties->g_log_flags & LOG_OUTPUT_PRINT_SEV_WARNING) && sev <= S_WARNING)) {
     fprintf(stderr, "%s ", logger_getSeverityStr((unsigned short) sev));
   }
 

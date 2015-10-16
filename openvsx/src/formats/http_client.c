@@ -377,7 +377,7 @@ int httpcli_gethdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttpResp,
   return rc;
 }
 
-int httpcli_connect(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa, const char *descr) {
+int httpcli_connect(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa, int tmtms, const char *descr) {
   char tmp[128];
   int rc = 0;
 
@@ -393,8 +393,14 @@ int httpcli_connect(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa, const ch
     return -1;
   }
 
-  if((rc = net_connect(PNETIOSOCK_FD(pnetsock), psa)) < 0) {
-    //netio_closesocket(pnetsock);
+  if((rc = net_connect_tmt(PNETIOSOCK_FD(pnetsock), psa, tmtms)) < 0) {
+    if(tmtms > 0) {
+      //
+      // Close a socket which may have been shutdown or may be trying to connect to a remote host
+      // otherwise the socket can be reused
+      //
+      netio_closesocket(pnetsock);
+    }
     return rc;
   }
 
@@ -412,4 +418,201 @@ int httpcli_connect(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa, const ch
     (pnetsock->flags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : "", FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)));
 
   return rc;
+}
+
+unsigned char *httpcli_get_contentlen_start(HTTP_RESP_T *pHttpResp,
+                                    HTTP_PARSE_CTXT_T *pHdrCtxt,
+                                    unsigned char *pbuf, unsigned int szbuf,
+                                    int verifybufsz,
+                                    unsigned int *pcontentLen) {
+  const char *p;
+  int contentLen = 0;
+  unsigned int consumed = 0;
+  unsigned char *pdata = NULL;
+
+  if((p = conf_find_keyval(pHttpResp->hdrPairs, HTTP_HDR_CONTENT_LEN))) {
+    contentLen = atoi(p);
+  }
+
+  if(contentLen <= 0) {
+    LOG(X_ERROR("%s not found in response"), HTTP_HDR_CONTENT_LEN);
+  } else if(verifybufsz && (unsigned int) contentLen >= szbuf) {
+    LOG(X_ERROR("Input buffer size too small %d / %d"), szbuf, contentLen);
+  } else if(pHdrCtxt->idxbuf > pHdrCtxt->hdrslen) {
+
+    if((consumed = pHdrCtxt->idxbuf - pHdrCtxt->hdrslen) < szbuf) {
+      if((char *) pbuf != pHdrCtxt->pbuf) {
+        memcpy(pbuf, &pHdrCtxt->pbuf[pHdrCtxt->hdrslen], consumed);
+        pdata = pbuf;
+      } else {
+        pdata = &pbuf[pHdrCtxt->hdrslen];
+      }
+    } else {
+      LOG(X_ERROR("Input buffer size too small %d / %d"), szbuf, contentLen);
+    }
+
+  } else if(pHdrCtxt->idxbuf == pHdrCtxt->hdrslen) {
+    pdata = pbuf;
+  }
+
+  if(pdata && pcontentLen) {
+    *pcontentLen = contentLen;
+  }
+
+  return pdata;
+}
+
+const unsigned char *httpcli_getpage(const char *location, const char *puri, 
+                                     unsigned char *pbuf, unsigned int *pszbuf,
+                                     HTTP_STATUS_T *phttpStatus, unsigned int tmtms) {
+  int rc = 0;
+  NETIO_SOCK_T netsock;
+  struct sockaddr_storage sa;
+  unsigned int szbufin;
+  unsigned char *pdata = NULL;
+  uint16_t port;
+  char portstr[128]; 
+  const char *strhost = NULL;
+  char strhostonly[512];
+  HTTP_RESP_T httpResp; 
+  CAPTURE_FILTER_TRANSPORT_T transType = CAPTURE_FILTER_TRANSPORT_UNKNOWN;
+  
+  if(!(strhost = location) || !pbuf || !pszbuf || *pszbuf <= 0) {
+    return NULL;
+  } 
+  if(phttpStatus) {
+    *phttpStatus = 0;
+  }
+
+  szbufin = *pszbuf;
+  *pszbuf = 0;
+
+  if(!puri) {
+    puri = "/";
+  }
+
+  if((transType = capture_parseTransportStr(&strhost)) == CAPTURE_FILTER_TRANSPORT_UNKNOWN) {
+    transType = CAPTURE_FILTER_TRANSPORT_HTTPGET;
+  }
+
+  if(strutil_parseAddress(strhost, strhostonly, sizeof(strhostonly), portstr, sizeof(portstr), NULL, 0) < 0) {
+    return NULL;
+  } else if((port = atoi(portstr)) <= 0) {
+    port = HTTP_PORT_DEFAULT;
+  }
+
+  memset(&sa, 0, sizeof(sa));
+  if((rc = net_resolvehost(strhostonly, &sa)) < 0) {
+  //if((rc = net_getaddress(strhostonly, &sa)) < 0) {
+    return NULL;
+  }
+  INET_PORT(sa) = htons(port);
+
+  memset(&netsock, 0, sizeof(netsock));
+  NETIOSOCK_FD(netsock) = INVALID_SOCKET;
+  if(IS_CAPTURE_FILTER_TRANSPORT_SSL(transType)) {
+    netsock.flags |= NETIO_FLAG_SSL_TLS;  
+  }
+
+  if((rc = httpcli_connect(&netsock, (struct sockaddr *) &sa, tmtms, NULL)) < 0) {
+    netio_closesocket(&netsock);
+    return NULL;
+  }
+
+  memset(&httpResp, 0, sizeof(httpResp));
+
+  if(!(pdata = httpcli_loadpagecontent(puri, pbuf, &szbufin, &netsock,
+                                      (const struct sockaddr *) &sa, tmtms, &httpResp, NULL, location))) {
+  } else {
+    *pszbuf = szbufin;
+  }
+
+  if(phttpStatus) {
+    *phttpStatus = httpResp.statusCode;
+  }
+  netio_closesocket(&netsock);
+
+  return pdata;
+}
+
+unsigned char *httpcli_loadpagecontent(const char *puri, 
+                                unsigned char *pbuf, 
+                                unsigned int *plen,
+                                NETIO_SOCK_T *pnetsock,
+                                const struct sockaddr *psa,
+                                unsigned int tmtms,
+                                HTTP_RESP_T *pHttpResp, 
+                                HTTP_PARSE_CTXT_T *pHdrCtxt, 
+                                const char *hdrhost) {
+  HTTP_RESP_T httpResp;
+  HTTP_PARSE_CTXT_T hdrCtxt;
+  int sz = 0;
+  struct timeval tv0, tv1;
+  unsigned int consumed = 0;
+  unsigned int contentLen = 0;
+  unsigned char *pdata = NULL;
+  char tmp[128];
+
+  if(!puri || !pbuf || !plen || *plen <= 0 || !psa || !pnetsock) {
+    return NULL;
+  }
+
+  if(!pHttpResp) {
+    memset(&httpResp, 0, sizeof(httpResp));
+    pHttpResp = &httpResp;
+  }
+  if(!pHdrCtxt) {
+    memset(&hdrCtxt, 0, sizeof(hdrCtxt));
+    hdrCtxt.pnetsock = pnetsock;
+    hdrCtxt.pbuf = (char *) pbuf;
+    hdrCtxt.szbuf = *plen;
+    hdrCtxt.tmtms = tmtms;
+    pHdrCtxt = &hdrCtxt;
+  }
+
+  VSX_DEBUG_HTTP ( LOG(X_DEBUG("HTTP - Getting URL %s:%d/%s"), 
+                  FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), htons(PINET_PORT(psa)), puri));
+
+  gettimeofday(&tv0, NULL);
+
+  if(pHdrCtxt->hdrslen == 0) {
+
+    if((httpcli_gethdrs(pHdrCtxt, pHttpResp,  psa, puri,
+          http_getConnTypeStr(HTTP_CONN_TYPE_CLOSE), 0, 0, hdrhost, NULL)) < 0) {
+      return NULL;
+    }
+
+  }
+
+  if((pdata = httpcli_get_contentlen_start(pHttpResp, pHdrCtxt, pbuf, *plen, 1, &contentLen))) {
+    consumed = pHdrCtxt->idxbuf - pHdrCtxt->hdrslen;
+  }
+
+  if(pdata && net_setsocknonblock(NETIOSOCK_FD(*pnetsock), 1) < 0) {
+    pdata = NULL;
+  }
+
+  while(pdata && consumed < contentLen && !g_proc_exit) {
+
+    if((sz = netio_recvnb(pnetsock, (unsigned char *) &pdata[consumed], contentLen - consumed, 500)) > 0) {
+      consumed += sz;
+    }
+    gettimeofday(&tv1, NULL);
+    if(tmtms > 0 && consumed < contentLen && TIME_TV_DIFF_MS(tv1, tv0) > (unsigned int) tmtms) {
+      LOG(X_WARNING("HTTP %s:%d%s timeout %d ms exceeded"),
+           FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)), puri, tmtms);
+      pdata = NULL;
+      break;
+    }
+  }
+
+  if(pdata && contentLen > 0 && consumed >= contentLen) {
+    pdata[consumed] = '\0';
+    *plen = consumed;
+  } else {
+    pdata = NULL;
+    *plen = 0;
+  }
+
+  return pdata;
 }

@@ -502,7 +502,7 @@ static int resp_index_file(CLIENT_CONN_T *pConn,
     strerror = tmp;
     rc = -1;
   } else if(!pListenCfg || INET_PORT(pListenCfg->sa) == 0) {
-    LOG(X_ERROR(" address / port substitution not set for %s"), protoUrl);
+    LOG(X_ERROR(" address / port substitution not set for %s, urlCap: 0x%x"), protoUrl, urlCap);
     rc = -1;
   } else {
 

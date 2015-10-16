@@ -267,6 +267,79 @@ int net_recvnb(SOCKET sock, unsigned char *buf, unsigned int len,
   return rc;
 }
 
+int net_connect_tmt(SOCKET sock, const struct sockaddr *psa, unsigned int mstmt) {
+  int rc = 0;
+  struct timeval tv;
+  fd_set fdsetRd, fdsetWr;
+  char tmp[128];
+  int try = 0;
+
+  if(sock == INVALID_SOCKET || !psa) {
+    return -1;
+  } else if(mstmt == 0) {
+    return net_connect(sock, psa);
+  }
+
+  VSX_DEBUG_NET( LOG(X_DEBUG("NET - net_connect family: %d, fd: %d, trying to %s:%d with timeout %d ms"),
+             psa->sa_family, sock, FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)), mstmt) );
+
+  if((rc = net_setsocknonblock(sock, 1)) < 0) {
+    return rc;
+  }
+
+  do {
+
+    if((rc = connect(sock, psa, (socklen_t) INET_SIZE(*psa))) != 0) {
+
+      if(errno == EINPROGRESS) {
+        tv.tv_sec = (mstmt / 1000);
+        tv.tv_usec = (mstmt % 1000) * 1000;
+
+        FD_ZERO(&fdsetRd);
+        FD_SET(sock, &fdsetRd);
+        FD_ZERO(&fdsetWr);
+        FD_SET(sock, &fdsetWr);
+
+        if((rc = select(sock + 1, &fdsetRd, &fdsetWr, NULL, &tv)) > 0) {
+          // call connect again to see if it was succesful 
+          try++;
+          rc = -1;
+        } else if(rc == 0) {
+          // timeout expired
+          rc = -1;
+          errno = ETIMEDOUT;
+          break;
+        } else {
+          // select error
+          break;
+        }
+
+      } else if(errno == EISCONN && try > 0) {
+        // already connected
+        rc = 0;
+        break;
+      } else {
+        // connect failure
+        rc = -1;
+        break;
+      }
+
+    } // end of if((rc = connect...
+
+  } while(rc < 0 && try < 2);
+
+  if(rc < 0) {
+    LOG(X_ERROR("Failed to connect to %s:%d with timeout %u ms "ERRNO_FMT_STR),
+            FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)), mstmt, ERRNO_FMT_ARGS);
+    shutdown(sock, SHUT_RDWR);
+  } else {
+    VSX_DEBUG_NET( LOG(X_DEBUG("NET - net_connect done : %d, fd: %d, connected to %s:%d"),
+                psa->sa_family, sock, FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa))) );
+  }
+
+  return rc;
+}
+
 int net_connect(SOCKET sock, const struct sockaddr *psa) {
   char tmp[128];
 
@@ -279,7 +352,11 @@ int net_connect(SOCKET sock, const struct sockaddr *psa) {
   //
   if(psa->sa_family == AF_UNSPEC) {
     ((struct sockaddr *)  psa)->sa_family = AF_INET;
+    //((struct sockaddr *)  psa)->sa_len = sizeof(struct sockaddr_in);
   }
+
+  VSX_DEBUG_NET( LOG(X_DEBUG("NET - net_connect family: %d, fd: %d, trying to %s:%d"),
+                psa->sa_family, sock, FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa))) );
 
   if(connect(sock, psa, (socklen_t) INET_SIZE(*psa)) < 0) {
 
@@ -288,7 +365,7 @@ int net_connect(SOCKET sock, const struct sockaddr *psa) {
     return -1;
   }
 
-  VSX_DEBUG_NET( LOG(X_DEBUG("NET - net_connect family: %d, fd: %d, connected to %s:%d"),
+  VSX_DEBUG_NET( LOG(X_DEBUG("NET - net_connect done : %d, fd: %d, connected to %s:%d"),
                 psa->sa_family, sock, FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa))) );
 
   return 0;
