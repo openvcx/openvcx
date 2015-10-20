@@ -155,26 +155,27 @@ typedef struct SRV_CTRL {
 
 
 typedef struct CLIENT_CONN {
-  POOL_ELEMENT_T             pool;
-  SRV_CTRL_T                *ppSrvCtrl[2]; //ppSrvCtrl may be NULL if called in context
+  POOL_ELEMENT_T                  pool;
+  SRV_CTRL_T                     *ppSrvCtrl[2]; //ppSrvCtrl may be NULL if called in context
                                        // outside of srv_start_conf, such as cmdline
-  STREAMER_CFG_T            *pStreamerCfg0; // shortcut to ppSrvCtrl[0]->curCfg.streamerCfg
-  STREAMER_CFG_T            *pStreamerCfg1; // shortcut to ppSrvCtrl[1]->curCfg.streamerCfg
-  pthread_mutex_t           *pMtx0;
-  pthread_mutex_t           *pMtx1;
-  pthread_t                  ptd;
-  pthread_attr_t             attr;
-  SOCKET_DESCR_T             sd;
-  //const struct sockaddr    *psrvsaListen; // server tcp listener port
+  STREAMER_CFG_T                 *pStreamerCfg0; // shortcut to ppSrvCtrl[0]->curCfg.streamerCfg
+  STREAMER_CFG_T                 *pStreamerCfg1; // shortcut to ppSrvCtrl[1]->curCfg.streamerCfg
+  pthread_mutex_t                *pMtx0;
+  pthread_mutex_t                *pMtx1;
+  pthread_t                       ptd;
+  pthread_attr_t                  attr;
+  SOCKET_DESCR_T                  sd;
+  //const struct sockaddr        *psrvsaListen; // server tcp listener port
 
   // Digest auth connection specific state
   //char nonce[AUTH_NONCE_MAXLEN];
   //char opaque[AUTH_OPAQUE_MAXLEN];
   
-  HTTP_REQ_T                 httpReq;
-  struct SRV_LISTENER_CFG   *pListenCfg;
-  SRV_CFG_T                 *pCfg;
-  void                      *pUserData; // Used to pass CAP_ASYNC_DESCR_T for capture_rtmp
+  HTTP_REQ_T                      httpReq;
+  struct STREAM_STATS            *pStats;
+  struct SRV_LISTENER_CFG        *pListenCfg;
+  SRV_CFG_T                      *pCfg;
+  void                           *pUserData; // Used to pass CAP_ASYNC_DESCR_T for capture_rtmp
 } CLIENT_CONN_T;
 
 enum IDX_SRV_CTRL_PLAY {

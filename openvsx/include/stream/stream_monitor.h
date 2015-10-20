@@ -80,6 +80,7 @@ typedef struct STREAM_STATS {
   THROUGHPUT_STATS_T            throughput_last[2];
 
   pthread_mutex_t               mtx;
+  int                           dynalloc;
   struct STREAM_STATS          *pnext;
   struct STREAM_STATS_MONITOR  *pMonitor;
 
@@ -112,9 +113,14 @@ STREAM_STATS_T *stream_monitor_createattach(STREAM_STATS_MONITOR_T *pMonitor,
                                             const struct sockaddr *psaRemote,
                                             STREAM_METHOD_T method,
                                             STREAM_MONITOR_ABR_TYPE_T abrEnabled);
+int stream_stats_create(STREAM_STATS_T *pStats, const struct sockaddr *psaRemote,
+                        unsigned int numWr, unsigned int numRd,
+                        int rangeMs1, int rangeMs2);
 int stream_monitor_dump_url(char *buf, unsigned int szbuf, STREAM_STATS_MONITOR_T *pMonitor);
 int stream_monitor_start(STREAM_STATS_MONITOR_T *pMonitor, const char *statfilepath, 
                          unsigned int intervalMs);
 int stream_monitor_stop(STREAM_STATS_MONITOR_T *pMonitor);
+int stream_monitor_attach(STREAM_STATS_MONITOR_T *pMonitor, STREAM_STATS_T *pStats);
+int stream_monitor_detach(STREAM_STATS_MONITOR_T *pMonitor, STREAM_STATS_T *pStats);
 
 #endif // __STREAM_MONITOR_H__

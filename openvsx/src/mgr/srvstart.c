@@ -232,6 +232,7 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
   AUTH_CREDENTIALS_STORE_T httpAuthStores[SRV_LISTENER_MAX];
   TIME_VAL tmstart = 0;
   MGR_NODE_LIST_T lbnodes;
+  STREAM_STATS_MONITOR_T monitor;
   unsigned int outidx;
   const char *log_tag = "main";
   int rc = 0;
@@ -253,6 +254,7 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
   memset(listenerHttpProxy, 0, sizeof(listenerHttpProxy));
   memset(&httpAuthStores, 0, sizeof(httpAuthStores));
   memset(&lbnodes, 0, sizeof(lbnodes));
+  memset(&monitor, 0, sizeof(monitor));
 
 #if defined(VSX_HAVE_SSL)
   //
@@ -307,6 +309,9 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
 
   LOG(X_INFO("Read configuration from %s"), cfg.pconfpath);
 
+  //
+  // Check if we're running in load balancer mode
+  //
   if(!pParams->lbnodesfile && (p = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_LBNODES_CONF))) {
     pParams->lbnodesfile = p;
   }
@@ -400,6 +405,10 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
     if((cfg.cfgShared.enable_symlink = params.enable_symlink)) {
       LOG(X_DEBUG("Symlink following enabled."));
     }
+
+    if((p = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_MONITOR)) && p[0] != '\0') {
+      start.pMonitor = &monitor;
+    }
   
     //
     // create a 'unique' key for the mediaDir
@@ -457,7 +466,7 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
 
     if(procdb_create(&pParams->procList) < 0) {
       conf_free(pConf);
-      mgrnode_close(&lbnodes);
+      mgrnode_close(start.pLbNodes);
       return -1;
     }
 
@@ -483,12 +492,12 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
 
   if(license_init(&lic, cfg.licfilepath, cfg.phomedir) < 0) {
     conf_free(pConf);
-    mgrnode_close(&lbnodes);
+    mgrnode_close(start.pLbNodes);
     return -1;
   } else if((lic.capabilities & LIC_CAP_NO_MGR)) {
     LOG(X_ERROR("VSXMgr not enabled in license"));
     conf_free(pConf);
-    mgrnode_close(&lbnodes);
+    mgrnode_close(start.pLbNodes);
     return -1;
   } 
 
@@ -496,12 +505,21 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
 
 #endif //VSX_HAVE_LICENSE
 
+  if(start.pMonitor) {
+    if(stream_monitor_start(start.pMonitor, NULL, params.statdumpintervalms) < 0) {
+      conf_free(pConf);
+      mgrnode_close(start.pLbNodes);
+      return -1;
+    }
+  }
+
   //
   // Create and init each available http connection instance
   //
   if(init_listener(&poolHttp, &start, listenerHttp, params.httpmax, cfg.listenHttp) < 0) {
     conf_free(pConf);
-    mgrnode_close(&lbnodes);
+    mgrnode_close(start.pLbNodes);
+    stream_monitor_stop(start.pMonitor);
     return -1;
   }
 
@@ -516,7 +534,8 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
       LOG(X_CRITICAL("Media directory not set.  Please specify your media directory by modifying '%s' or by passing the '--media=' command line option"),
                MGR_CONF_PATH);
       conf_free(pConf);
-      mgrnode_close(&lbnodes);
+      mgrnode_close(start.pLbNodes);
+      stream_monitor_stop(start.pMonitor);
       return -1;
     }
 
@@ -532,7 +551,8 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
 
       LOG(X_ERROR("Unable to create media database thread"));
       conf_free(pConf);
-      mgrnode_close(&lbnodes);
+      mgrnode_close(start.pLbNodes);
+      stream_monitor_stop(start.pMonitor);
       return -1;
     }
   }
@@ -684,7 +704,8 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
     procdb_destroy(&pParams->procList);
   }
   conf_free(pConf);
-  mgrnode_close(&lbnodes);
+  mgrnode_close(start.pLbNodes);
+  stream_monitor_stop(start.pMonitor);
 
   return rc;
 }

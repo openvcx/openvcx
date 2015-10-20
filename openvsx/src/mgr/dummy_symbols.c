@@ -37,6 +37,7 @@ int stream_abr_cbOnStream(struct STREAM_STATS *pStreamStats) {
 void stream_abr_close(STREAM_ABR_T *pAbr) {
 }
 
+/*
 //stream/stream_monitor.c
 int stream_monitor_start(STREAM_STATS_MONITOR_T *pMonitor,
                          const char *statfilepath,
@@ -55,6 +56,7 @@ STREAM_STATS_T *stream_monitor_createattach(STREAM_STATS_MONITOR_T *pMonitor,
 int stream_stats_destroy(STREAM_STATS_T **ppStats, pthread_mutex_t *pmtx) {
   return 0;
 }
+*/
 
 //stream/stream_srtp.c
 int srtp_loadKeys(const char *in,  SRTP_CTXT_T *pCtxtV, SRTP_CTXT_T *pCtxtA) {

@@ -1822,49 +1822,13 @@ int srv_ctrl_mkv(CLIENT_CONN_T *pConn,
                  const char *pargfile, 
                  int is_remoteargfile, 
                  const SRV_LISTENER_CFG_T *pListenHttp) {
-  int rc = 0;
-  char tmp[VSX_MAX_PATH_LEN];
-  char buf[VSX_MAX_PATH_LEN];
-  size_t sz = 0;
-  const char *contentType = NULL;
 
   VSX_DEBUG_LIVE(LOG(X_DEBUG("LIVE - srv_ctrl_mkv file: '%s', is_remoteargfile: %d"), pargfile, is_remoteargfile));
 
   //
-  // We are likely called from the mgr to request the .mkv media file to be showin within an html5 tag
+  // Return the rsrc/mkv_embed.html file with all substitions
   //
-  if(0&&pargfile && pargfile[0] != '\0') {
-
-    if(mediadb_prepend_dir(pConn->pCfg->pMediaDb->homeDir,
-               VSX_RSRC_HTML_PATH, (char *) tmp, sizeof(tmp)) < 0 ||
-       mediadb_prepend_dir((char *) tmp, pargfile, buf, sizeof(buf)) < 0) {
-
-      rc = http_resp_error(&pConn->sd, &pConn->httpReq, HTTP_STATUS_NOTFOUND, 0, NULL, NULL);
-      rc = -1;
-
-    } else {
-
-      if((sz = strlen(buf)) > 5) {
-        if(strncasecmp(&buf[sz - 4], ".png", 4) == 0) {
-          contentType = CONTENT_TYPE_IMAGEPNG;
-        } else if(strncasecmp(&buf[sz - 5], ".html", 5) == 0) {
-          contentType = CONTENT_TYPE_TEXTHTML;
-        }
-      }
-
-      VSX_DEBUG_LIVE(LOG(X_DEBUG("LIVE - srv_ctrl_mkv returning '%s' contentType: '%s'"), pargfile, contentType));
-      rc = http_resp_sendfile(pConn, NULL, buf, contentType, HTTP_ETAG_AUTO);
-
-    }
-
-    return rc;
-  } else {
-
-    //
-    // Return the rsrc/mkv_embed.html file with all substitions
-    //
-    return resp_index_file(pConn, pargfile, is_remoteargfile, pListenHttp, URL_CAP_MKVLIVE);
-  }
+  return resp_index_file(pConn, pargfile, is_remoteargfile, pListenHttp, URL_CAP_MKVLIVE);
 
 }
 

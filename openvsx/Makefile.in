@@ -264,6 +264,7 @@ OBJS_MGR= \
           ${BUILD_DIR}/stream/stream_outfmt.o \
           ${BUILD_DIR}/stream/stream_stun.o \
           ${BUILD_DIR}/stream/stream_turn.o \
+	  ${BUILD_DIR}/stream/stream_monitor.o \
           ${BUILD_DIR}/server/srvauth.o \
  	  ${BUILD_DIR}/server/srvdevtype.o \
  	  ${BUILD_DIR}/server/srvdirlist.o \

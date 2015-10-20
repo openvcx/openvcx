@@ -39,6 +39,7 @@
 #define SRV_CONF_KEY_EXPIRE_CHILD_SEC   "expireSec"
 #define SRV_CONF_KEY_DISABLE_LISTING    "disableListing"
 #define SRV_CONF_KEY_LBNODES_CONF       "LBNodesConfig"
+#define SRV_CONF_KEY_MONITOR            "Monitor"
 
 #define MGR_CONNECTIONS_MAX        500 
 #define MGR_CONNECTIONS_DEFAULT    50 
@@ -106,6 +107,7 @@ typedef struct SRV_MGR_START_CFG {
   SYS_PROCLIST_T               *pProcList;
   TIME_VAL                     *ptmstart;
   MGR_NODE_LIST_T              *pLbNodes;
+  STREAM_STATS_MONITOR_T       *pMonitor;
   LIC_INFO_T                   *plic;
 
   struct SRV_MGR_LISTENER_CFG  *pListenerRtmpProxy;

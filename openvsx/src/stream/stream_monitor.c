@@ -33,7 +33,7 @@ typedef struct MONITOR_START_WRAP {
 
 
 static void stream_monitor_dump(FILE *fp, STREAM_STATS_MONITOR_T *pMonitor);
-static int stream_monitor_detach(STREAM_STATS_MONITOR_T *pMonitor, STREAM_STATS_T *pStats);
+//static int stream_monitor_detach(STREAM_STATS_MONITOR_T *pMonitor, STREAM_STATS_T *pStats);
 
 
 int stream_stats_destroy(STREAM_STATS_T **ppStats, pthread_mutex_t *pmtx) {
@@ -71,7 +71,9 @@ int stream_stats_destroy(STREAM_STATS_T **ppStats, pthread_mutex_t *pmtx) {
 
   pthread_mutex_unlock(&(*ppStats)->mtx);
   pthread_mutex_destroy(&(*ppStats)->mtx);
-  avc_free((void **) ppStats);
+  if((*ppStats)->dynalloc) {
+    avc_free((void **) ppStats);
+  }
 
   if(pmtx) {
     pthread_mutex_unlock(pmtx);
@@ -80,17 +82,19 @@ int stream_stats_destroy(STREAM_STATS_T **ppStats, pthread_mutex_t *pmtx) {
   return 0;
 }
 
-static STREAM_STATS_T *stream_stats_create(const struct sockaddr *psaRemote, 
-                                           unsigned int numWr, unsigned int numRd,
-                                           int rangeMs1, int rangeMs2) {
-  STREAM_STATS_T *pStats = NULL;
+int stream_stats_create(STREAM_STATS_T *pStats, 
+                        const struct sockaddr *psaRemote, 
+                        unsigned int numWr, 
+                        unsigned int numRd,
+                        int rangeMs1, 
+                        int rangeMs2) {
   unsigned int idx;
   unsigned int periodMs;
   int rangeMs;
   int rc = 0;
 
-  if(!(pStats = (STREAM_STATS_T *) avc_calloc(1, sizeof(STREAM_STATS_T)))) {
-    return NULL;
+  if(!pStats || (numWr <= 0 && numRd <= 0) || (rangeMs1 <= 0 && rangeMs2 <= 0)) {
+    return -1;
   }
 
   pStats->active = 1;
@@ -120,7 +124,7 @@ static STREAM_STATS_T *stream_stats_create(const struct sockaddr *psaRemote,
     }
     if(rc < 0) {
       stream_stats_destroy(&pStats, NULL);
-      return NULL;
+      return -1;
     }
 
   }
@@ -133,8 +137,7 @@ static STREAM_STATS_T *stream_stats_create(const struct sockaddr *psaRemote,
 
   pthread_mutex_init(&pStats->mtx, NULL);
 
-  return pStats;
-
+  return rc;
 }
 
 void stream_stats_addPktSample(STREAM_STATS_T *pStats, pthread_mutex_t *pmtx, unsigned int len, int rtp) {
@@ -172,14 +175,13 @@ void stream_stats_addPktSample(STREAM_STATS_T *pStats, pthread_mutex_t *pmtx, un
   if(pStats->active) {
 
     pThroughput->tmLastWr.tm = TIME_FROM_TIMEVAL(tv);
-    pThroughput->written.bytes += len;
-    pThroughput->written.slots++;
 
     if(pThroughput->written.slots == 0) {
-      //TIME_TV_SET(pStats->tvstart, tv);
       pThroughput->tmStart.tm = pThroughput->tmLastWr.tm;
-      //TIME_TV_SET(pThroughput->tvStart, tv);
     }
+
+    pThroughput->written.bytes += len;
+    pThroughput->written.slots++;
 
     for(idx = 0; idx < THROUGHPUT_STATS_BURSTRATES_MAX; idx++) {
       if(pbitrates[idx].meter.rangeMs > 0) {
@@ -461,7 +463,7 @@ static STREAM_STATS_T *monitor_find(STREAM_STATS_MONITOR_T *pMonitor, STREAM_STA
   return NULL;
 }
 
-static int stream_monitor_attach(STREAM_STATS_MONITOR_T *pMonitor, STREAM_STATS_T *pStats) {
+int stream_monitor_attach(STREAM_STATS_MONITOR_T *pMonitor, STREAM_STATS_T *pStats) {
   int rc = 0;
   STREAM_STATS_T *pNode = NULL;
   
@@ -483,10 +485,8 @@ static int stream_monitor_attach(STREAM_STATS_MONITOR_T *pMonitor, STREAM_STATS_
     pMonitor->plist = pStats;
   }
   pStats->pnext = pNode;
-  //gettimeofday(&pStats->tvstart, NULL);
   pStats->pMonitor = pMonitor;
   pMonitor->count++;
-  //fprintf(stderr, "ATTACH COUNT:%d\n", pMonitor->count);
 
   pthread_mutex_unlock(&pMonitor->mtx);
 
@@ -502,7 +502,7 @@ STREAM_STATS_T *stream_monitor_createattach(STREAM_STATS_MONITOR_T *pMonitor,
                                             STREAM_MONITOR_ABR_TYPE_T abrEnabled) {
   unsigned int numWr = 1;
   unsigned int numRd = 1;
-  STREAM_STATS_T *pStats;
+  STREAM_STATS_T *pStats = NULL;
   char tmp[128];
 
   if(!pMonitor || !pMonitor->active || !psaRemote) {
@@ -542,7 +542,11 @@ STREAM_STATS_T *stream_monitor_createattach(STREAM_STATS_MONITOR_T *pMonitor,
     numRd = 0;
   }
 
-  if(!(pStats = stream_stats_create(psaRemote, numWr, numRd, pMonitor->rangeMs1, pMonitor->rangeMs2))) {
+  if(!(pStats = (STREAM_STATS_T *) avc_calloc(1, sizeof(STREAM_STATS_T))) || !(pStats->dynalloc = 1) ||
+      stream_stats_create(pStats, psaRemote, numWr, numRd, pMonitor->rangeMs1, pMonitor->rangeMs2) < 0) {
+    if(pStats) {
+      avc_free((void **) &pStats);
+    }
     return NULL;
   }
 
@@ -556,7 +560,7 @@ STREAM_STATS_T *stream_monitor_createattach(STREAM_STATS_MONITOR_T *pMonitor,
   return pStats;
 }
 
-static int stream_monitor_detach(STREAM_STATS_MONITOR_T *pMonitor, STREAM_STATS_T *pStats) {
+int stream_monitor_detach(STREAM_STATS_MONITOR_T *pMonitor, STREAM_STATS_T *pStats) {
   int rc = -1;
   STREAM_STATS_T *pNode;
   STREAM_STATS_T *pPrev = NULL;
@@ -584,8 +588,6 @@ static int stream_monitor_detach(STREAM_STATS_MONITOR_T *pMonitor, STREAM_STATS_
     pPrev = pNode;
     pNode = pNode->pnext;
   }
-
-  //fprintf(stderr, "DETACH COUNT:%d\n", pMonitor->count);
 
   if(pMonitor->count > 0) {
     pMonitor->count--;

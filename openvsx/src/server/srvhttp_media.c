@@ -27,7 +27,9 @@
 //#define BITRATE_RESTRICT 1
 
 static int resp_sendmediafile(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq,
-                               HTTP_MEDIA_STREAM_T *pMedia, float throttleMultiplier,
+                               HTTP_MEDIA_STREAM_T *pMedia,  
+                               STREAM_STATS_T *pStats, 
+                               float throttleMultiplier,
                                float prebufSec) { 
   int rc = 0;
   FILE_OFFSET_T contentLen = 0;
@@ -253,6 +255,10 @@ static int resp_sendmediafile(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq,
     }
 #endif // BITRATE_RESTRICT
 
+    if(pStats) {
+      stream_stats_addPktSample(pStats, NULL, lenread, 1);
+    }
+
     if((rc = netio_send(&pSd->netsocket, (const struct sockaddr *) &pSd->sa, buf, lenread)) < 0) {
       LOG(X_ERROR("Failed to send media '%s' payload %u bytes (%llu/%llu)"), 
             pMedia->pFileStream->filename, lenread, idxContent, contentLen);
@@ -313,7 +319,7 @@ int http_resp_sendmediafile(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus,
 
   }
 
-  rc = resp_sendmediafile(&pConn->sd, &pConn->httpReq, pMedia, throttleMultiplier, prebufSec);
+  rc = resp_sendmediafile(&pConn->sd, &pConn->httpReq, pMedia, pConn->pStats, throttleMultiplier, prebufSec);
 
   return rc;
 }
@@ -440,6 +446,10 @@ int http_resp_sendtslive(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq,
   }
 
 #endif // BITRATE_MEASURE
+
+        //if(pStats) {
+        //  stream_stats_addPktSample(pStats, NULL, lenread, 1);
+        //}
 
         if((rc = netio_send(&pSd->netsocket, (const struct sockaddr *) &pSd->sa, buf, sz)) < 0) {
           LOG(X_ERROR("Failed to send HTTP live payload %u bytes (%llu/%llu)"), 

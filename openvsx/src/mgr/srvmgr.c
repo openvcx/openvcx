@@ -1234,6 +1234,49 @@ static int process_dash(SRV_MGR_CONN_T *pMgrConn,
   return rc;
 }
 
+static int process_staticmedia(SRV_MGR_CONN_T *pConn, SRVMEDIA_RSRC_T *pMediaRsrc, STREAM_METHOD_T method) {
+  int rc = 0;
+  STREAM_STATS_T stats;
+  STREAM_STATS_T *pStats = &stats;
+
+  //
+  // Attach stream monitor
+  //
+  if(pConn->cfg.pMonitor) {
+
+    memset(&stats, 0, sizeof(stats));
+    stats.method = method;
+
+    if(stream_stats_create(&stats, (const struct sockaddr *) &pConn->conn.sd.sa, 1, 0, 
+                         STREAM_STATS_RANGE_MS_LOW, 0) < 0) {
+      return -1;
+    } else if(stream_monitor_attach(pConn->cfg.pMonitor, &stats) < 0) {
+      stream_stats_destroy(&pStats, NULL);
+      return -1;
+    }
+
+    pConn->conn.pStats = &stats;
+
+  }
+
+  // 
+  // Directly handle the non-live canned media resource
+  //
+  rc = srv_ctrl_loadmedia(&pConn->conn, pMediaRsrc->filepath);
+
+  //
+  // Detach any stream monitor
+  //
+  if(pConn->conn.pStats) {
+    stream_monitor_detach(pConn->cfg.pMonitor, pConn->conn.pStats);
+    stream_stats_destroy(&pConn->conn.pStats, NULL);
+    pConn->conn.pStats = NULL;
+  }
+
+  return rc;
+}
+
+
 static int create_redirect_uri(STREAM_METHOD_T method, 
                                SRVMEDIA_RSRC_T *pMediaRsrc, 
                                char *buf, 
@@ -1527,16 +1570,37 @@ const char *srvmgr_authenticate(SRV_MGR_CONN_T *pConn,
 
 int mgr_status_show_output(SRV_MGR_CONN_T *pConn, HTTP_STATUS_T *phttpStatus) {
   int rc = 0;
-  char buf[256];
+  const char *parg;
+  unsigned int idx = 0;
+  char buf[4096];
 
   if(!(pConn->conn.pListenCfg->urlCapabilities & URL_CAP_STATUS)) {
     *phttpStatus = HTTP_STATUS_FORBIDDEN;
     return -1;
   }
 
-  snprintf(buf, sizeof(buf), "status=OK");
-  rc = http_resp_send(&pConn->conn.sd, &pConn->conn.httpReq,
-                    HTTP_STATUS_OK, (unsigned char *) buf, strlen(buf));
+  if((rc = snprintf(&buf[idx], sizeof(buf) - idx, "status=OK")) >= 0) {
+    idx += rc;
+  }
+
+  if(pConn->cfg.pMonitor && (parg = conf_find_keyval(pConn->conn.httpReq.uriPairs, "streamstats"))) {
+
+    if((rc = snprintf(&buf[idx], sizeof(idx) - idx, "&")) >= 0) {
+      idx += rc;
+    }
+
+    if((rc = stream_monitor_dump_url(&buf[idx], sizeof(buf) - idx, pConn->cfg.pMonitor)) >= 0) {
+      idx += rc;
+    }
+
+  }
+
+  if(idx <= 0) {
+    *phttpStatus = HTTP_STATUS_SERVERERROR;
+  } else {
+    rc = http_resp_send(&pConn->conn.sd, &pConn->conn.httpReq,
+                    *phttpStatus, (unsigned char *) buf, strlen(buf));
+  }
 
   return rc;
 }
@@ -1835,7 +1899,7 @@ void srvmgr_client_proc(void *pfuncarg) {
           // 
           // Directly handle the non-live canned media resource
           //
-          rc = srv_ctrl_loadmedia(&pConn->conn, mediaRsrc.filepath);
+          rc = process_staticmedia(pConn, &mediaRsrc, methodAuto);
           break;
 
         case MEDIA_ACTION_LIVE_STREAM:
