@@ -437,7 +437,7 @@ static void srvlisten_rtsplive_proc(void *pArg) {
 
   logutil_tid_remove(pthread_self());
 
-  return ;
+  return;
 }
 
 int srvlisten_startrtsplive(SRV_LISTENER_CFG_T *pListenCfg) {

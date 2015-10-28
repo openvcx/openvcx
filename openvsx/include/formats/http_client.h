@@ -69,6 +69,31 @@ unsigned char *httpcli_loadpagecontent(const char *puri,
                                        HTTP_PARSE_CTXT_T *pHdrCtxt,
                                        const char *hdrhost);
 
+unsigned char *httpcli_post(const char *puri,
+                            unsigned char *pbuf,
+                            unsigned int *plen,
+                            NETIO_SOCK_T *pnetsock,
+                            const struct sockaddr *psa,
+                            unsigned int tmtms,
+                            const char *hdrhost,
+                            const char *hdrUserAgent,
+                            HTTP_RESP_T *pHttpResp,
+                            const KEYVAL_PAIR_T *pkvs,
+                            unsigned char *postData,
+                            unsigned int szpost);
+
+int httpcli_req_send(NETIO_SOCK_T *pnetsock,
+                         const struct sockaddr *psa,
+                         const char *method,
+                         const char *uri,
+                         const char *connType,
+                         const char *host,
+                         const char *userAgent,
+                         const char *authorization,
+                         const KEYVAL_PAIR_T *pHdrs,
+                         unsigned char *postData,
+                         unsigned int szpost);
+
 const unsigned char *httpcli_getpage(const char *location, const char *puri, 
                                      unsigned char *pbuf, unsigned int *pszbuf,
                                      HTTP_STATUS_T *phttpStatus, unsigned int tmtms);

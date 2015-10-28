@@ -1443,8 +1443,9 @@ else if((pAmf = flv_amf_find(pAmfArr, "onFCSubscribe"))) {
 
 static CONNECT_RETRY_RC_T run_capture_client(CAP_ASYNC_DESCR_T *pCfg) {
   CONNECT_RETRY_RC_T rc = CONNECT_RETRY_RC_OK;
-  int contentType;
+  int contentType = 0;
   RTMP_CTXT_CLIENT_T rtmp;
+  unsigned char rtmptbuf[2048];
   SOCKET_DESCR_T sockDescr;
   unsigned int idx;
   const char *p = NULL;
@@ -1475,6 +1476,7 @@ static CONNECT_RETRY_RC_T run_capture_client(CAP_ASYNC_DESCR_T *pCfg) {
   strncpy(uribuf, pCfg->pcommon->addrsExt[0], sizeof(uribuf) - 1);
   rtmp.puri = uribuf;
   rtmp.puridocname = "";
+  rtmp.ctxt.phosthdr = pCfg->pcommon->addrsExtHost[0];
 
   capture_rtmpUriParts(uribuf, NULL, (char **) &rtmp.puridocname);
 
@@ -1482,6 +1484,19 @@ static CONNECT_RETRY_RC_T run_capture_client(CAP_ASYNC_DESCR_T *pCfg) {
   rtmp.ctxt.av.aud.pStreamerCfg = pCfg->pStreamerCfg;
   rtmp.ctxt.av.vid.pStreamerCfg = pCfg->pStreamerCfg;
   rtmp.ctxt.pSd = &sockDescr;
+
+  //
+  // Setup any explicit RTMP tunnel
+  //
+  if(pCfg->pcommon->filt.filters[0].transType == CAPTURE_FILTER_TRANSPORT_RTMPT ||
+     pCfg->pcommon->filt.filters[0].transType == CAPTURE_FILTER_TRANSPORT_RTMPTS) {
+    if(rtmpt_setupclient(&rtmp, rtmptbuf, sizeof(rtmptbuf)) < 0) {
+      LOG(X_ERROR("Failed to setup RTMPT tunnel session"));
+      return -1;
+    } else {
+      rtmp.ctxt.ishttptunnel = 1;
+    }
+  }
 
   if(rtmp_handshake_cli(&rtmp.ctxt, rtmp.client.cfg.rtmpfp9) < 0) {
     LOG(X_ERROR("RTMP handshake failed for %s:%d"),
@@ -1655,6 +1670,7 @@ int capture_rtmp_client(CAP_ASYNC_DESCR_T *pCfg) {
   retryCtxt.psa = (const struct sockaddr *) &pCfg->pSockList->salist[0];
   retryCtxt.connectDescr = "RTMP";
   retryCtxt.pconnectretrycntminone = &pCfg->pcommon->connectretrycntminone;
+  retryCtxt.tmtms = 0;
 
   //
   // Connect to the remote and call capture_rtmp_cbonconnect
@@ -2269,6 +2285,7 @@ static int stream_rtmp_publish(STREAMER_CFG_T *pStreamerCfg) {
   retryCtxt.psa = (struct sockaddr *) &rtmpClient.sd.sa;
   retryCtxt.connectDescr = "RTMP";
   retryCtxt.pconnectretrycntminone = &pStreamerCfg->rtmppublish.connectretrycntminone;
+  retryCtxt.tmtms = 0;
 
   //
   // Connect to the remote and call capture_rtsp_cbonannounceurl

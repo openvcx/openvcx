@@ -34,7 +34,6 @@
 #if defined(LITE_VERSION) 
 
 #define VSX_CONNECTIONS_MAX           4
-#define VSX_CONNECTIONS_DEFAULT       4
 
 #define VSX_LIVEQ_MAX                 4 
 #define VSX_LIVEQ_DEFAULT             4
@@ -44,8 +43,10 @@
 
 #else // (LITE_VERSION) 
 
+//
+// May need to set `ulimit -s unlimited` for max connections > 100
+//
 #define VSX_CONNECTIONS_MAX           100
-#define VSX_CONNECTIONS_DEFAULT        20
 
 #define VSX_LIVEQ_MAX                 100
 #define VSX_LIVEQ_DEFAULT             4

@@ -444,9 +444,8 @@ void vsxlib_setsrvconflimits(VSXLIB_STREAM_PARAMS_T *pParams,
     LOG(X_WARNING("Max HTTP sessions limited to %d"), VSX_CONNECTIONS_MAX);
     pParams->livemax = VSX_CONNECTIONS_MAX;
   } else if(pParams->livemax == 0) {
-    pParams->livemax = 4;
+    pParams->livemax = STREAMER_LIVEQ_DEFAULT;
   }
-
 
   //
   // /pip URL is limited by number of HTTP listeners
@@ -962,6 +961,14 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
   }
 
   //
+  // Get Frame pre-allocation settings 
+  //
+  if(BOOL_ISDFLT(pParams->outq_prealloc) &&
+     (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_OUTQ_PREALLOC))) {
+    pParams->outq_prealloc = MAKE_BOOL(atoi(parg));
+  }
+
+  //
   // Get Frame thinning settings
   //
   if(BOOL_ISDFLT(pParams->frameThin) &&
@@ -1375,8 +1382,7 @@ int vsxlib_stream_setupcap(const VSXLIB_STREAM_PARAMS_T *pParams, CAPTURE_LOCAL_
     }
     pFilt->filters[0].mediaType = CAPTURE_FILTER_PROTOCOL_DASH;
 
-  } else if(inTransType == CAPTURE_FILTER_TRANSPORT_RTMP ||
-            inTransType == CAPTURE_FILTER_TRANSPORT_RTMPS) {
+  } else if(IS_CAPTURE_FILTER_TRANSPORT_RTMP(inTransType)) {
     // Defaut to 2 (vid, aud) input filters
     pFilt->numFilters = 2;
     pFilt->filters[0].mediaType = MEDIA_FILE_TYPE_H264b;
@@ -1742,13 +1748,12 @@ int vsxlib_parse_listener(const char *arrAddr[], unsigned int maxListenerCfgs, S
       return -1;
     }
 
-    if(transType == CAPTURE_FILTER_TRANSPORT_HTTPSGET ||
-       transType == CAPTURE_FILTER_TRANSPORT_RTSPS ||
-       transType == CAPTURE_FILTER_TRANSPORT_RTMPS) {
+    if(IS_CAPTURE_FILTER_TRANSPORT_SSL(transType)) {
       netflags |= NETIO_FLAG_SSL_TLS;
     }
-    //LOG(X_DEBUG("AUTHSTORE: user:'%s', pass:'%s'"), authStore.username, authStore.pass);
-    if((rc = vsxlib_check_prior_listeners(arrCfgs, maxListenerCfgs, (const struct sockaddr *) &sockList.salist[0])) > 0) {
+    
+    if((rc = vsxlib_check_prior_listeners(arrCfgs, maxListenerCfgs, 
+                                          (const struct sockaddr *) &sockList.salist[0])) > 0) {
       if(arrCfgs[rc - 1].netflags != netflags) {
         LOG(X_ERROR("Cannot mix SSL and non-SSL listener for %s"), arrAddr[idxArr]);
         return -1;

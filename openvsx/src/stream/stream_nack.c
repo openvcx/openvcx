@@ -111,7 +111,7 @@ int streamxmit_init(STREAM_RTP_DEST_T *pDest, const STREAM_DEST_CFG_T *pDestCfg)
   szPkt = pDest->pRtpMulti->init.maxPayloadSz + RTP_HEADER_LEN + DTLS_OVERHEAD_SIZE + 64;
 
   // No locking!... should rely on pAsyncQ->mtx
-  if(!(pQ = pktqueue_create(numPkts, szPkt, 0, 0, 0, sizeof(STREAMXMIT_PKT_HDR_T), 0))) {
+  if(!(pQ = pktqueue_create(numPkts, szPkt, 0, 0, 0, sizeof(STREAMXMIT_PKT_HDR_T), 0, 1))) {
     return -1;
   }
 

@@ -60,6 +60,7 @@
 #define SRV_CONF_KEY_APPREMB_RTCP_FORCE    "REMBRtcpForceAdjustment"
 
 #define SRV_CONF_KEY_FRAME_THIN            "FrameThin"
+#define SRV_CONF_KEY_OUTQ_PREALLOC         "preallocBuffers"
 #define SRV_CONF_KEY_FLVLIVE               "FLVLive"
 #define SRV_CONF_KEY_FLVLIVEMAX            "FLVLiveMax"
 #define SRV_CONF_KEY_FRAUDQSLOTS           "audioFrameQueueSlots"
@@ -91,7 +92,7 @@
 #define SRV_CONF_KEY_LICFILE               "license"
 #define SRV_CONF_KEY_LISTEN                "listen"
 #define SRV_CONF_KEY_LIVE                  "live"
-#define SRV_CONF_KEY_LIVEMAX               "livemax"
+#define SRV_CONF_KEY_LIVEMAX               "liveMax"
 #define SRV_CONF_KEY_LIVEPWD               "password"
 #define SRV_CONF_KEY_ENABLESYMLINK         "followSymLink"
 #define SRV_CONF_KEY_LOGFILE               "logFile"

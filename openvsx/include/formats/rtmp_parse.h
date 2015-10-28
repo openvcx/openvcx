@@ -153,6 +153,14 @@ typedef enum RTMP_METHOD {
   RTMP_METHOD_ONFCSUBSCRIBE      = 24,
 } RTMP_METHOD_T;
 
+typedef enum RTMP_TUNNEL_STATE {
+  RTMP_TUNNEL_STATE_NONE         = 0x00,
+  RTMP_TUNNEL_STATE_BUFFERING    = 0x01,  // server is buffering until  a time it can respond to a client POST
+  RTMP_TUNNEL_STATE_CANFLUSH     = 0x02,  // server can flush buffer because it is responding to a client POST 
+  RTMP_TUNNEL_STATE_DOQUEUEMORE  = 0x04   // server should delay flush because there is more imminent cb data
+} RTMP_TUNNEL_STATE_T;
+
+
 #define RTMP_PARAM_LEN_MAX          128
 
 typedef struct RTMP_CONNECT_PARAMS {
@@ -189,8 +197,19 @@ typedef struct RTMP_CTXT {
   struct timeval           tvLastRd;
   const char              *pAuthTokenId;
 
+  uint64_t                 tunnelSessionId;
+  unsigned int             tunnelSeqnum;
+  int                      tunneldatasz;
+  char                    *phosthdr;
+  HTTP_PARSE_CTXT_T        tunnelHttpCtxt;
+  unsigned int             idxInHttpBuf;
+  unsigned int             idxContent; 
+  unsigned int             contentLen; 
+
   //TODO: seperate server output stream context from parse ctxt
   int                      isclient;
+  int                      ishttptunnel;
+  enum RTMP_TUNNEL_STATE   tunnelState;
   enum RTMP_STATE          state;
   enum RTMP_METHOD         methodParsed;
   double                   advCapabilities; 

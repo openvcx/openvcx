@@ -42,7 +42,8 @@ enum SYS_PROC_FLAG {
   SYS_PROC_FLAG_PENDING           = 0x01,
   SYS_PROC_FLAG_STARTED           = 0x02,
   SYS_PROC_FLAG_RUNNING           = 0x04,
-  SYS_PROC_FLAG_ERROR             = 0x08
+  SYS_PROC_FLAG_ERROR             = 0x08,
+  SYS_PROC_FLAG_FAILSTART         = 0x10
 };
 
 typedef struct SYS_PROC {
@@ -55,6 +56,7 @@ typedef struct SYS_PROC {
   struct timeval              tmLastPoll;
   struct timeval              tmLastPollActive;
   int                         numActive;    // active clients repored in '/status'
+  int                         numPendingActive; 
   int                         isXcoded;
   char                        instanceId[SYS_PROC_INSTANCE_ID_LEN + 1];
   char                        tokenId[META_FILE_TOKEN_LEN]; 
@@ -77,6 +79,7 @@ typedef struct SYS_PROCLIST {
   unsigned int          activeXcodeInstances;
   unsigned int          mbbpsTot;       // macroblocks per second
   unsigned int          maxMbbpsTot;
+  unsigned int          maxClientsPerProc;
   unsigned int          procexpiresec;
   uint16_t              minStartPort;
   uint16_t              maxStartPort;
@@ -89,7 +92,7 @@ SYS_PROC_T *procdb_findName(SYS_PROCLIST_T *pProcs, const char *name,
                             const char *id, int lock);
 int procdb_create_instanceId(char *buf);
 SYS_PROC_T *procdb_findInstanceId(SYS_PROCLIST_T *pProcs, const char *instanceId, int lock);
-int procdb_delete(SYS_PROCLIST_T *pProcs, const char *name, const char *id, int lock);
+//int procdb_delete(SYS_PROCLIST_T *pProcs, const char *name, const char *id, int lock);
 SYS_PROC_T *procdb_setup(SYS_PROCLIST_T *pProcs, const char *virtPath, const char *id, 
                          const MEDIA_DESCRIPTION_T *pMediaDescr, const char *pXcodeStr, 
                          const char *pInstanceId, const char *pTokenId, int lock);

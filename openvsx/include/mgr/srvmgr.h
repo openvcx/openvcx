@@ -29,17 +29,18 @@
 #include "mgr/procdb.h"
 #include "mgr/mgrnode.h"
 
-#define MGR_CONF_FILE                   "vsxwp.conf"
+#define MGR_CONF_FILE                      "vsxwp.conf"
 
-#define SRV_CONF_KEY_LAUNCHMEDIA        "launchMedia"
-#define SRV_CONF_KEY_PORTRANGE          "portRange"
-#define SRV_CONF_KEY_MAX_MEDIA          "maxProcesses"
-#define SRV_CONF_KEY_MAX_MEDIA_XCODE    "maxXcoders"
-#define SRV_CONF_KEY_MAX_MBPS           "maxMacroBlocks"
-#define SRV_CONF_KEY_EXPIRE_CHILD_SEC   "expireSec"
-#define SRV_CONF_KEY_DISABLE_LISTING    "disableListing"
-#define SRV_CONF_KEY_LBNODES_CONF       "LBNodesConfig"
-#define SRV_CONF_KEY_MONITOR            "Monitor"
+#define SRV_CONF_KEY_LAUNCHMEDIA           "launchMedia"
+#define SRV_CONF_KEY_PORTRANGE             "portRange"
+#define SRV_CONF_KEY_MAX_MEDIA             "maxProcesses"
+#define SRV_CONF_KEY_MAX_MEDIA_XCODE       "maxXcoders"
+#define SRV_CONF_KEY_MAX_MBPS              "maxMacroBlocks"
+#define SRV_CONF_KEY_EXPIRE_CHILD_SEC      "expireSec"
+#define SRV_CONF_KEY_DISABLE_LISTING       "disableListing"
+#define SRV_CONF_KEY_LBNODES_CONF          "LBNodesConfig"
+#define SRV_CONF_KEY_MAX_CLIENTS_PER_PROC  "maxClientsPerProcess"
+#define SRV_CONF_KEY_MONITOR               "Monitor"
 
 #define MGR_CONNECTIONS_MAX        500 
 #define MGR_CONNECTIONS_DEFAULT    50 
@@ -158,8 +159,9 @@ int srvmgr_check_metafile(META_FILE_T *pMetaFile, SRVMEDIA_RSRC_T *pMediaRsrc,
 int srvmgr_check_start_proc(SRV_MGR_CONN_T *pConn, const SRVMEDIA_RSRC_T *pMediaRsrc,
                             MEDIA_DESCRIPTION_T *pMediaDescr, SYS_PROC_T *procArg,
                             const STREAM_DEVICE_T *pdevtype, MEDIA_ACTION_T action, 
-                            STREAM_METHOD_T methodAuto, int *pstartProc);
+                            STREAM_METHOD_T methodAuto, int isShared, int *pstartProc);
 const char *srvmgr_action_tostr(MEDIA_ACTION_T action);
+int srvmgr_is_shared_resource(const SRVMEDIA_RSRC_T *pMediaRsrc,  MEDIA_ACTION_T action);
 
 
 

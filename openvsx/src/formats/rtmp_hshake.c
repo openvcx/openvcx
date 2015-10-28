@@ -633,6 +633,7 @@ int rtmp_handshake_cli(RTMP_CTXT_T *pRtmp, int fp9) {
   time_t tm;
   int sigOffset;
   int sigOffsetSrv;
+  unsigned int rcvTmtMs = 0;
   unsigned char bufout[RTMP_HANDSHAKE_SZ];
 
 #if defined(VSX_HAVE_RTMP_HMAC)
@@ -690,12 +691,13 @@ int rtmp_handshake_cli(RTMP_CTXT_T *pRtmp, int fp9) {
     return rc;
   }
 
-  if((rc = netio_recvnb_exact(&pRtmp->pSd->netsocket, pRtmp->in.buf,
-                              RTMP_HANDSHAKE_SZ * 2 + 1, RTMP_HANDSHAKE_TMT_MS)) < 0) {
-
+  rcvTmtMs = pRtmp->rcvTmtMs;
+  pRtmp->rcvTmtMs = RTMP_HANDSHAKE_TMT_MS;
+  if((rc = pRtmp->cbRead(pRtmp, pRtmp->in.buf, RTMP_HANDSHAKE_SZ * 2 + 1)) < 0) {
     LOG(X_ERROR("Failed to receive %d rtmp handshake bytes"), RTMP_HANDSHAKE_SZ);
     return rc;
   }
+  pRtmp->rcvTmtMs = rcvTmtMs;
 
   VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - handshake_cli recv: %d/%d"), rc, RTMP_HANDSHAKE_SZ * 2 + 1);
                   LOGHEXT_DEBUGVV(pRtmp->in.buf, rc) );

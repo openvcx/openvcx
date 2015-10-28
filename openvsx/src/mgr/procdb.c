@@ -93,7 +93,6 @@ static int check_status(SYS_PROC_T *pProc) {
   char host[256];
   PROC_STATUS_RESP_DATA_T status;
 
-  pProc->numActive = 0;
 
   snprintf(host, sizeof(host), "http://127.0.0.1:%d", MGR_GET_PORT_STATUS(pProc->startPort));
 
@@ -101,9 +100,12 @@ static int check_status(SYS_PROC_T *pProc) {
   if(!(page = (const char *) httpcli_getpage(host, VSX_STATUS_URL, (unsigned char *) buf, &szdata, 
                                              &httpStatus, PROC_STATUS_REQ_TIMEOUT_MS))) {
     LOG(X_ERROR("Failed to load "VSX_STATUS_URL" for %s (%d)"), host, httpStatus);
+    //pProc->numActive = 0;
     return -1;
   }
 
+  pProc->numActive = 0;
+  pProc->numPendingActive = 0;
   memset(&status, 0, sizeof(status));
   strutil_parse_delimeted_str(cbparse_procstatus_resp, &status, page, '&');
 
@@ -155,7 +157,10 @@ static void procdb_monitor_proc(void *pArg) {
     while(pProc) {
 
       remove = 0;
-      if((pProc->flags & SYS_PROC_FLAG_RUNNING)) {
+      if((pProc->flags & SYS_PROC_FLAG_FAILSTART)) {
+        remove = 1;
+        snprintf(logstr, sizeof(logstr), "Delete");
+      } else if((pProc->flags & SYS_PROC_FLAG_RUNNING)) {
 
         if((rc = procutil_isrunning(pProc->pid)) < 0) {
           remove = 1;
@@ -202,7 +207,7 @@ static void procdb_monitor_proc(void *pArg) {
           pProcs->activeInstances, pProcs->maxInstances, pProcs->activeXcodeInstances, 
           pProcs->maxXcodeInstances);
 
-        if(procutil_kill_block(pProc->pid) < 0) {
+        if(!(pProc->flags & SYS_PROC_FLAG_FAILSTART) && procutil_kill_block(pProc->pid) < 0) {
           LOG(X_ERROR("Unable to kill process '%s' instance id: %s, pid:%d"), 
               pProc->name, pProc->instanceId, pProc->pid);
         }
@@ -294,6 +299,8 @@ void procdb_destroy(SYS_PROCLIST_T *pProcs) {
     return;
   }
 
+  pthread_mutex_lock(&pProcs->mtx);
+
   pProc = pProcs->procs;
   while(pProc) {
     pProcNext = pProc->pnext;
@@ -301,10 +308,13 @@ void procdb_destroy(SYS_PROCLIST_T *pProcs) {
     pProc = pProcNext;
   }
 
+  pthread_mutex_unlock(&pProcs->mtx);
+
   pthread_mutex_destroy(&pProcs->mtx);
 
 }
 
+/*
 int procdb_delete(SYS_PROCLIST_T *pProcs, const char *name, const char *id, int lock) {
   int rc = -1;
   SYS_PROC_T *pProc = NULL;
@@ -365,6 +375,7 @@ int procdb_delete(SYS_PROCLIST_T *pProcs, const char *name, const char *id, int 
 
   return rc;
 }
+*/
 
 SYS_PROC_T *procdb_findName(SYS_PROCLIST_T *pProcs, 
                             const char *name, 
@@ -484,10 +495,11 @@ SYS_PROC_T *procdb_setup(SYS_PROCLIST_T *pProcs,
     pProc->id[META_FILE_IDSTR_MAX - 1] = '\0';
   }
 
-  if(++pProcs->priorStartPort > pProcs->maxStartPort) {
+  if(pProcs->priorStartPort >= pProcs->maxStartPort) {
     pProcs->priorStartPort = pProcs->minStartPort; 
   }
 
+  pProc->numPendingActive++;
   pProc->startPort = pProcs->priorStartPort;
   gettimeofday(&pProc->tmStart, NULL);
   memcpy(&pProc->tmLastAccess, &pProc->tmStart, sizeof(pProc->tmLastAccess));
@@ -511,7 +523,9 @@ SYS_PROC_T *procdb_setup(SYS_PROCLIST_T *pProcs,
     procdb_create_instanceId(pProc->instanceId);
   }
 
-  // for the time being, each process uses 3 unique tcp ports
+  //
+  // for the time being, each process uses 4 unique tcp ports (http media, rtmp, rtsp, localhost only http status)
+  //
   pProcs->priorStartPort += MGR_PORT_ALLOC_COUNT;
 
   //
@@ -718,9 +732,9 @@ int procdb_start(SYS_PROCLIST_T *pProcs,
 
     LOG(X_ERROR("Failed to start process '%s'"), cmd);
 
-    if(procdb_delete(pProcs, pProc->name, pProc->id, 1) < 0) {
-      pProc->flags |= SYS_PROC_FLAG_ERROR;
-    }
+    //if(procdb_delete(pProcs, pProc->name, pProc->id, 1) < 0) {
+      pProc->flags |= SYS_PROC_FLAG_FAILSTART;
+    //}
 
     rc = -1;
 
@@ -749,8 +763,8 @@ int procdb_start(SYS_PROCLIST_T *pProcs,
       pProc->flags = SYS_PROC_FLAG_RUNNING;
       rc = 0;
     } else {
-      pProc->flags |= SYS_PROC_FLAG_ERROR;
-      procdb_delete(pProcs, pProc->name, pProc->id, 1);
+      pProc->flags |= SYS_PROC_FLAG_FAILSTART;
+      //procdb_delete(pProcs, pProc->name, pProc->id, 1);
       rc = -1;
     }
 

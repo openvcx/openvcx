@@ -363,6 +363,12 @@ CAPTURE_FILTER_TRANSPORT_T capture_parseTransportStr(const char **ppstr) {
     } else if(!strncasecmp(*ppstr, "rtmps://", 8)) {
       trans = CAPTURE_FILTER_TRANSPORT_RTMPS;
       (*ppstr) += 8;
+    } else if(!strncasecmp(*ppstr, "rtmpt://", 8)) {
+      trans = CAPTURE_FILTER_TRANSPORT_RTMPT;
+      (*ppstr) += 8;
+    } else if(!strncasecmp(*ppstr, "rtmpts://", 9)) {
+      trans = CAPTURE_FILTER_TRANSPORT_RTMPTS;
+      (*ppstr) += 8;
     } else if(!strncasecmp(*ppstr, "flv://", 6)) {
       trans = CAPTURE_FILTER_TRANSPORT_HTTPFLV;
       (*ppstr) += 6;

@@ -4842,7 +4842,7 @@ PKTQUEUE_T *stream_createFrameQ(enum STREAM_FRAMEQ_TYPE type,
     growMultiplier = FRAMESZ_GROW_MULTIPLIER;
     szSlotMax = szSlot * growMultiplier;
     maxSlots = numSlots;
-    if(!(pQ = pktqueue_create(numSlots, szSlot, maxSlots, szSlotMax, prebufOffset, 0, 1))) {
+    if(!(pQ = pktqueue_create(numSlots, szSlot, maxSlots, szSlotMax, prebufOffset, 0, 1, 1))) {
       LOG(X_ERROR("Failed to allocate frame queue %d x %d"), numSlots, szSlot);
       return NULL;
     }

@@ -157,6 +157,7 @@ typedef uint32_t in_addr_t;
 #define VSX_DEBUG_FLAG_MGR              0x00040000
 #define VSX_DEBUG_FLAG_INFRAME          0x00080000
 #define VSX_DEBUG_FLAG_CODEC            0x00100000
+#define VSX_DEBUG_FLAG_MEM              0x00200000
 
 #define VSX_DEBUG_NET(x)        if((g_debug_flags & VSX_DEBUG_FLAG_NET)) { x; }
 #define VSX_DEBUG_STREAMAV(x)   if((g_debug_flags & VSX_DEBUG_FLAG_STREAMAV)) { x; }
@@ -179,6 +180,7 @@ typedef uint32_t in_addr_t;
 #define VSX_DEBUG_MGR(x)        if((g_debug_flags & VSX_DEBUG_FLAG_MGR)) { x; }
 #define VSX_DEBUG_INFRAME(x)    if((g_debug_flags & VSX_DEBUG_FLAG_INFRAME)) { x; }
 #define VSX_DEBUG_CODEC(x)      if((g_debug_flags & VSX_DEBUG_FLAG_CODEC)) { x; }
+#define VSX_DEBUG_MEM(x)        if((g_debug_flags & VSX_DEBUG_FLAG_MEM)) { x; }
 
 #if defined(ANDROID_LOG)
 

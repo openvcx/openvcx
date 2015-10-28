@@ -422,6 +422,7 @@ static int get_remote_conn(const char *pvirtRsrc,
   //char virtRsrc[VSX_MAX_PATH_LEN];
   int port;
   int startProc = 0;
+  int isShared = 0;
   char *proxystr = NULL;
   struct stat st;
   size_t sz = 0;
@@ -491,12 +492,13 @@ static int get_remote_conn(const char *pvirtRsrc,
       return -1;
     } else {
 
+      isShared = srvmgr_is_shared_resource(&mediaRsrc, MEDIA_ACTION_LIVE_STREAM);
       memset(&proc, 0, sizeof(proc));
 
       //mediaRsrc.puri = (char *) pvirtRsrc;
       //TODO: set the media action to live or not...
-      if((rc = srvmgr_check_start_proc(pConn, &mediaRsrc, &mediaDescr,
-                          &proc, &devtype, MEDIA_ACTION_UNKNOWN, STREAM_METHOD_UNKNOWN, &startProc)) < 0) {
+      if((rc = srvmgr_check_start_proc(pConn, &mediaRsrc, &mediaDescr, &proc, &devtype, 
+                                       MEDIA_ACTION_UNKNOWN, STREAM_METHOD_UNKNOWN, isShared, &startProc)) < 0) {
                           //&proc, &devtype, MEDIA_ACTION_UNKNOWN, streamMethod, &startProc)) < 0) {
         LOG(X_ERROR("Unable to %s process for '%s'"), 
             (startProc ? "start" : "find"), mediaRsrc.filepath);

@@ -100,7 +100,7 @@ typedef struct PKTQUEUE_CONFIG {
                                       // add's slot has not yet been read, 
                                       // try to fill last add slot in
                                       // multiples of concataddenum
-
+  int                 prealloc;
   PKTQ_OVERWRITE_TYPE_T overwriteType;
   int                   overwriteVal;
   int                   maxRTlatencyMs;  
@@ -156,7 +156,8 @@ enum PKTQUEUE_RC {
 
 PKTQUEUE_T *pktqueue_create(unsigned int maxPkts, unsigned int szPkt,
                             unsigned int growMaxPkts, unsigned int growSzPkts,
-                            unsigned int prebufOffset, unsigned int userDataLen, int uselock);
+                            unsigned int prebufOffset, unsigned int userDataLen, 
+                           int uselock, int prealloc);
 PKTQUEUE_T *framebuf_create(unsigned int sz, unsigned int prebufOffset);
 PKTQUEUE_T *ringbuf_create(unsigned int sz);
 void pktqueue_destroy(PKTQUEUE_T *pQ);
@@ -176,6 +177,7 @@ enum PKTQUEUE_RC pktqueue_addpartialpkt(PKTQUEUE_T *pQ, const unsigned char *pDa
                                         unsigned int len, PKTQ_EXTRADATA_T *pXtra, 
                                         int endingPkt, int overwrite);
 const PKTQUEUE_PKT_T *pktqueue_readpktdirect(PKTQUEUE_T *pQ);
+int pktqueue_readpktdirect_havenext(PKTQUEUE_T *pQ);
 int pktqueue_readpktdirect_done(PKTQUEUE_T *pQ);
 int pktqueue_swapreadslots(PKTQUEUE_T *pQ, PKTQUEUE_PKT_T **ppSlot);
 int pktqueue_havepkt(PKTQUEUE_T *pQ);

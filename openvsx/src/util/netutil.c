@@ -255,6 +255,8 @@ int net_recvnb(SOCKET sock, unsigned char *buf, unsigned int len,
     } else if(rc == 0) {
       LOG(X_WARNING("recv nonblock %d - connection has been closed."), len);
       rc = -1;
+    } else {
+      VSX_DEBUG_NET( LOG(X_DEBUG("NET - net_recvnb got %d/%d bytes, fd: %d"), rc, len, sock) );
     }
 
   } else if(rc == 0) {
@@ -427,6 +429,8 @@ int net_recv(SOCKET sock, const struct sockaddr *psa,
       return -1;
     }
   } 
+
+  VSX_DEBUG_NET( LOG(X_DEBUG("NET - net_recv got %d/%d bytes, fd: %d"), rc, len, sock) );
 
   // client disconnected rc = 0
 

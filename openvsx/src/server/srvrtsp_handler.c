@@ -1729,7 +1729,7 @@ int rtsp_interleaved_start(RTSP_REQ_CTXT_T *pRtsp) {
 
         if(!(pQ = pktqueue_create(pLiveQ2->qCfg.maxPkts, pLiveQ2->qCfg.maxPktLen,
                                   pLiveQ2->qCfg.maxPkts, pLiveQ2->qCfg.growMaxPktLen,
-                                  0,  sizeof(OUTFMT_FRAME_DATA_T), 1))) {
+                                  0,  sizeof(OUTFMT_FRAME_DATA_T), 1, 1))) {
           LOG(X_ERROR("Failed to create queue for RTSP interleaved listener[%d] length: %d x %d"), 
                       idx, pLiveQ2->qCfg.maxPkts, pLiveQ2->qCfg.maxPktLen);
           rc = -1;

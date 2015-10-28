@@ -179,13 +179,13 @@ int srvlisten_loop(SRV_LISTENER_CFG_T *pListenCfg, void *thread_func) {
 
   //fprintf(stderr, "%d CALLING wrap: 0x%x pConn:0x%x\n", pthread_self(), &wrapArg, wrapArg.pConn);
 
-    if(pthread_create(&pConn->ptd,
+    if((rc = pthread_create(&pConn->ptd,
                     &pConn->attr,
                     (void *) thread_func_wrapper,
-                    (void *) &wrapArg) != 0) {
-      LOG(X_ERROR("Unable to create connection handler thread on port %d from %s:%d"), 
+                    (void *) &wrapArg)) != 0) {
+      LOG(X_ERROR("Unable to create connection handler thread on port %d from %s:%d (%d %s)"), 
           htons(INET_PORT(pListenCfg->sa)), FORMAT_NETADDR(sdclient.sa, tmp, sizeof(tmp)),
-          htons(INET_PORT(sdclient.sa)));
+          htons(INET_PORT(sdclient.sa)), rc, strerror(rc));
       netio_closesocket(&pConn->sd.netsocket);
       pool_return(pListenCfg->pConnPool, &pConn->pool);
       wrapArg.flags = 0;

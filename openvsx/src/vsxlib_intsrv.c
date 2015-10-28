@@ -363,6 +363,10 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
     }
   }
 
+  if(maxHttp == 0) {
+    maxHttp = VSX_CONNECTIONS_MAX;
+  }
+
   for(idx = 0; idx < IXCODE_VIDEO_OUT_MAX; idx++) {
     pHttpLiveDatas[idx] = &pStreamerCfg->pStorageBuf->httpLiveDatas[idx];
   }
@@ -571,8 +575,9 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
   } // end of if if(pParams->mooflive...
 */
 
+  //LOG(X_DEBUG("maxWww: %d, maxMkvLive: %d, maxHttp: %d"), maxWww, maxMkvLive, maxHttp);
   if((numHttp = maxWww + maxTsLive + maxHttpLive + maxMoofLive + maxFlvLive +
-                maxMkvLive + maxStatus + maxPip + maxConfig)  > maxHttp + 1) {
+                maxMkvLive + maxStatus + maxPip + maxConfig) > maxHttp + 1) {
     //
     // Add one extra connection to allow returning rejections for extra requests
     //
@@ -633,8 +638,8 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
     pLiveQ->qCfg.maxPktLen = pStreamerCfg->action.outfmtQCfg.cfgTslive.maxPktLen;
     pLiveQ->qCfg.growMaxPktLen = pStreamerCfg->action.outfmtQCfg.cfgTslive.growMaxPktLen;
     pLiveQ->qCfg.growMaxPkts = pStreamerCfg->action.outfmtQCfg.cfgTslive.growMaxPkts;
+    pLiveQ->qCfg.prealloc = MAKE_BOOL(pParams->outq_prealloc);
     pLiveQ->qCfg.concataddenum = MP2TS_LEN;
-
   }
 
   // 
@@ -651,6 +656,7 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
   pLiveFmt->qCfg.maxPkts = pStreamerCfg->action.outfmtQCfg.cfgRtmp.maxPkts;
   pLiveFmt->qCfg.maxPktLen = pStreamerCfg->action.outfmtQCfg.cfgRtmp.maxPktLen;
   pLiveFmt->qCfg.growMaxPktLen = pStreamerCfg->action.outfmtQCfg.cfgRtmp.growMaxPktLen;
+  pLiveFmt->qCfg.prealloc = MAKE_BOOL(pParams->outq_prealloc);
 
   // 
   // Setup FLV server parameters
@@ -666,6 +672,7 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
   pLiveFmt->qCfg.maxPkts = pStreamerCfg->action.outfmtQCfg.cfgFlv.maxPkts;
   pLiveFmt->qCfg.maxPktLen = pStreamerCfg->action.outfmtQCfg.cfgFlv.maxPktLen;
   pLiveFmt->qCfg.growMaxPktLen = pStreamerCfg->action.outfmtQCfg.cfgFlv.growMaxPktLen;
+  pLiveFmt->qCfg.prealloc = MAKE_BOOL(pParams->outq_prealloc);
   pLiveFmt->bufferDelaySec = pParams->flvlivedelay;
 
   //
@@ -682,32 +689,8 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
   pLiveFmt->qCfg.maxPkts = pStreamerCfg->action.outfmtQCfg.cfgMkv.maxPkts;
   pLiveFmt->qCfg.maxPktLen = pStreamerCfg->action.outfmtQCfg.cfgMkv.maxPktLen;
   pLiveFmt->qCfg.growMaxPktLen = pStreamerCfg->action.outfmtQCfg.cfgMkv.growMaxPktLen;
+  pLiveFmt->qCfg.prealloc = MAKE_BOOL(pParams->outq_prealloc);
   pLiveFmt->bufferDelaySec = pParams->mkvlivedelay;
-/*
-  // 
-  // Setup RTSP server parameters
-  //
-  for(outidx = 0; outidx < IXCODE_VIDEO_OUT_MAX; outidx++) {
-
-    if(outidx > 0 && !pStreamerCfg->xcode.vid.out[outidx].active) {
-      continue;
-    }
-
-    pLiveQ2 = &pStreamerCfg->liveQ2s[outidx];
-    if((*((unsigned int *) &pLiveQ2->max) = maxRtspLive) > 0 &&
-     !(pLiveQ2->pQs = (PKTQUEUE_T **) avc_calloc(maxRtspLive, sizeof(PKTQUEUE_T *)))) {
-      return -1;
-    }
-    pthread_mutex_init(&pLiveQ2->mtx, NULL);
-    pLiveQ2->qCfg.id = STREAMER_QID_RTSP_INTERLEAVED + outidx;
-    pLiveQ2->qCfg.maxPkts = pStreamerCfg->action.outfmtQCfg.cfgRtsp.maxPkts;
-    pLiveQ2->qCfg.maxPktLen = pStreamerCfg->action.outfmtQCfg.cfgRtsp.maxPktLen;
-    pLiveQ2->qCfg.growMaxPktLen = pStreamerCfg->action.outfmtQCfg.cfgRtsp.growMaxPktLen;
-
-  }
-*/
-  //pSrv->rtspLive.pCfg = &pSrv->startcfg;
-  //pSrv->rtspLive.pConnPool = &pSrv->poolRtsp;
 
   pthread_mutex_init(&pSrv->mtx, NULL);
 

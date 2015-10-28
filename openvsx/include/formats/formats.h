@@ -74,6 +74,7 @@
 #include "formats/ice.h"
 #include "formats/http_parse.h"
 #include "formats/rtsp_parse.h"
+#include "formats/rtmp_tunnel.h"
 #include "formats/filetype.h"
 
 

@@ -217,8 +217,7 @@ static void capture_pktqueue_rdproc(void *parg) {
 
     rc = capture_httpget(pCap);
 
-  } else if(pCap->pcommon->filt.filters[0].transType == CAPTURE_FILTER_TRANSPORT_RTMP ||
-            pCap->pcommon->filt.filters[0].transType == CAPTURE_FILTER_TRANSPORT_RTMPS) {
+  } else if(IS_CAPTURE_FILTER_TRANSPORT_RTMP(pCap->pcommon->filt.filters[0].transType)) {
 
     if(IS_CAPTURE_FILTER_TRANSPORT_SSL(pCap->pcommon->filt.filters[0].transType)) {
       pCap->pSockList->netsockets[0].flags |= NETIO_FLAG_SSL_TLS; 
@@ -300,7 +299,7 @@ static PKTQUEUE_T *create_capQueue(unsigned int pktQueueLen, int id) {
   PKTQUEUE_T *pQueue = NULL;
 
   if((pQueue = pktqueue_create(pktQueueLen,
-                               RTP_JTBUF_PKT_BUFSZ_LOCAL, 0, 0, 0, 0, 1)) == NULL) {
+                               RTP_JTBUF_PKT_BUFSZ_LOCAL, 0, 0, 0, 0, 1, 1)) == NULL) {
       LOG(X_ERROR("Failed to create packet queue[%d] length: %d x %d"),
                   id, pktQueueLen, RTP_JTBUF_PKT_BUFSZ_LOCAL);
       return NULL;
@@ -782,7 +781,9 @@ static int stream_capture(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_PKT_ACTION_DESCR_T *c
              pFilter->transType != CAPTURE_FILTER_TRANSPORT_UDPDTLS &&
              pFilter->transType != CAPTURE_FILTER_TRANSPORT_UDPDTLSSRTP &&
              pFilter->transType != CAPTURE_FILTER_TRANSPORT_RTMP &&
+             pFilter->transType != CAPTURE_FILTER_TRANSPORT_RTMPT &&
              pFilter->transType != CAPTURE_FILTER_TRANSPORT_RTMPS &&
+             pFilter->transType != CAPTURE_FILTER_TRANSPORT_RTMPTS &&
              //pFilter->transType != CAPTURE_FILTER_TRANSPORT_RTSP &&
              //pFilter->transType != CAPTURE_FILTER_TRANSPORT_RTSPS &&
              pFilter->transType != CAPTURE_FILTER_TRANSPORT_HTTPFLV &&
@@ -869,6 +870,8 @@ static int stream_capture(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_PKT_ACTION_DESCR_T *c
            pFilter->transType != CAPTURE_FILTER_TRANSPORT_UDPDTLSSRTP &&
            pFilter->transType != CAPTURE_FILTER_TRANSPORT_RTMP &&
            pFilter->transType != CAPTURE_FILTER_TRANSPORT_RTMPS &&
+           pFilter->transType != CAPTURE_FILTER_TRANSPORT_RTMPT &&
+           pFilter->transType != CAPTURE_FILTER_TRANSPORT_RTMPTS &&
            //pFilter->transType != CAPTURE_FILTER_TRANSPORT_RTSP &&
            //pFilter->transType != CAPTURE_FILTER_TRANSPORT_RTSPS &&
            pFilter->transType != CAPTURE_FILTER_TRANSPORT_HTTPFLV &&
@@ -1334,7 +1337,8 @@ int capture_net_async(CAPTURE_LOCAL_DESCR_T *pLocalCfg,
     if(capture_getdestFromStr(pLocalCfg->common.localAddrs[0],
                               &sockList.salist[0],
                               &pLocalCfg->common.addrsExt[0],
-                              NULL, RTMP_PORT_DEFAULT) == 0) {
+                              pLocalCfg->common.addrsExtHost[0], RTMP_PORT_DEFAULT) == 0) {
+                              //NULL, RTMP_PORT_DEFAULT) == 0) {
 
       sockList.numSockets = 1;
 

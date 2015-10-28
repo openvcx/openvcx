@@ -83,7 +83,7 @@ int xcodectxt_allocbuf(STREAM_XCODE_CTXT_T *pXcodeCtxt, unsigned int vidSz, cons
   if(pPipFrQCfg && pPipFrQCfg->maxPktLen > 0) {
     if((pXcodeCtxt->vidUData.pPipFrQ = pktqueue_create(pPipFrQCfg->maxPkts, pPipFrQCfg->maxPktLen,
                                                        pPipFrQCfg->maxPkts, pPipFrQCfg->growMaxPktLen,
-                                                       0, sizeof(OUTFMT_FRAME_DATA_T), 1))) {
+                                                       0, sizeof(OUTFMT_FRAME_DATA_T), 1, 1))) {
       pktqueue_setrdr(pXcodeCtxt->vidUData.pPipFrQ, 0);
       pXcodeCtxt->vidUData.pPipFrQ->cfg.id = STREAMER_QID_PIPVID;
       pXcodeCtxt->vidUData.pPipFrQ->cfg.overwriteType = PKTQ_OVERWRITE_FIND_KEYFRAME;

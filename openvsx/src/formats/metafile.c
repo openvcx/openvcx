@@ -147,6 +147,7 @@ int metafile_isvalidFile(const char *path) {
              !memcmp(&buf[idx], METAFILE_KEY_RTSP_PROXY, strlen(METAFILE_KEY_RTSP_PROXY)) ||
              !memcmp(&buf[idx], METAFILE_KEY_HTTP_PROXY, strlen(METAFILE_KEY_HTTP_PROXY)) ||
              !memcmp(&buf[idx], METAFILE_KEY_METHODS, strlen(METAFILE_KEY_METHODS)) ||
+             !memcmp(&buf[idx], METAFILE_KEY_TOKEN, strlen(METAFILE_KEY_TOKEN)) ||
              !memcmp(&buf[idx], METAFILE_KEY_XCODEARGS, strlen(METAFILE_KEY_XCODEARGS))) {
             rc = 1;
             break;

@@ -25,14 +25,23 @@
 #include "vsx_common.h"
 
 
-static int http_req_send(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa, const char *method,
-                         const char *uri, const char *connType, unsigned int range0,
-                         unsigned int range1, const char *host, const char *authorization) {
+int httpcli_req_send(NETIO_SOCK_T *pnetsock, 
+                         const struct sockaddr *psa, 
+                         const char *method,
+                         const char *uri, 
+                         const char *connType, 
+                         const char *host, 
+                         const char *userAgent, 
+                         const char *authorization,
+                         const KEYVAL_PAIR_T *pHdrs,
+                         unsigned char *postData,
+                         unsigned int szpost) {
 
   int rc;
   int sz = 0;
   char tmps[2][256];
-  char buf[2048];
+  char buf[4096];
+  const KEYVAL_PAIR_T *pHdr = NULL;
 
   if(!pnetsock || !psa || !uri || !method) {
     return -1;
@@ -40,27 +49,31 @@ static int http_req_send(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa, con
 
   if((rc = snprintf(buf, sizeof(buf),
           "%s %s "HTTP_VERSION_DEFAULT"\r\n"
-          "Host: %s\r\n"
-          "User-Agent: %s\r\n",
+          HTTP_HDR_HOST": %s\r\n"
+          HTTP_HDR_USER_AGENT": %s\r\n",
           method,
           uri, 
           (host && host[0] != '\0') ? host : FORMAT_NETADDR(*psa, tmps[0], sizeof(tmps[0])),
-          vsxlib_get_useragentstr(tmps[1], sizeof(tmps[1]))
+          (userAgent && userAgent[0] != '\0') ? userAgent : vsxlib_get_useragentstr(tmps[1], sizeof(tmps[1]))
           )) < 0) {
     return -1;
   }
   sz += rc;
 
-  if(range0 > 0 || range1 > 0) {
-    if((rc = snprintf(&buf[sz], sizeof(buf) - sz, "Range: bytes=%d-", range0)) < 0) {
-      return -1;
+  pHdr = pHdrs;
+  while(pHdr) {
+    if(pHdr->key[0] != '\0' && pHdr->val[0] != '\0') {
+      if((rc = snprintf(&buf[sz], sizeof(buf) - sz, "%s: %s\r\n", pHdr->key, pHdr->val)) < 0) {
+        return -1;
+      }
+      sz += rc;
     }
-    sz += rc;
-    if((rc = snprintf(&buf[sz], sizeof(buf) - sz, "%d", range1)) < 0) {
-      return -1;
-    }
-    sz += rc;
-    if((rc = snprintf(&buf[sz], sizeof(buf) - sz, "\r\n")) < 0) {
+    pHdr = pHdr->pnext;
+  }
+
+  if(szpost > 0) {
+    if((rc = snprintf(&buf[sz], sizeof(buf) - sz, "%s: %d\r\n",
+             HTTP_HDR_CONTENT_LEN, szpost)) < 0) {
       return -1;
     }
     sz += rc;
@@ -103,11 +116,27 @@ static int http_req_send(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa, con
     return -1;
   }
 
+  if(postData && szpost > 0) {
+    VSX_DEBUG_HTTP(
+      LOG(X_DEBUG("HTTP - Sending POST %d bytes"), sz);
+      LOGHEXT_DEBUG(postData, szpost);
+    );
+    if((rc = netio_send(pnetsock, psa, postData, szpost)) < 0) {
+      LOG(X_ERROR("Failed to send HTTP%s request POST data %d bytes to %s:%d "ERRNO_FMT_STR),
+          (pnetsock->flags & NETIO_FLAG_SSL_TLS) ? "S" : "",
+          szpost, FORMAT_NETADDR(*psa, tmps[0], sizeof(tmps[0])), ntohs(PINET_PORT(psa)), ERRNO_FMT_ARGS);
+      return -1;
+    }
+  }
+
   return 0;
 }
 
-int httpcli_req_queryhdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttpResp, 
-                      const struct sockaddr *psa, HTTPCLI_AUTH_CTXT_T *pAuthCliCtxt, const char *descr) {
+int httpcli_req_queryhdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, 
+                          HTTP_RESP_T *pHttpResp, 
+                          const struct sockaddr *psa, 
+                          HTTPCLI_AUTH_CTXT_T *pAuthCliCtxt, 
+                          const char *descr) {
   char tmp[128];
   int rc = 0;
   const char *p = NULL;
@@ -124,7 +153,7 @@ int httpcli_req_queryhdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttpResp,
   }
 
   VSX_DEBUG_HTTP(
-    LOG(X_DEBUG("Read header %d bytes from %s:%d"), 
+    LOG(X_DEBUG("HTTP - Read header %d bytes from %s:%d"), 
                 pHdrCtxt->hdrslen, FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)));
     LOGHEXT_DEBUG(pHdrCtxt->pbuf, pHdrCtxt->hdrslen)
   );
@@ -175,12 +204,6 @@ int httpcli_req_queryhdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttpResp,
   }
 
   return rc;
-}
-
-static int req_queryhdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttpResp, 
-                              const struct sockaddr *psa, HTTPCLI_AUTH_CTXT_T *pAuthCliCtxt) {
-
-  return httpcli_req_queryhdrs(pHdrCtxt, pHttpResp, psa, pAuthCliCtxt, "HTTP");
 }
 
 int httpcli_calcdigestauth(HTTPCLI_AUTH_CTXT_T *pAuthCliCtxt) {
@@ -332,11 +355,18 @@ int httpcli_authenticate(HTTP_RESP_T *pHttpResp, HTTPCLI_AUTH_CTXT_T *pAuthCliCt
   return rc;
 }
   
-int httpcli_gethdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttpResp,
-                  const struct sockaddr *psa, const char *uri,
-                  const char *connType, unsigned int range0,
-                  unsigned int range1, const char *host,
-                  HTTPCLI_AUTH_CTXT_T *pAuthCliCtxt) {
+static int http_req_sendread(HTTP_PARSE_CTXT_T *pHdrCtxt, 
+                             HTTP_RESP_T *pHttpResp,
+                             const char *method,
+                             const struct sockaddr *psa, 
+                             const char *uri,
+                             const char *connType,
+                             const char *host,
+                             const char *userAgent,
+                             HTTPCLI_AUTH_CTXT_T *pAuthCliCtxt, 
+                             const KEYVAL_PAIR_T *pHdrs,
+                             unsigned char *postData,
+                             unsigned int szpost) {
   int rc = 0;
   unsigned int idxretry = 0; 
 
@@ -346,10 +376,12 @@ int httpcli_gethdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttpResp,
 
   do {
 
-    if((rc = http_req_send(pHdrCtxt->pnetsock, psa, HTTP_METHOD_GET, uri, connType, range0, 
-                           range1, host, pAuthCliCtxt ? pAuthCliCtxt->authorization : NULL) < 0)) {
+    if((rc = httpcli_req_send(pHdrCtxt->pnetsock, psa, method, uri, connType, 
+                           host, userAgent, pAuthCliCtxt ? pAuthCliCtxt->authorization : NULL, 
+                           pHdrs, postData, szpost) < 0)) {
       break;
     }
+
     if(pAuthCliCtxt) {
       strncpy(pAuthCliCtxt->lastMethod, HTTP_METHOD_GET, sizeof(pAuthCliCtxt->lastMethod) -1);
     }
@@ -361,7 +393,7 @@ int httpcli_gethdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttpResp,
     pHdrCtxt->termcharidx = 0;
     pHdrCtxt->rcvclosed = 0;
 
-    if((rc = req_queryhdrs(pHdrCtxt, pHttpResp, psa, pAuthCliCtxt)) < 0) {
+    if((rc = httpcli_req_queryhdrs(pHdrCtxt, pHttpResp, psa, pAuthCliCtxt, "HTTP")) < 0) {
       //LOG(X_DEBUG("--REQ_QUERY_H rc:%d, idxretry:%d, statuscode:%d"), rc, idxretry, pHttpResp->statusCode);
       if(pHttpResp->statusCode == HTTP_STATUS_UNAUTHORIZED && pAuthCliCtxt) {
 
@@ -386,7 +418,8 @@ int httpcli_connect(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa, int tmtm
   }
 
   LOG(X_DEBUG("%s%sonnecting %sto %s:%d"), descr ? descr : "", descr ? " c" : "C",
-   (pnetsock->flags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : "", FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)));
+         (pnetsock->flags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : "", FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), 
+          ntohs(PINET_PORT(psa)));
 
   if(PNETIOSOCK_FD(pnetsock) == INVALID_SOCKET &&
     (PNETIOSOCK_FD(pnetsock) = net_opensocket(SOCK_STREAM, SOCK_RCVBUFSZ_DEFAULT, 0, NULL)) == INVALID_SOCKET) {
@@ -420,6 +453,42 @@ int httpcli_connect(NETIO_SOCK_T *pnetsock, const struct sockaddr *psa, int tmtm
   return rc;
 }
 
+int httpcli_gethdrs(HTTP_PARSE_CTXT_T *pHdrCtxt, HTTP_RESP_T *pHttpResp,
+                  const struct sockaddr *psa, const char *uri,
+                  const char *connType, unsigned int range0,
+                  unsigned int range1, const char *host,
+                  HTTPCLI_AUTH_CTXT_T *pAuthCliCtxt) {
+
+  int rc = 0;
+  unsigned int sz = 0;
+  KEYVAL_PAIR_T *pkv = NULL;
+  KEYVAL_PAIR_T kv;
+
+  if(!pHdrCtxt || !pHdrCtxt->pnetsock || !pHdrCtxt->pbuf || pHdrCtxt->szbuf <= 0 || !pHttpResp) {
+    return -1;
+  }
+
+  memset(&kv, 0, sizeof(kv));
+
+  //
+  // Construct any byte range header
+  //
+  if(range0 > 0 || range1 > 0) {
+    snprintf(kv.key, sizeof(kv.key), "Range");
+    if((rc = snprintf(kv.val, sizeof(kv.val), "bytes=%d-", range0)) > 0) {
+      sz += rc;
+      if(range1 > 0) {
+        snprintf(&kv.val[sz], sizeof(kv.val) - sz, "%d", range1);
+      }
+    }
+    pkv = &kv;
+  }
+
+  rc = http_req_sendread(pHdrCtxt, pHttpResp, HTTP_METHOD_GET, psa, uri, connType, 
+                     host, NULL, pAuthCliCtxt, pkv, NULL, 0);
+  return rc;
+}
+
 unsigned char *httpcli_get_contentlen_start(HTTP_RESP_T *pHttpResp,
                                     HTTP_PARSE_CTXT_T *pHdrCtxt,
                                     unsigned char *pbuf, unsigned int szbuf,
@@ -429,6 +498,10 @@ unsigned char *httpcli_get_contentlen_start(HTTP_RESP_T *pHttpResp,
   int contentLen = 0;
   unsigned int consumed = 0;
   unsigned char *pdata = NULL;
+
+  if(!pHttpResp || !pHdrCtxt || !pbuf) {
+    return NULL;
+  }
 
   if((p = conf_find_keyval(pHttpResp->hdrPairs, HTTP_HDR_CONTENT_LEN))) {
     contentLen = atoi(p);
@@ -535,6 +608,61 @@ const unsigned char *httpcli_getpage(const char *location, const char *puri,
   return pdata;
 }
 
+static unsigned char *httpcli_getbody(HTTP_RESP_T *pHttpResp, HTTP_PARSE_CTXT_T *pHdrCtxt, unsigned int *plen,
+                                      const char *puri, const struct sockaddr *psa, struct timeval *ptv0) {
+
+  unsigned char *pdata = NULL;
+  unsigned char *pbuf = NULL;
+  NETIO_SOCK_T *pnetsock = NULL;
+  unsigned int tmtms;
+  unsigned int sz;
+  struct timeval tv1;
+  unsigned int consumed = 0;
+  unsigned int contentLen = 0;
+  char tmp[128];
+
+  pbuf = (unsigned char *) pHdrCtxt->pbuf;
+  pnetsock = pHdrCtxt->pnetsock;
+  tmtms = pHdrCtxt->tmtms;
+
+  if((pdata = httpcli_get_contentlen_start(pHttpResp, pHdrCtxt, pbuf, *plen, 1, &contentLen))) {
+    consumed = pHdrCtxt->idxbuf - pHdrCtxt->hdrslen;
+  }
+
+  if(pdata && net_setsocknonblock(NETIOSOCK_FD(*pnetsock), 1) < 0) {
+    pdata = NULL;
+  }
+
+  while(pdata && consumed < contentLen && !g_proc_exit) {
+
+    if((sz = netio_recvnb(pnetsock, (unsigned char *) &pdata[consumed], contentLen - consumed, 500)) > 0) {
+      VSX_DEBUG_HTTP(
+        LOG(X_DEBUG("HTTP - Read %d body bytes at [%d]/%d bytes from %s:%d"), 
+                  sz, consumed, contentLen, FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)));
+        LOGHEXT_DEBUG(&pdata[consumed], sz)
+      );
+      consumed += sz;
+    }
+    gettimeofday(&tv1, NULL);
+    if(tmtms > 0 && consumed < contentLen && TIME_TV_DIFF_MS(tv1, *ptv0) > (unsigned int) tmtms) {
+      LOG(X_WARNING("HTTP %s:%d%s timeout %d ms exceeded"),
+           FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)), puri, tmtms);
+      pdata = NULL;
+      break;
+    }
+  }
+
+  if(pdata && contentLen > 0 && consumed >= contentLen) {
+    pdata[consumed] = '\0';
+    *plen = consumed;
+  } else {
+    pdata = NULL;
+    *plen = 0;
+  }
+
+  return pdata;
+}
+
 unsigned char *httpcli_loadpagecontent(const char *puri, 
                                 unsigned char *pbuf, 
                                 unsigned int *plen,
@@ -546,10 +674,7 @@ unsigned char *httpcli_loadpagecontent(const char *puri,
                                 const char *hdrhost) {
   HTTP_RESP_T httpResp;
   HTTP_PARSE_CTXT_T hdrCtxt;
-  int sz = 0;
-  struct timeval tv0, tv1;
-  unsigned int consumed = 0;
-  unsigned int contentLen = 0;
+  struct timeval tv0;
   unsigned char *pdata = NULL;
   char tmp[128];
 
@@ -584,34 +709,55 @@ unsigned char *httpcli_loadpagecontent(const char *puri,
 
   }
 
-  if((pdata = httpcli_get_contentlen_start(pHttpResp, pHdrCtxt, pbuf, *plen, 1, &contentLen))) {
-    consumed = pHdrCtxt->idxbuf - pHdrCtxt->hdrslen;
+  pdata = httpcli_getbody(pHttpResp, pHdrCtxt, plen, puri, psa, &tv0);
+
+  return pdata;
+}
+
+unsigned char *httpcli_post(const char *puri, 
+                            unsigned char *pbuf, 
+                            unsigned int *plen,
+                            NETIO_SOCK_T *pnetsock,
+                            const struct sockaddr *psa,
+                            unsigned int tmtms,
+                            const char *hdrhost,
+                            const char *hdrUserAgent,
+                            HTTP_RESP_T *pHttpResp,
+                            const KEYVAL_PAIR_T *pkvs,
+                            unsigned char *postData,
+                            unsigned int szpost) {
+  HTTP_RESP_T httpResp;
+  HTTP_PARSE_CTXT_T hdrCtxt;
+  int rc = 0;
+  struct timeval tv0;
+  unsigned char *pdata = NULL;
+  char tmp[128];
+  HTTPCLI_AUTH_CTXT_T *pAuthCliCtxt = NULL;
+
+  if(!puri || !pbuf || !plen || *plen <= 0 || !psa || !pnetsock) {
+    return NULL;
   }
 
-  if(pdata && net_setsocknonblock(NETIOSOCK_FD(*pnetsock), 1) < 0) {
-    pdata = NULL;
+  memset(&hdrCtxt, 0, sizeof(hdrCtxt));
+  hdrCtxt.pnetsock = pnetsock;
+  hdrCtxt.pbuf = (char *) pbuf;
+  hdrCtxt.szbuf = *plen;
+  hdrCtxt.tmtms = tmtms;
+
+  if(!pHttpResp) {
+    memset(&httpResp, 0, sizeof(httpResp));
+    pHttpResp = &httpResp;
   }
 
-  while(pdata && consumed < contentLen && !g_proc_exit) {
+  VSX_DEBUG_HTTP ( LOG(X_DEBUG("HTTP - Posting URL %s:%d/%s"), 
+                  FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), htons(PINET_PORT(psa)), puri));
 
-    if((sz = netio_recvnb(pnetsock, (unsigned char *) &pdata[consumed], contentLen - consumed, 500)) > 0) {
-      consumed += sz;
-    }
-    gettimeofday(&tv1, NULL);
-    if(tmtms > 0 && consumed < contentLen && TIME_TV_DIFF_MS(tv1, tv0) > (unsigned int) tmtms) {
-      LOG(X_WARNING("HTTP %s:%d%s timeout %d ms exceeded"),
-           FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)), puri, tmtms);
-      pdata = NULL;
-      break;
-    }
-  }
+  gettimeofday(&tv0, NULL);
 
-  if(pdata && contentLen > 0 && consumed >= contentLen) {
-    pdata[consumed] = '\0';
-    *plen = consumed;
-  } else {
-    pdata = NULL;
-    *plen = 0;
+  if((rc = http_req_sendread(&hdrCtxt, pHttpResp, HTTP_METHOD_POST, psa, puri, 
+                     http_getConnTypeStr(HTTP_CONN_TYPE_KEEPALIVE), 
+                     hdrhost, hdrUserAgent, pAuthCliCtxt, pkvs, postData, szpost)) >= 0) {
+    pdata = httpcli_getbody(pHttpResp, &hdrCtxt, plen, puri, psa, &tv0);
   }
 
   return pdata;

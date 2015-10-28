@@ -47,6 +47,7 @@ typedef struct RTMP_CTXT_CLIENT {
   const char                     *purl;
   const char                     *puri;
   const char                     *puridocname;
+  const char                     *plocation;
 
   SOCKET_DESCR_T                 sd; 
   PKTQUEUE_T                     *pQVid;

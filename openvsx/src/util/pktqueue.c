@@ -27,10 +27,18 @@
 
 #define PKTQUEUE_TMP_PKT                   1
 
+#define PKTQ_ADVANCE_RD2(pQ, idxRd)   if(++idxRd >= (pQ)->cfg.maxPkts) { idxRd = 0; } 
+#define PKTQ_ADVANCE_WR2(pQ, idxWr)   if(++idxWr >= (pQ)->cfg.maxPkts) { idxWr = 0; } 
+
+/*
 #define PKTQ_ADVANCE_WR(pQ)   if(++((pQ)->idxWr) >= (pQ)->cfg.maxPkts) { \
                                     (pQ)->idxWr = 0; } (pQ)->idxInWr = 0;
 #define PKTQ_ADVANCE_RD(pQ)   if(++((pQ)->idxRd) >= (pQ)->cfg.maxPkts) { \
                                     (pQ)->idxRd = 0; } (pQ)->idxInRd = 0;
+*/
+#define PKTQ_ADVANCE_WR(pQ) PKTQ_ADVANCE_WR2((pQ), (pQ)->idxWr) (pQ)->idxInWr = 0;
+#define PKTQ_ADVANCE_RD(pQ) PKTQ_ADVANCE_RD2((pQ), (pQ)->idxRd) (pQ)->idxInRd = 0;
+                                    
 #define PKTQ_PREV_WR(pQ) (pQ->idxWr > 0 ? pQ->idxWr - 1 : pQ->cfg.maxPkts - 1);
 
 
@@ -171,6 +179,9 @@ static int alloc_slot(PKTQUEUE_T *pQ, unsigned int idx) {
     return -1;
   }
 
+  VSX_DEBUG_MEM( LOG(X_DEBUG("MEM - pktqueue_alloc_slot [%d]:0x%x=%d bytes"), idx, pQ->pkts[idx].pBuf, 
+       pQ->cfg.prebufOffset + pQ->cfg.maxPktLen + (pQ->cfg.userDataLen > 0 ? 16 : 0) + pQ->cfg.userDataLen); ); 
+
   pQ->pkts[idx].pData = pQ->pkts[idx].pBuf + pQ->cfg.prebufOffset;
   pQ->pkts[idx].allocSz = pQ->cfg.maxPktLen;
 
@@ -180,12 +191,12 @@ static int alloc_slot(PKTQUEUE_T *pQ, unsigned int idx) {
 PKTQUEUE_T *pktqueue_create(unsigned int maxPkts, unsigned int szPkt,
                             unsigned int growMaxPkts, unsigned int growSzPkt,
                             unsigned int prebufOffset, unsigned int userDataLen,
-                            int uselock) {
+                            int uselock, int prealloc) {
   PKTQUEUE_T *pQ;
   unsigned int idx;
   //unsigned int alignoffset = 0;
 
-  if(maxPkts <= 0 || szPkt <= 0) {
+  if(maxPkts <= 0 || (prealloc && szPkt <= 0)) {
     return NULL;
   }
 
@@ -197,6 +208,7 @@ PKTQUEUE_T *pktqueue_create(unsigned int maxPkts, unsigned int szPkt,
     growMaxPkts = maxPkts;
   }
 
+
   if(!(pQ = (PKTQUEUE_T *) avc_calloc(1, sizeof(PKTQUEUE_T)))) {
     return NULL;
   }
@@ -206,12 +218,20 @@ PKTQUEUE_T *pktqueue_create(unsigned int maxPkts, unsigned int szPkt,
     return NULL;
   }
 
+  VSX_DEBUG_MEM( LOG(X_DEBUG("MEM - pktqueue_create Q: 0x%x=%d bytes, pQ->pkts: 0x%x=((%d+%d)*%d=%d) bytes"), pQ, sizeof(PKTQUEUE_T), pQ->pkts, growMaxPkts,PKTQUEUE_TMP_PKT, sizeof(PKTQUEUE_PKT_T),  (growMaxPkts + PKTQUEUE_TMP_PKT) * sizeof(PKTQUEUE_PKT_T)););
+
+  //TODO: make dynalloc mode, where all allocations are on the fly.. and then deallocated
+
   pQ->cfg.maxPkts = maxPkts;
-  pQ->cfg.maxPktLen = szPkt;
   pQ->cfg.growMaxPkts = growMaxPkts;
   pQ->cfg.growMaxPktLen = growSzPkt;
   pQ->cfg.prebufOffset = prebufOffset;
   pQ->cfg.userDataLen = userDataLen;
+  if((pQ->cfg.prealloc = prealloc)) {
+    pQ->cfg.maxPktLen = szPkt;
+  } else {
+    pQ->cfg.maxPktLen = 0;
+  }
 
   //fprintf(stderr, "Q 0x%x MTX INIT\n", pQ);
 
@@ -224,22 +244,15 @@ PKTQUEUE_T *pktqueue_create(unsigned int maxPkts, unsigned int szPkt,
   pthread_mutex_init(&pQ->notify.mtx, NULL);
   pthread_cond_init(&pQ->notify.cond, NULL);
 
-  for(idx = 0; idx < maxPkts + PKTQUEUE_TMP_PKT; idx++) {
+  if(prealloc) {
+    for(idx = 0; idx < maxPkts + PKTQUEUE_TMP_PKT; idx++) {
 
-    if(alloc_slot(pQ, idx) < 0) {
-      pktqueue_destroy(pQ);
-      return NULL;
-    }
-/*
-    if(!(pQ->pkts[idx].pBuf = avc_calloc(1, pQ->cfg.prebufOffset + pQ->cfg.maxPktLen +
-                             (pQ->cfg.userDataLen > 0 ? 16 : 0) + pQ->cfg.userDataLen))) {
-      pktqueue_destroy(pQ);
-      return NULL;
-    }
+      if(alloc_slot(pQ, idx) < 0) {
+        pktqueue_destroy(pQ);
+        return NULL;
+      }
 
-    pQ->pkts[idx].pData = pQ->pkts[idx].pBuf + pQ->cfg.prebufOffset;
-    pQ->pkts[idx].allocSz = pQ->cfg.maxPktLen;
-*/
+    }
   }
 
   if(PKTQUEUE_TMP_PKT) {
@@ -260,11 +273,12 @@ void pktqueue_destroy(PKTQUEUE_T *pQ) {
 
   for(idx = 0; idx < pQ->cfg.growMaxPkts + PKTQUEUE_TMP_PKT; idx++) {
     if(pQ->pkts[idx].pBuf) {
-      free(pQ->pkts[idx].pBuf);
+      avc_free((void **) &pQ->pkts[idx].pBuf);
     }
+    pQ->pkts[idx].allocSz = 0;
   }
   if(pQ->pktTmp && pQ->pktTmp->pBuf && pQ->ownTmpPkt) {
-    free(pQ->pktTmp->pBuf);
+    avc_free((void **) &pQ->pktTmp->pBuf);
   }
 
   //if(pQ->pstats) {
@@ -385,6 +399,7 @@ static int realloc_slot(PKTQUEUE_T *pQ, unsigned int idx, unsigned int reqlen) {
       if(pQ->cfg.growSzOnlyAsNeeded == 1) {
         growMaxPktLen = reqlen;
       } else {
+        // Assume percentage beyond reqlen
         growMaxPktLen =  (unsigned int) ((float)(reqlen * (100 + pQ->cfg.growSzOnlyAsNeeded)) / 100.0f);
       }
       growMaxPktLen = MIN(growMaxPktLen, pQ->cfg.growMaxPktLen);
@@ -405,9 +420,11 @@ static int realloc_slot(PKTQUEUE_T *pQ, unsigned int idx, unsigned int reqlen) {
     LOG(X_DEBUGV("Increased queue (id:%d) slot[%d] size %d -> %d, data len:%u"), 
                  pQ->cfg.id, idx, pQ->pkts[idx].allocSz, growMaxPktLen, reqlen);
 
-    memcpy(pBuf, pQ->pkts[idx].pBuf, pQ->cfg.prebufOffset + pQ->pkts[idx].len + 
-           (pQ->cfg.userDataLen > 0 ? 16 : 0) + pQ->cfg.userDataLen);
-    free(pQ->pkts[idx].pBuf);
+    if(pQ->pkts[idx].pBuf) {
+      memcpy(pBuf, pQ->pkts[idx].pBuf, pQ->cfg.prebufOffset + pQ->pkts[idx].len + 
+             (pQ->cfg.userDataLen > 0 ? 16 : 0) + pQ->cfg.userDataLen);
+      avc_free((void **) &pQ->pkts[idx].pBuf);
+    }
     pQ->pkts[idx].pBuf = pBuf;
     pQ->pkts[idx].pData = pBuf + pQ->cfg.prebufOffset;
     pQ->pkts[idx].allocSz = growMaxPktLen;
@@ -1192,6 +1209,12 @@ int pktqueue_readpktdirect_done(PKTQUEUE_T *pQ) {
     return PKTQUEUE_RC_ERROR;
   }
 
+  if(!pQ->cfg.prealloc) {
+    avc_free((void **) &pQ->pkts[pQ->idxRd].pBuf);
+    pQ->pkts[pQ->idxRd].pData = NULL;
+    pQ->pkts[pQ->idxRd].allocSz = 0;
+  }
+
   pQ->pkts[pQ->idxRd].flags = 0;
   if(pQ->pstats) {
     pQ->pstats->read.slots++;
@@ -1210,6 +1233,22 @@ int pktqueue_readpktdirect_done(PKTQUEUE_T *pQ) {
   return 0;
 }
 
+int pktqueue_readpktdirect_havenext(PKTQUEUE_T *pQ) {
+  unsigned int idxRd;
+
+  if(!pQ || !pQ->inDirectRd) {
+    return -1;
+  }
+
+  idxRd = pQ->idxRd;
+  PKTQ_ADVANCE_RD2(pQ, idxRd);
+  if(pQ->pkts[idxRd].len > 0 && pQ->pkts[idxRd].flags & PKTQUEUE_FLAG_HAVECOMPLETE) {
+    return 1;
+  }
+
+  return 0;
+}
+
 int pktqueue_swapreadslots(PKTQUEUE_T *pQ, PKTQUEUE_PKT_T **ppSlot) {
   PKTQUEUE_PKT_T *pSlotGoingIn = NULL;
   PKTQUEUE_PKT_T pkt;
@@ -1222,33 +1261,50 @@ int pktqueue_swapreadslots(PKTQUEUE_T *pQ, PKTQUEUE_PKT_T **ppSlot) {
     qlock(pQ, 1);
   }
 
-  if(!(*ppSlot)) {
+  if(pQ->cfg.prealloc) {
 
-    if(!pQ->pktTmp) {
-      LOG(X_ERROR("Unable to swap pkt slots"));
+    if(!(*ppSlot)) {
+
+      if(!pQ->pktTmp) {
+        LOG(X_ERROR("Unable to swap pkt slots"));
+        if(!pQ->inDirectRd) {
+          qlock(pQ, 0);
+        }
+        return -1;
+      }
+      pSlotGoingIn = *ppSlot = pQ->pktTmp;
+      pQ->ownTmpPkt = 0;
+    } else {
+      pSlotGoingIn = *ppSlot;
+    }
+
+    if(!pSlotGoingIn->pBuf) {
       if(!pQ->inDirectRd) {
         qlock(pQ, 0);
       }
       return -1;
-    }
-    pSlotGoingIn = *ppSlot = pQ->pktTmp;
-    pQ->ownTmpPkt = 0;
+    } 
+
+    memcpy(&pkt, &pQ->pkts[pQ->idxRd], sizeof(PKTQUEUE_PKT_T));
+    pSlotGoingIn->len = 0;
+    pSlotGoingIn->flags = 0;
+    memcpy(&pQ->pkts[pQ->idxRd], pSlotGoingIn, sizeof(PKTQUEUE_PKT_T));
+    memcpy(*ppSlot, &pkt, sizeof(PKTQUEUE_PKT_T));
+
   } else {
-    pSlotGoingIn = *ppSlot;
-  }
 
-  if(!pSlotGoingIn->pBuf) {
-    if(!pQ->inDirectRd) {
-      qlock(pQ, 0);
+    if(pQ->pktTmp->pBuf) {
+      avc_free((void **) &pQ->pktTmp->pBuf);
     }
-    return -1;
-  } 
-
-  memcpy(&pkt, &pQ->pkts[pQ->idxRd], sizeof(PKTQUEUE_PKT_T));
-  pSlotGoingIn->len = 0;
-  pSlotGoingIn->flags = 0;
-  memcpy(&pQ->pkts[pQ->idxRd], pSlotGoingIn, sizeof(PKTQUEUE_PKT_T));
-  memcpy(*ppSlot, &pkt, sizeof(PKTQUEUE_PKT_T));
+    pQ->pktTmp->allocSz = 0;
+    memcpy(pQ->pktTmp, &pQ->pkts[pQ->idxRd], sizeof(PKTQUEUE_PKT_T));
+    pQ->pkts[pQ->idxRd].pBuf = NULL; 
+    pQ->pkts[pQ->idxRd].allocSz = 0; 
+    if(!(*ppSlot)) {
+      *ppSlot = pQ->pktTmp;
+    }
+    memcpy(*ppSlot, pQ->pktTmp, sizeof(PKTQUEUE_PKT_T));
+  }
 
   if(!pQ->inDirectRd) {
     qlock(pQ, 0);
@@ -1511,7 +1567,7 @@ int pktqueue_getstats(PKTQUEUE_T *pQ, PKTQUEUE_STATS_REPORT_T *pReport) {
 PKTQUEUE_T *framebuf_create(unsigned int sz, unsigned int prebufOffset) {
   PKTQUEUE_T *pFb;
                           
-  if(!(pFb = pktqueue_create(2, sz, 0, 0, prebufOffset, 0, 0))) {
+  if(!(pFb = pktqueue_create(2, sz, 0, 0, prebufOffset, 0, 0, 1))) {
     return NULL;
   }
 
@@ -1523,7 +1579,7 @@ PKTQUEUE_T *framebuf_create(unsigned int sz, unsigned int prebufOffset) {
 PKTQUEUE_T *ringbuf_create(unsigned int sz) {
   PKTQUEUE_T *pRb;
 
-  if(!(pRb = pktqueue_create(1, sz, 0, 0, 0, 0, 1))) {
+  if(!(pRb = pktqueue_create(1, sz, 0, 0, 0, 0, 1, 1))) {
     return NULL;
   }
 

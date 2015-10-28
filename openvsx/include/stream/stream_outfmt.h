@@ -77,11 +77,14 @@ typedef union {
   MPG4V_SEQ_HDRS_T        mpg4v;
 } OUTFMT_VID_HDRS_UNION_T;
 
+#define OUTFMT_FRAME_FLAG_HAVENEXT          0x01
+
 typedef struct OUTFMT_FRAME_DATA {
   uint16_t                    streamType;
   uint8_t                     isvid;
   uint8_t                     isaud;
   uint16_t                    channelId;
+  uint16_t                    flags;
   XC_CODEC_TYPE_T             mediaType;
 
   XCODE_OUTBUF_T              xout;

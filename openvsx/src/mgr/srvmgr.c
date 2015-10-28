@@ -86,7 +86,7 @@ static int is_shared_livemethod(const SRVMEDIA_RSRC_T *pMediaRsrc) {
 }
 */
 
-static int is_shared_resource(const SRVMEDIA_RSRC_T *pMediaRsrc,  MEDIA_ACTION_T action) {
+int srvmgr_is_shared_resource(const SRVMEDIA_RSRC_T *pMediaRsrc,  MEDIA_ACTION_T action) {
   int shared = 1;
 
   //
@@ -99,7 +99,7 @@ static int is_shared_resource(const SRVMEDIA_RSRC_T *pMediaRsrc,  MEDIA_ACTION_T
   }
 
   VSX_DEBUG_MGR(LOG(X_DEBUG("MGR - is_shared_resource '%s': pshared: 0x%x, *pshared: %d, returning %d"), 
-                     pMediaRsrc->virtRsrc, pMediaRsrc->pshared, *pMediaRsrc->pshared, shared));
+       pMediaRsrc->virtRsrc, pMediaRsrc->pshared, pMediaRsrc->pshared ? *pMediaRsrc->pshared : -1, shared));
 
   return shared;
 }
@@ -1342,6 +1342,7 @@ int srvmgr_check_start_proc(SRV_MGR_CONN_T *pConn,
                             const STREAM_DEVICE_T *pdevtype,  
                             MEDIA_ACTION_T action, 
                             STREAM_METHOD_T methodAuto,
+                            int isShared,
                             int *pstartProc) {
   int rc = 0;
   int haveFullMediaDescr = 0;
@@ -1363,7 +1364,12 @@ int srvmgr_check_start_proc(SRV_MGR_CONN_T *pConn,
 
   *pstartProc = 0;
 
-  if(!(pProc = find_running_proc(pConn->cfg.pProcList, pMediaRsrc, 1))) {
+  //
+  // Lock the process list
+  //
+  pthread_mutex_lock(&pConn->cfg.pProcList->mtx);
+
+  if(!(pProc = find_running_proc(pConn->cfg.pProcList, pMediaRsrc, 0))) {
     haveFullMediaDescr = check_mediaproperties(pMediaRsrc, pMediaDescr);
   }
 
@@ -1373,12 +1379,42 @@ int srvmgr_check_start_proc(SRV_MGR_CONN_T *pConn,
          pProc ? pProc->instanceId : "", haveFullMediaDescr, pMediaRsrc->pshared ? *pMediaRsrc->pshared : 0,
          pMediaRsrc->pmethodBits ? *pMediaRsrc->pmethodBits : 0));
  
-  //
-  // Lock the process list
-  //
-  pthread_mutex_lock(&pConn->cfg.pProcList->mtx);
+  if((pProc)) {
 
-  if(!(pProc = find_running_proc(pConn->cfg.pProcList, pMediaRsrc, 0))) {
+    VSX_DEBUG_MGR(LOG(X_DEBUG("MGR - check_start_proc proc instanceId: '%s' already exists.  "
+                              "maxClientsPerProc: (pending: %d + active: %d)/%d"), 
+                               pProc->instanceId, pProc->numPendingActive, 
+                               pProc->numActive, pConn->cfg.pProcList->maxClientsPerProc));
+   
+    if(pConn->cfg.pProcList->maxClientsPerProc > 0 && 
+       (pProc->numPendingActive + pProc->numActive) + 1 >= pConn->cfg.pProcList->maxClientsPerProc) {
+
+      VSX_DEBUG_MGR(LOG(X_DEBUG("MGR - check_start_proc using new stream processor (pending: %d + active: %d)/%d"),
+                           pProc->numPendingActive, pProc->numActive, pConn->cfg.pProcList->maxClientsPerProc));
+  
+      pProc = NULL;
+
+    } else {
+
+      VSX_DEBUG_MGR(
+            LOG(X_DEBUG("MGR - check_start_proc using existing stream processor (pending: %d + active: %d)/%d"),
+                           pProc->numPendingActive, pProc->numActive, pConn->cfg.pProcList->maxClientsPerProc));
+
+      //
+      // Update last access time
+      //
+      gettimeofday(&pProc->tmLastAccess, NULL);
+
+      //
+      // Increase the number of pending client connections for this stream processor, which will be reset
+      // the next time numActive is polled and est
+      //
+      pProc->numPendingActive++;
+    }
+
+  } 
+
+  if(!pProc) {
 
     //
     // We are going to be creating a new child process, so check resource availability
@@ -1423,14 +1459,6 @@ int srvmgr_check_start_proc(SRV_MGR_CONN_T *pConn,
 
     }
 
-  } else {
-
-    VSX_DEBUG_MGR(LOG(X_DEBUG("MGR - proc instanceId: '%s' already exists"), pProc->instanceId));
-
-    //
-    // Update last access time
-    //
-    gettimeofday(&pProc->tmLastAccess, NULL);
   }
 
   //
@@ -1651,6 +1679,7 @@ void srvmgr_client_proc(void *pfuncarg) {
   SRVMEDIA_RSRC_T mediaRsrc;
   HTTP_STATUS_T httpStatus;
   int liveAutoFind;
+  int isShared;
   int itmp;
 
   LOG(X_DEBUG("Handling %sconnection on port %d from %s:%d"),
@@ -1687,6 +1716,7 @@ void srvmgr_client_proc(void *pfuncarg) {
     methodAuto = STREAM_METHOD_UNKNOWN;
     checkAction = MEDIA_ACTION_UNKNOWN;
     liveAutoFind = 0;
+    isShared = 0;
     memset(&mediaDescr, 0, sizeof(mediaDescr));
     memset(&mediaRsrc, 0, sizeof(mediaRsrc));
     userAgent = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->conn.httpReq.reqPairs, HTTP_HDR_USER_AGENT);
@@ -1811,7 +1841,7 @@ void srvmgr_client_proc(void *pfuncarg) {
       // Check and introspect the media resource only if for /media URL
       //
       if(reqMethod == STREAM_METHOD_UNKNOWN || methodAuto == STREAM_METHOD_PROGDOWNLOAD ||
-        action == MEDIA_ACTION_CANNED_INFLASH) {
+        action == MEDIA_ACTION_CANNED_INFLASH || action == MEDIA_ACTION_UNKNOWN) {
         check_mediafile(&mediaRsrc, &mediaDescr, 0); 
       }
 
@@ -1820,15 +1850,18 @@ void srvmgr_client_proc(void *pfuncarg) {
       //
       if(action == MEDIA_ACTION_UNKNOWN) {
 
+        LOG(X_DEBUG("MGR - get_media_action with action: %s (%d)"), srvmgr_action_tostr(action), action);
+
         action = get_media_action(&mediaDescr, &mediaRsrc, &pConn->conn, pdevtype, reqMethod, methodAuto);
 
-        LOG(X_DEBUG("MGR - get_media_action path: '%s', virt: '%s', got action: %s (%d) from unknown, ext:'%s', "
-                    "reqMethod: %s (%d), methodAuto: %s (%d), media.type: %s (%d), profile:'%s'"), 
-                     mediaRsrc.filepath, mediaRsrc.virtRsrc, srvmgr_action_tostr(action), action, 
-                     mediaRsrc.pRsrcName, devtype_methodstr(reqMethod), reqMethod, 
-                     devtype_methodstr(methodAuto), methodAuto, codecType_getCodecDescrStr(mediaDescr.type), 
-                     mediaDescr.type, mediaRsrc.profile);
       }
+
+      LOG(X_DEBUG("MGR - get_media_action path: '%s', virt: '%s', action: %s (%d) from unknown, ext:'%s', "
+                  "reqMethod: %s (%d), methodAuto: %s (%d), media.type: %s (%d), profile:'%s'"), 
+                   mediaRsrc.filepath, mediaRsrc.virtRsrc, srvmgr_action_tostr(action), action, 
+                   mediaRsrc.pRsrcName, devtype_methodstr(reqMethod), reqMethod, 
+                   devtype_methodstr(methodAuto), methodAuto, codecType_getCodecDescrStr(mediaDescr.type), 
+                   mediaDescr.type, mediaRsrc.profile);
 
       //
       // Ensure the media resource (media file or sdp) exists in the media dir
@@ -1847,9 +1880,12 @@ void srvmgr_client_proc(void *pfuncarg) {
         mediaRsrc.instanceId[0] = '\0';
       }
 
+      if(mediaDescr.type != MEDIA_FILE_TYPE_UNKNOWN) {
+        isShared = srvmgr_is_shared_resource(&mediaRsrc, action);
+      }
+
       if(mediaRsrc.instanceId[0] == '\0' && 
-         (methodAuto == STREAM_METHOD_HTTPLIVE || methodAuto == STREAM_METHOD_DASH) && 
-         !is_shared_resource(&mediaRsrc, action)) {
+         (methodAuto == STREAM_METHOD_HTTPLIVE || methodAuto == STREAM_METHOD_DASH) && !isShared) {
 
         //
         // If the resource is a dedicated, non-shared resource then Send HTTP 30x redirect to 
@@ -1912,7 +1948,7 @@ void srvmgr_client_proc(void *pfuncarg) {
           // The media resource is processed by a dedicated vsx child instance
           //
           if((rc = srvmgr_check_start_proc(pConn, &mediaRsrc, &mediaDescr, &proc, pdevtype, 
-                                           action, methodAuto, &startProc)) < 0) {
+                                           action, methodAuto, isShared, &startProc)) < 0) {
             if(startProc) {
               httpStatus = HTTP_STATUS_SERVERERROR;
             } else {
@@ -2034,8 +2070,10 @@ void srvmgr_client_proc(void *pfuncarg) {
   
               rc = http_resp_sendfile(&pConn->conn, &httpStatus, tmpfile,
                                       CONTENT_TYPE_TEXTHTML, HTTP_ETAG_AUTO);
+
             } else {
-              httpStatus = HTTP_STATUS_FORBIDDEN;
+              //httpStatus = HTTP_STATUS_FORBIDDEN;
+              httpStatus = HTTP_STATUS_NOTFOUND;
             }
           } // end of httpStatus = HTTP_STATUS_OK
 

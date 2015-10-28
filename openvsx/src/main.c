@@ -1041,16 +1041,18 @@ enum CMD_OPT {
   CMD_OPT_TURNSDPOUTPATH,
   CMD_OPT_TURNPOLICY,
   CMD_OPT_TOKENID,
+  CMD_OPT_OUTQ_PREALLOC,
   CMD_OPT_DEBUG,
   CMD_OPT_DEBUG_CODEC,
   CMD_OPT_DEBUG_AUTH,
   CMD_OPT_DEBUG_HTTP,
   CMD_OPT_DEBUG_MKV,
   CMD_OPT_DEBUG_DASH,
-  CMD_OPT_DEBUG_LIVE,
   CMD_OPT_DEBUG_INFRAME,
-  CMD_OPT_DEBUG_OUTFMT,
+  CMD_OPT_DEBUG_LIVE,
+  CMD_OPT_DEBUG_MEM,
   CMD_OPT_DEBUG_NET,
+  CMD_OPT_DEBUG_OUTFMT,
   CMD_OPT_DEBUG_REMB,
   CMD_OPT_DEBUG_RTP,
   CMD_OPT_DEBUG_RTCP,
@@ -1140,6 +1142,7 @@ int main(int argc, char *argv[]) {
                  { "debug-dash",  optional_argument,       NULL, CMD_OPT_DEBUG_DASH },
                  { "debug-live",  optional_argument,       NULL, CMD_OPT_DEBUG_LIVE  },
                  { "debug-inframe", optional_argument,     NULL, CMD_OPT_DEBUG_INFRAME },
+                 { "debug-mem",   optional_argument,       NULL, CMD_OPT_DEBUG_MEM },
                  { "debug-net",   optional_argument,       NULL, CMD_OPT_DEBUG_NET  },
                  { "debug-outfmt",optional_argument,       NULL, CMD_OPT_DEBUG_OUTFMT },
                  { "debug-remb",  optional_argument,       NULL, CMD_OPT_DEBUG_REMB },
@@ -1374,6 +1377,7 @@ int main(int argc, char *argv[]) {
                  { "stts",        optional_argument,       NULL, CMD_OPT_STTS },
                  { "test",        optional_argument,       NULL, CMD_OPT_TEST },
                  { "token",       required_argument,       NULL, CMD_OPT_TOKENID },
+                 { "prealloc",    optional_argument,       NULL, CMD_OPT_OUTQ_PREALLOC },
                  { "tslive",      optional_argument,       NULL, CMD_OPT_TSLIVEPORT },
                  { "tslivemax",   required_argument,       NULL, CMD_OPT_TSLIVEMAX },
                  { "transport",   required_argument,       NULL, CMD_OPT_TRANSPORT },
@@ -2470,6 +2474,9 @@ int main(int argc, char *argv[]) {
       case CMD_OPT_TOKENID:
         streamParams.tokenid = optarg;
         break;
+      case CMD_OPT_OUTQ_PREALLOC:
+        streamParams.outq_prealloc = (optarg && atoi(optarg) <= 0) ? BOOL_DISABLED_OVERRIDE : BOOL_ENABLED_OVERRIDE;
+        break;
       case CMD_OPT_TSLIVEPORT:
         if(idxTslive < sizeof(streamParams.tsliveaddr) / sizeof(streamParams.tsliveaddr[0])) {
           if(optarg) {
@@ -2503,10 +2510,14 @@ int main(int argc, char *argv[]) {
         if(optarg) {
           if(!strcasecmp("auth", optarg)) {  
             g_debug_flags |= VSX_DEBUG_FLAG_AUTH;
+          } else if(!strcasecmp("codec", optarg)) {  
+            g_debug_flags |= VSX_DEBUG_FLAG_CODEC;
           } else if(!strcasecmp("http", optarg)) {  
             g_debug_flags |= VSX_DEBUG_FLAG_HTTP;
           } else if(!strcasecmp("remb", optarg)) {  
             g_debug_flags |= VSX_DEBUG_FLAG_REMB;
+          } else if(!strcasecmp("mem", optarg)) {  
+            g_debug_flags |= VSX_DEBUG_FLAG_MEM;
           } else if(!strcasecmp("mkv", optarg)) {  
             g_debug_flags |= VSX_DEBUG_FLAG_MKV;
           } else if(!strcasecmp("dash", optarg)) {  
@@ -2553,6 +2564,9 @@ int main(int argc, char *argv[]) {
         break;
       case CMD_OPT_DEBUG_INFRAME:
         g_debug_flags |= VSX_DEBUG_FLAG_INFRAME;
+        break;
+      case CMD_OPT_DEBUG_MEM:
+        g_debug_flags |= VSX_DEBUG_FLAG_MEM;
         break;
       case CMD_OPT_DEBUG_OUTFMT:
         g_debug_flags |= VSX_DEBUG_FLAG_OUTFMT;

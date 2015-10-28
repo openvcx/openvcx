@@ -996,7 +996,7 @@ int srv_ctrl_tslive(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
   // TODO pktqueue size >= sizeof(PACKETGEN_PKT_UDP_T::data)
   if(rc == 0) {
     if((pQueue = pktqueue_create(queueSz, 
-                                 pLiveQ->qCfg.maxPktLen, 0, 0, 0, 0, 1)) == NULL) {
+                                 pLiveQ->qCfg.maxPktLen, 0, 0, 0, 0, 1, 1)) == NULL) {
       rc = -1;
       *pHttpStatus = HTTP_STATUS_SERVERERROR;
       LOG(X_ERROR("Failed to create %s queue %d x %d for %s:%d"), VSX_TSLIVE_URL, queueSz, 

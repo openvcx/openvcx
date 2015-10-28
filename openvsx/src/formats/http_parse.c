@@ -251,7 +251,7 @@ int http_readhdr(HTTP_PARSE_CTXT_T *pCtxt) {
       //fprintf(stderr, "called net_recvnb tmt: %d rcvd:%d\n", pCtxt->tmtms, rcvd);
 
     } else {
-      //fprintf(stderr, "calling recv\n");
+      //LOG(X_DEBUG("calling recv with %d, szbuf: %d, idxbuf: %d"), pCtxt->szbuf-pCtxt->idxbuf, pCtxt->szbuf, pCtxt->idxbuf);
       if((rcvd = netio_recv(pCtxt->pnetsock, NULL, (unsigned char *) &pCtxt->pbuf[pCtxt->idxbuf], 
                           pCtxt->szbuf - pCtxt->idxbuf)) < 0) {
         //fprintf(stderr, "bad %d errno:%d\n", rcvd, errno);

@@ -1632,6 +1632,14 @@ typedef struct VSXLIB_STREAM_PARAMS {
 
   /**
    *
+   * Dynamically Pre-allocate output buffering queue
+   *
+   */
+  unsigned int outq_prealloc;
+
+
+  /**
+   *
    * audio output samples buffer storage size in ms
    *
    */

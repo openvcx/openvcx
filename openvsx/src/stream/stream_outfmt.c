@@ -475,7 +475,7 @@ OUTFMT_CFG_T *outfmt_setCb(STREAMER_OUTFMT_T *pLiveFmt,
       memset(&pOutFmt->cbCtxt, 0, sizeof(pOutFmt->cbCtxt));
       if(!(pOutFmt->pQ = (PKTQUEUE_T *) pktqueue_create(pQCfg->maxPkts, pQCfg->maxPktLen,
                                                         pQCfg->maxPkts, pQCfg->growMaxPktLen, 
-                                                        0,  sizeof(OUTFMT_FRAME_DATA_T), 1))) {
+                                                        0,  sizeof(OUTFMT_FRAME_DATA_T), 1, pQCfg->prealloc))) {
         LOG(X_ERROR("Failed to create queue for async frame listener"));
         pOutFmt = NULL;
         break; 
@@ -483,11 +483,16 @@ OUTFMT_CFG_T *outfmt_setCb(STREAMER_OUTFMT_T *pLiveFmt,
       pOutFmt->pQ->cfg.id = pQCfg->id + idx;
       pOutFmt->pQ->cfg.overwriteType = PKTQ_OVERWRITE_FIND_KEYFRAME;
       //pOutFmt->pQ->cfg.overwriteType = PKTQ_OVERWRITE_FIND_PTS; pOutFmt->pQ->cfg.overwriteVal = 0;
-      pOutFmt->pQ->cfg.growSzOnlyAsNeeded = 20; // grow by extra 20% 
+      if(pQCfg->prealloc) {
+        pOutFmt->pQ->cfg.growSzOnlyAsNeeded = 20; // grow by extra 20% 
+      } else {
+        pOutFmt->pQ->cfg.growSzOnlyAsNeeded = 1; // grow only to the size of the current data
+      }
       pOutFmt->pQ->cfg.maxRTlatencyMs = FRAME_THIN_Q_LATENCY_MS; // TODO: this should not be smaller than any GOP
 
-      LOG(X_DEBUG("Created outfmt pktq[%d] %d x slotsz:%d, slotszmax:%d"), 
-          pOutFmt->pQ->cfg.id, pQCfg->maxPkts, pOutFmt->pQ->cfg.maxPktLen, pOutFmt->pQ->cfg.growMaxPktLen);
+      LOG(X_DEBUG("Created outfmt pktq[%d] %d x slotsz:%d, slotszmax:%d, prealloc: %d"), 
+          pOutFmt->pQ->cfg.id, pQCfg->maxPkts, pOutFmt->pQ->cfg.maxPktLen, 
+          pOutFmt->pQ->cfg.growMaxPktLen, pQCfg->prealloc);
 
       //
       // Attach any (reader/writer) stats metrics counters to the queue instance
@@ -621,7 +626,8 @@ int outfmt_init(STREAMER_OUTFMT_LIST_T *pLiveFmts, int orderingQSz) {
     //
     // no locking queue for ordering / buffering future timestamped audio / video, as when applying a/v sync
     //
-    if(!(pQ = pktqueue_create(orderingQSz, 1024, orderingQSz, growMaxPktLen, 0, sizeof(OUTFMT_FRAME_DATA_T), 0))) {
+    if(!(pQ = pktqueue_create(orderingQSz, 1024, orderingQSz, growMaxPktLen, 0, 
+                              sizeof(OUTFMT_FRAME_DATA_T), 0, 1))) {
       return -1;
     }
     LOG(X_DEBUG("Created outfmt ordering pktq[%d] %d x slotsz:%d, slotszmax:%d"),
@@ -1146,6 +1152,7 @@ static void liveq_proc(void *pArg) {
   int skipFrame = 0;
   char buf[32];
   char *pid = NULL;
+  uint16_t frameFlags;
 
   memcpy(&wrap, (LIVEQ_CB_CTXT_WRAP_T *) pArg, sizeof(wrap));
   logutil_tid_add(pthread_self(), wrap.tid_tag);
@@ -1165,7 +1172,7 @@ static void liveq_proc(void *pArg) {
     pid = buf;
   }
 
-  LOG(X_DEBUG("LiveQ reader %s thread started"), pid); 
+  LOG(X_DEBUG("LiveQ reader %s %s thread started"), pid, wrap.tid_tag); 
 
   while(rc >= 0 && pCtxt->running == 1 && !g_proc_exit) {
 
@@ -1199,11 +1206,18 @@ static void liveq_proc(void *pArg) {
           pPkt = pCtxt->pSwappedSlot;
         }
 
+        frameFlags = 0;
+        if(pktqueue_readpktdirect_havenext(pQ) == 1) {
+          frameFlags |= OUTFMT_FRAME_FLAG_HAVENEXT;
+        }
+
+        //pktqueue_dump(pQ, NULL);
+        //fprintf(stderr, "liveq_proc (qid:%d) prealloc: %d, read rd:%d, wr:%d/%d, pquserdata:0x%x, len:%d/%d\n", pQ->cfg.id, pQ->cfg.prealloc, pQ->idxRd, pQ->idxWr, pQ->cfg.maxPkts, pPkt->xtra.pQUserData, pPkt->len, pPkt->allocSz);
+
         pktqueue_readpktdirect_done(pQ);
 
-        //fprintf(stderr, "liveq_proc (qid:%d) read rd:%d, wr:%d/%d, pquserdata:0x%x\n", pQ->cfg.id, pQ->idxRd, pQ->idxWr, pQ->cfg.maxPkts, pPkt->xtra.pQUserData);
-
         frameFromQ(pQ, pPkt, &frameData);
+        frameData.flags = frameFlags;
         skipFrame = 0;
       
         //
@@ -1273,8 +1287,7 @@ static void liveq_proc(void *pArg) {
   LOG(X_DEBUG("LiveQ reader %s thread exiting (rc:%d) "), pid, rc);
 
   if(pCtxt->pSwappedSlot && pCtxt->pSwappedSlot->pBuf) {
-    free(pCtxt->pSwappedSlot->pBuf);
-    pCtxt->pSwappedSlot->pBuf = NULL;
+    avc_free((void **) &pCtxt->pSwappedSlot->pBuf);
   }
   pCtxt->pSwappedSlot = NULL;
 
@@ -1337,12 +1350,12 @@ int liveq_start_cb(LIVEQ_CB_CTXT_T *pCtxt) {
   pthread_attr_init(&ptdAttr);
   pthread_attr_setdetachstate(&ptdAttr, PTHREAD_CREATE_DETACHED);
 
-  if(pthread_create(&ptd,
+  if((rc = pthread_create(&ptd,
                     &ptdAttr,
                   (void *) liveq_proc,
-                  (void *) &wrap) != 0) {
+                  (void *) &wrap)) != 0) {
 
-    LOG(X_ERROR("Unable to create liveQ callback thread"));
+    LOG(X_ERROR("Unable to create liveQ callback thread (%d %s)"), rc, strerror(rc));
     pCtxt->running = 0;
     return -1;
   }

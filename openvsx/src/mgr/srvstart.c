@@ -379,6 +379,13 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
     if((p = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_MAX_MBPS)) && p[0] != '\0') {
       start.pProcList->maxMbbpsTot = atoi(p); 
     }
+
+    if((p = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_MAX_CLIENTS_PER_PROC)) && p[0] != '\0') {
+      start.pProcList->maxClientsPerProc = atoi(p); 
+    }
+    if(start.pProcList->maxClientsPerProc == 0) {
+      start.pProcList->maxClientsPerProc = VSX_LIVEQ_DEFAULT;
+    }
   
     if((p = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_EXPIRE_CHILD_SEC)) && p[0] != '\0') {
       start.pProcList->procexpiresec = atoi(p); 

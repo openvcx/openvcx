@@ -317,8 +317,12 @@ static int parseFilterExpr(const char *str, unsigned int len, CAPTURE_FILTER_T *
       pFilter->transType = CAPTURE_FILTER_TRANSPORT_RTSPS;
     } else if(!strncmp("rtsp", val, 4)) {
       pFilter->transType = CAPTURE_FILTER_TRANSPORT_RTSP;
+    } else if(!strncmp("rtmpts", val, 5)) {
+      pFilter->transType = CAPTURE_FILTER_TRANSPORT_RTMPTS;
     } else if(!strncmp("rtmps", val, 5)) {
       pFilter->transType = CAPTURE_FILTER_TRANSPORT_RTMPS;
+    } else if(!strncmp("rtmpt", val, 5)) {
+      pFilter->transType = CAPTURE_FILTER_TRANSPORT_RTMPT;
     } else if(!strncmp("rtmp", val, 4)) {
       pFilter->transType = CAPTURE_FILTER_TRANSPORT_RTMP;
     } else if(!strncmp("dev", val, 3)) {

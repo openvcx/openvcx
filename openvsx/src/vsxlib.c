@@ -2770,7 +2770,8 @@ VSX_RC_T vsxlib_open(VSXLIB_STREAM_PARAMS_T *pParams) {
   pParams->rtmpfp9 = RTMP_CLIENT_FP9;
   pParams->statusmax = 0;
   pParams->enable_symlink = HTTP_FOLLOW_SYMLINKS_DEFAULT; // Follow symlinks by default
-  pParams->httpmax = VSX_CONNECTIONS_DEFAULT;
+  //pParams->httpmax = VSX_CONNECTIONS_DEFAULT;
+  pParams->httpmax = 0;
   pParams->rtplivemax = STREAMER_RTP_DEFAULT;
   pParams->rtmplivemax = STREAMER_OUTFMT_DEFAULT;
   pParams->flvlivemax = STREAMER_OUTFMT_DEFAULT;
@@ -2784,6 +2785,7 @@ VSX_RC_T vsxlib_open(VSXLIB_STREAM_PARAMS_T *pParams) {
   pParams->rtsprefreshtimeoutviartcp = 1;
   pParams->flvlivedelay = FLVLIVE_DELAY_DEFAULT;
   pParams->mkvlivedelay = MKVLIVE_DELAY_DEFAULT;
+  pParams->outq_prealloc = BOOL_ENABLED_DFLT;
   
   // MOOF mp4 creation defaults
   pParams->dash_moof_segments = -1;
