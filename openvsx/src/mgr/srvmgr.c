@@ -1329,7 +1329,7 @@ static SYS_PROC_T *find_running_proc(SYS_PROCLIST_T *pProcs,
   if(pMediaRsrc->instanceId[0] != '\0') {
     pProc = procdb_findInstanceId(pProcs, pMediaRsrc->instanceId, lock);
   } else {
-    pProc = procdb_findName(pProcs, pMediaRsrc->virtRsrc, pMediaRsrc->pId, lock);
+    pProc = procdb_findName(pProcs, pMediaRsrc->virtRsrc, pMediaRsrc->pId, 1, lock);
   }
 
   return pProc;
@@ -1601,6 +1601,7 @@ int mgr_status_show_output(SRV_MGR_CONN_T *pConn, HTTP_STATUS_T *phttpStatus) {
   const char *parg;
   unsigned int idx = 0;
   char buf[4096];
+  char rateStr[64];
 
   if(!(pConn->conn.pListenCfg->urlCapabilities & URL_CAP_STATUS)) {
     *phttpStatus = HTTP_STATUS_FORBIDDEN;
@@ -1611,6 +1612,11 @@ int mgr_status_show_output(SRV_MGR_CONN_T *pConn, HTTP_STATUS_T *phttpStatus) {
     idx += rc;
   }
 
+  //
+  // Get the total output bitrate
+  //
+  burstmeter_printBitrateStr(rateStr, sizeof(rateStr),pConn->cfg.pProcList->bpsTot);
+
   if(pConn->cfg.pMonitor && (parg = conf_find_keyval(pConn->conn.httpReq.uriPairs, "streamstats"))) {
 
     if((rc = snprintf(&buf[idx], sizeof(idx) - idx, "&")) >= 0) {
@@ -1618,6 +1624,11 @@ int mgr_status_show_output(SRV_MGR_CONN_T *pConn, HTTP_STATUS_T *phttpStatus) {
     }
 
     if((rc = stream_monitor_dump_url(&buf[idx], sizeof(buf) - idx, pConn->cfg.pMonitor)) >= 0) {
+      idx += rc;
+    }
+
+    //TODO: change totalRate= -> staticRate, outputRate -> liveRate
+    if((rc = snprintf(&buf[idx], sizeof(idx) - idx, "&outputRate=%s", rateStr)) >= 0) {
       idx += rc;
     }
 

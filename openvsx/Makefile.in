@@ -369,11 +369,15 @@ ifeq ($(CFG_HAVE_LICENSE),1)
             ${SRC_DIR}/util/blowfish.c \
             ${SRC_DIR}/util/sha1.c \
             ${SRC_DIR}/util/fileutil.c \
+	    ${BUILD_DIR}/util/strutil.o \
+	    ${BUILD_DIR}/capture/capture_strutil.o \
             ${SRC_DIR}/util/netutil.c 
   LICEXE_OBJ_DEP= ${BUILD_DIR}/util/base64.o \
             ${BUILD_DIR}/util/blowfish.o \
             ${BUILD_DIR}/util/sha1.o \
             ${BUILD_DIR}/util/fileutil.o \
+	    ${BUILD_DIR}/util/strutil.o \
+	    ${BUILD_DIR}/capture/capture_strutil.o \
             ${BUILD_DIR}/util/netutil.o 
 LICEXE_OBJ_DEP+=${OBJS_DEP}
 EXE_LICENSE=license_gen

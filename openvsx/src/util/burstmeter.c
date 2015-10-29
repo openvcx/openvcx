@@ -397,10 +397,12 @@ int burstmeter_updateCounters(BURSTMETER_SAMPLE_SET_T *pSamples, const struct ti
 int burstmeter_printBytes(char *buf, unsigned int szbuf, int64_t b) {
   int rc = 0;
 
-  if(b >= 1048576) {
-    rc = snprintf(buf, szbuf, "%.2fMB", (float)b/1048576.0f );
-  } else if(b >= 1024) {
-    rc = snprintf(buf, szbuf, "%.2fKB", (float)b/1024.0f );
+  if(b >= THROUGHPUT_BYTES_IN_GIG) {
+    rc = snprintf(buf, szbuf, "%.3fGB", (float)b/THROUGHPUT_BYTES_IN_GIG_F );
+  } else if(b >= THROUGHPUT_BYTES_IN_MEG) {
+    rc = snprintf(buf, szbuf, "%.3fMB", (float)b/THROUGHPUT_BYTES_IN_MEG_F );
+  } else if(b >= THROUGHPUT_BYTES_IN_KILO) {
+    rc = snprintf(buf, szbuf, "%.3fKB", (float)b/THROUGHPUT_BYTES_IN_KILO_F );
   } else {
     rc = snprintf(buf, szbuf, "%lldB", b );
   }
@@ -465,12 +467,14 @@ static int printBitrate(char *buf, unsigned int szbuf, float bps) {
   int rc = 0;
   //float _bps = Bps * 8;
 
-  if(bps >= THROUGHPUT_BYTES_IN_MEG_F  ) {
-    rc = snprintf(buf, szbuf, "%.2fMb/s", (float) bps/THROUGHPUT_BYTES_IN_MEG_F );
+  if(bps >= THROUGHPUT_BYTES_IN_GIG_F  ) {
+    rc = snprintf(buf, szbuf, "%.3fGb/s", (float) bps/THROUGHPUT_BYTES_IN_GIG_F );
+  } else if(bps >= THROUGHPUT_BYTES_IN_MEG_F  ) {
+    rc = snprintf(buf, szbuf, "%.3fMb/s", (float) bps/THROUGHPUT_BYTES_IN_MEG_F );
   } else if(bps >= THROUGHPUT_BYTES_IN_KILO_F ) {
-    rc = snprintf(buf, szbuf, "%.2fKb/s", (float) bps/THROUGHPUT_BYTES_IN_KILO_F );
+    rc = snprintf(buf, szbuf, "%.3fKb/s", (float) bps/THROUGHPUT_BYTES_IN_KILO_F );
   } else {
-    rc = snprintf(buf, szbuf, "%.2fb/s", bps);
+    rc = snprintf(buf, szbuf, "%.3fb/s", bps);
   }
 
   if(rc <= 0 && szbuf > 0) {

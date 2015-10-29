@@ -516,7 +516,8 @@ static int resp_index_file(CLIENT_CONN_T *pConn,
       while(pargfile[idx] == '/') {
         idx++;
       }
-      snprintf(tmp, sizeof(tmp), "/%s%s%s", &pargfile[idx], tokenstr[0] != '\0' ? "?" : "", tokenstr);
+      snprintf(tmp, sizeof(tmp), "%s%s%s%s", is_remoteargfile ? "" : "/", &pargfile[idx], 
+                                             tokenstr[0] != '\0' ? "?" : "", tokenstr);
 
       if(!strncmp(VSX_MEDIA_URL, tmp, strlen(VSX_MEDIA_URL))) {
         //

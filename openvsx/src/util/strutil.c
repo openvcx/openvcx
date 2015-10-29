@@ -488,7 +488,7 @@ int64_t strutil_read_numeric(const char *s, int bAllowbps, int bytesInK, int dfl
   }
 
   if(bytesInK == 0) {
-    bytesInK = 1024;
+    bytesInK = THROUGHPUT_BYTES_IN_KILO;
   }
 
   p = pnum = s; 
@@ -502,12 +502,15 @@ int64_t strutil_read_numeric(const char *s, int bAllowbps, int bytesInK, int dfl
   if(*p != '\0') {
     strncpy(buf, s, MIN(p - s, sizeof(buf) - 1));
     pnum = buf;
+
     if(*p == 'b' || *p == 'B') {
       multiplier = 1;
     } else if(*p == 'K' || *p == 'k') {
       multiplier = bytesInK;
     } else if(*p == 'M' || *p == 'm') {
       multiplier = bytesInK * bytesInK;
+    } else if(*p == 'G' || *p == 'g') {
+      multiplier = bytesInK * bytesInK * bytesInK;
     }
 
     if(bAllowbps && multiplier > 1 && p[1] == 'b') {

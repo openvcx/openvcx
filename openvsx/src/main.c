@@ -1012,6 +1012,7 @@ enum CMD_OPT {
   CMD_OPT_LOGPATH,
   CMD_OPT_LOGMAXSIZE,
   CMD_OPT_HTTPLOG,
+  CMD_OPT_ENABLE_SYMLINK,
   CMD_OPT_STREAMSTATSFILE,
   CMD_OPT_SRTPKEY,
   CMD_OPT_SRTPKEY0,
@@ -1346,6 +1347,7 @@ int main(int argc, char *argv[]) {
                  { "stream2",     required_argument,       NULL, CMD_OPT_OUTPUT1 },
                  { "stream3",     required_argument,       NULL, CMD_OPT_OUTPUT2 },
                  { "stream4",     required_argument,       NULL, CMD_OPT_OUTPUT3 },
+                 { "symlink",     optional_argument,       NULL, CMD_OPT_ENABLE_SYMLINK },
                  //{ "dtlssrtp",    optional_argument,       NULL, CMD_OPT_DTLSSRTP },
                  { "dtls-srtp",   optional_argument,       NULL, CMD_OPT_DTLSSRTP },
                  { "dtls",        optional_argument,       NULL, CMD_OPT_DTLS },
@@ -2333,6 +2335,9 @@ int main(int argc, char *argv[]) {
         break;
       case CMD_OPT_SRTP:
         streamParams.srtpCfgs[0].srtp = optarg ? atoi(optarg) : 1;
+        break;
+      case CMD_OPT_ENABLE_SYMLINK:
+        streamParams.enable_symlink = (optarg && atoi(optarg) == 0) ? BOOL_DISABLED_OVERRIDE : BOOL_ENABLED_OVERRIDE;
         break;
       case CMD_OPT_DTLSSRTP:
         streamParams.srtpCfgs[0].srtp = streamParams.srtpCfgs[0].dtls = (optarg ? atoi(optarg) : 1);

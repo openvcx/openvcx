@@ -36,18 +36,24 @@ static int get_pid(SYS_PROC_T *pProc) {
   return procutil_readpid(path);
 }
 
-static void procdb_dump(SYS_PROCLIST_T *pProcs) {
+static void procdb_dump(SYS_PROCLIST_T *pProcs, int lock) {
   SYS_PROC_T *p;
-  pthread_mutex_lock(&pProcs->mtx);
+  if(lock) {
+    pthread_mutex_lock(&pProcs->mtx);
+  }
   p = pProcs->procs;
   while(p) {
-    fprintf(stderr, "name:'%s', id:'%s' instance:%s, flags:0x%x\n", p->name, p->id, p->instanceId, p->flags);
+    LOG(X_DEBUG("name:'%s', id:'%s' instance:%s, flags:0x%x, numActive: %d, numPendingActive: %d"), 
+          p->name, p->id, p->instanceId, p->flags, p->numActive, p->numPendingActive);
     p = p->pnext;
   }
-  pthread_mutex_unlock(&pProcs->mtx);
+  if(lock) {
+    pthread_mutex_unlock(&pProcs->mtx);
+  }
 }
 
 typedef struct PROC_STATUS_RESP_DATA {
+  float bps;
   int numActiveRtmp;
   int numActiveRtsp;
   int numActiveRtspInterleaved;
@@ -76,7 +82,7 @@ int cbparse_procstatus_resp(void *pArg, const char *p) {
     } else if(!strncasecmp(kv.key, "mkvlive", 7)) {
       pResp->numActiveMkvLive = atoi(kv.val);
     } else if(!strncasecmp(kv.key, "outputRate", 10)) {
-     // output stream bps data rate 
+      pResp->bps = (float) strutil_read_numeric(kv.val, 0, 0, 0);
     }
   }
 
@@ -91,6 +97,7 @@ static int check_status(SYS_PROC_T *pProc) {
   unsigned int szdata = sizeof(buf);
   const char *page = NULL;
   char host[256];
+  char tmp[64];
   PROC_STATUS_RESP_DATA_T status;
 
 
@@ -124,12 +131,14 @@ static int check_status(SYS_PROC_T *pProc) {
   if(status.numActiveMkvLive > 0) {
     pProc->numActive += status.numActiveMkvLive;
   }
+  pProc->bps = status.bps;
 
   VSX_DEBUG_MGR( LOG(X_DEBUG("Status for %s (%s, profile:%s) %s:%d rtmp:%d rtsp:%d (interleaved:%d) ts:%d flv: %d "
-                             "mkv:%d (szdata:%d '%s')"), 
+                             "mkv:%d, bps: %s (%.1f) (szdata:%d '%s')"), 
      pProc->name, pProc->instanceId, pProc->id, host, MGR_GET_PORT_STATUS(pProc->startPort), 
      status.numActiveRtmp, status.numActiveRtsp, status.numActiveRtspInterleaved, status.numActiveTsLive, 
-     status.numActiveFlvLive, status.numActiveMkvLive, szdata, page););
+     status.numActiveFlvLive, status.numActiveMkvLive, 
+     burstmeter_printBitrateStr(tmp, sizeof(tmp), (float) status.bps), status.bps, szdata, page););
 
   return szdata;
 }
@@ -143,16 +152,18 @@ static void procdb_monitor_proc(void *pArg) {
   char logstr[128];
   struct timeval *ptvlatest;
   struct timeval tvnow;
+  float bpsTot;
 
   logutil_tid_add(pthread_self(), pProcs->tid_tag);
 
   while(pProcs->runMonitor) {
 
-    //procdb_dump(pProcs);
+    //procdb_dump(pProcs, 1);
 
     gettimeofday(&tvnow, NULL);
     pProcPrev = NULL;
     pProc = pProcs->procs;
+    bpsTot = 0.0f;
 
     while(pProc) {
 
@@ -236,11 +247,14 @@ static void procdb_monitor_proc(void *pArg) {
         pthread_mutex_unlock(&pProcs->mtx); 
 
       } else { 
+        bpsTot += pProc->bps;
         pProcPrev = pProc;
         pProc = pProc->pnext;
       }
 
     }  // end of while(pProc
+
+    pProcs->bpsTot = bpsTot;
 
     usleep(1000000);
 
@@ -380,8 +394,10 @@ int procdb_delete(SYS_PROCLIST_T *pProcs, const char *name, const char *id, int 
 SYS_PROC_T *procdb_findName(SYS_PROCLIST_T *pProcs, 
                             const char *name, 
                             const char *id, 
+                            int findLowestActive, 
                             int lock) {
   SYS_PROC_T *pProc = NULL;
+  SYS_PROC_T *pProcFound = NULL;
 
   if(!pProcs || !name) {
     return NULL;
@@ -398,17 +414,25 @@ SYS_PROC_T *procdb_findName(SYS_PROCLIST_T *pProcs,
   pProc = pProcs->procs;
 
   while(pProc) {
-    if(!strcasecmp(pProc->name, name) && !strcasecmp(pProc->id, id)) {
-      break;
+    if(!strcasecmp(pProc->name, name) && !strcasecmp(pProc->id, id) &&
+      (!pProcFound || (findLowestActive && pProc->numActive + pProc->numPendingActive < 
+                                           pProcFound->numActive + pProcFound->numPendingActive))) {
+      pProcFound = pProc;
+      if(!findLowestActive) {
+        break;
+      }
     }
     pProc = pProc->pnext; 
   }
+
+  //LOG(X_DEBUG("FINDNAME name: '%s', id: '%s', got: %s"), name, id, pProcFound ? pProcFound->instanceId : ""); procdb_dump(pProcs, 0);
 
   if(lock) {
     pthread_mutex_unlock(&pProcs->mtx); 
   }
 
-  return pProc;
+
+  return pProcFound;
 }
 
 SYS_PROC_T *procdb_findInstanceId(SYS_PROCLIST_T *pProcs, 

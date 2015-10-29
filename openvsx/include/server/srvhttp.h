@@ -34,7 +34,7 @@
 #define HTTP_THROTTLEPREBUF              8.0
 
 #define HTTP_REQUEST_TIMEOUT_SEC         30
-#define HTTP_FOLLOW_SYMLINKS_DEFAULT     0
+#define HTTP_FOLLOW_SYMLINKS_DEFAULT     BOOL_DISABLED_DFLT 
 
 typedef struct HTTP_MEDIA_STREAM {
   FILE_STREAM_T                 *pFileStream;

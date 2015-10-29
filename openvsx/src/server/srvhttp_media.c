@@ -486,7 +486,7 @@ int http_check_symlink(const CLIENT_CONN_T *pConn, const char *path) {
   //
   // Check if the path refers to a symbolic link
   //
-  if(pConn->pCfg->enable_symlink == 0) {
+  if(BOOL_ISDISABLED(pConn->pCfg->enable_symlink)) {
 
     strncpy(pathbuf, path, sizeof(pathbuf) - 1);
     pathbuf[sizeof(pathbuf) - 1] = '\0';
@@ -520,7 +520,7 @@ int http_check_symlink(const CLIENT_CONN_T *pConn, const char *path) {
   //
   // Check if the path refers to a symbolic link
   //
-  if(pConn->pCfg->enable_symlink == 0) {
+  if(BOOL_ISDISABLED(pConn->pCfg->enable_symlink)) {
     if(fileops_lstat(path, &st) == 0) {
       if(S_ISLNK(st.st_mode & S_IFLNK)) {
         rc = -1;

@@ -55,6 +55,7 @@ typedef struct SYS_PROC {
   struct timeval              tmLastAccess;
   struct timeval              tmLastPoll;
   struct timeval              tmLastPollActive;
+  float                       bps;
   int                         numActive;    // active clients repored in '/status'
   int                         numPendingActive; 
   int                         isXcoded;
@@ -73,6 +74,7 @@ typedef struct SYS_PROCLIST {
   int                   runMonitor;
   unsigned int          pollIntervalMs;
   pthread_mutex_t       mtx;
+  float                 bpsTot;
   unsigned int          maxInstances;
   unsigned int          activeInstances;
   unsigned int          maxXcodeInstances;
@@ -89,7 +91,7 @@ typedef struct SYS_PROCLIST {
 
 
 SYS_PROC_T *procdb_findName(SYS_PROCLIST_T *pProcs, const char *name, 
-                            const char *id, int lock);
+                            const char *id, int findLowestActive, int lock);
 int procdb_create_instanceId(char *buf);
 SYS_PROC_T *procdb_findInstanceId(SYS_PROCLIST_T *pProcs, const char *instanceId, int lock);
 //int procdb_delete(SYS_PROCLIST_T *pProcs, const char *name, const char *id, int lock);

@@ -670,8 +670,9 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
     pParams->livepwd = parg;
   }
 
-  if((parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_ENABLESYMLINK))) {
-    pParams->enable_symlink = atoi(parg);
+  if(BOOL_ISDFLT(pParams->enable_symlink) && 
+     (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_ENABLESYMLINK))) {
+    pParams->enable_symlink = MAKE_BOOL(atoi(parg));
   }
 
   //TODO: get multiple output indexes
