@@ -476,6 +476,9 @@ static void usage_stream(int argc, const const char *argv[]) {
       "   --dtlsserver  Use DTLS server keying mode\n"
       "   --dtlscert=[ SSL DTLS Certificate path ] (default="SSL_DTLS_CERT_PATH")\n"
       "   --dtlskey=[ SSL DTLS key path ] (default="SSL_DTLS_PRIVKEY_PATH")\n"
+      "   --sslcert=[ SSL/TLS PEM Certificate file ] default="SSL_CERT_PATH")\n"
+      "   --sslprivkey=[ SSL/TLS PEM Private key file] default="SSL_PRIVKEY_PATH")\n"
+      "   --sslmethod=[ "NETIO_SSL_METHODS_STR" ] (default="NETIO_SSL_METHODSTR_DEFAULT")\n"
 
       "\n   Parameters affecting FLV stream output\n\n"
       "   --flvdelay=[ initial output buffering delay factor (default=%.1f sec) ]\n"
@@ -1031,6 +1034,9 @@ enum CMD_OPT {
   CMD_OPT_DTLS,
   CMD_OPT_DTLSCERTPATH,
   CMD_OPT_DTLSPRIVKEYPATH,
+  CMD_OPT_SSLMETHOD,
+  CMD_OPT_SSLPRIVKEYPATH,
+  CMD_OPT_SSLCERTPATH,
   CMD_OPT_STUNRESP,
   CMD_OPT_STUNREQ,
   CMD_OPT_STUNREQUSER,
@@ -1363,6 +1369,9 @@ int main(int argc, char *argv[]) {
                  //{ "dtlsoutputserverkey", optional_argument, NULL, CMD_OPT_DTLSXMITSERVERKEY },
                  { "dtlscert",    required_argument,       NULL, CMD_OPT_DTLSCERTPATH },
                  { "dtlskey",     required_argument,       NULL, CMD_OPT_DTLSPRIVKEYPATH },
+                 { "sslcert",     required_argument,       NULL, CMD_OPT_SSLCERTPATH},
+                 { "sslprivkey",  required_argument,       NULL, CMD_OPT_SSLPRIVKEYPATH },
+                 { "sslmethod",   required_argument,       NULL, CMD_OPT_SSLMETHOD },
                  { "stunrespond", optional_argument,       NULL, CMD_OPT_STUNRESP },
                  { "stunrequest", optional_argument,       NULL, CMD_OPT_STUNREQ },
                  { "stunrequestuser", required_argument,   NULL, CMD_OPT_STUNREQUSER },
@@ -2385,6 +2394,15 @@ int main(int argc, char *argv[]) {
         break;
       case CMD_OPT_DTLSPRIVKEYPATH:
         streamParams.srtpCfgs[0].dtlsprivkeypath = optarg;
+        break;
+      case CMD_OPT_SSLMETHOD:
+        streamParams.sslmethod = g_client_ssl_method = optarg;
+        break;
+      case CMD_OPT_SSLPRIVKEYPATH:
+        streamParams.sslprivkeypath = optarg;
+        break;
+      case CMD_OPT_SSLCERTPATH:
+        streamParams.sslcertpath = optarg;
         break;
       case CMD_OPT_STUNRESP:
         streamParams.stunResponderCfg.bindingResponse = STUN_POLICY_ENABLED;

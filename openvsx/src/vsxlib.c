@@ -30,11 +30,11 @@
 //
 int g_proc_exit;
 int g_verbosity;
-//int g_usehttplog;
 const char *g_http_log_path;
 int g_proc_exit_flags;
 TIME_VAL g_debug_ts;
 int g_debug_flags = 0;
+const char *g_client_ssl_method;
 pthread_cond_t *g_proc_exit_cond;
 
 #if defined(VSX_HAVE_SSL)

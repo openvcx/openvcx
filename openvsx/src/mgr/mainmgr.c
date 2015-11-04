@@ -54,6 +54,7 @@ int g_verbosity;
 const char *g_http_log_path;
 TIME_VAL g_debug_ts;
 int g_debug_flags = 0;
+const char *g_client_ssl_method;
 pthread_cond_t *g_proc_exit_cond;
 
 #if defined(VSX_HAVE_SSL)

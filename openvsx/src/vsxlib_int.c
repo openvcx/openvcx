@@ -1149,6 +1149,11 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
     pParams->sslprivkeypath = parg;
   }
 
+  if(!pParams->sslmethod &&
+     (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_SSLMETHOD))) {
+    pParams->sslmethod = g_client_ssl_method = parg;
+  }
+
   //
   // DTLS configs
   //
@@ -2108,8 +2113,9 @@ static int g_warn_default_tls = 0;
 int vsxlib_ssl_initserver(const VSXLIB_STREAM_PARAMS_T *pParams, const SRV_LISTENER_CFG_T *pListenCfg) {
 #if defined(VSX_HAVE_SSL)
   int rc = 0;
-  const char *sslcertpath;
-  const char *sslprivkeypath;
+  const char *sslcertpath = NULL;
+  const char *sslprivkeypath = NULL;
+  const char *sslmethodstr = NULL;
 #else // (VSX_HAVE_SSL)
   char tmp[128];
 #endif // (VSX_HAVE_SSL)
@@ -2133,6 +2139,7 @@ int vsxlib_ssl_initserver(const VSXLIB_STREAM_PARAMS_T *pParams, const SRV_LISTE
 
   sslcertpath = pParams->sslcertpath;
   sslprivkeypath = pParams->sslprivkeypath;
+  sslmethodstr = pParams->sslmethod;
 
   if(!sslcertpath) {
     sslcertpath = SSL_CERT_PATH;
@@ -2148,9 +2155,10 @@ int vsxlib_ssl_initserver(const VSXLIB_STREAM_PARAMS_T *pParams, const SRV_LISTE
     }
   }
 
-  LOG(X_DEBUG("Using SSL TLS server certificate: %s, key-file: %s"), sslcertpath, sslprivkeypath);
+  LOG(X_DEBUG("Using SSL TLS server certificate: %s, key-file: %s, method: %s"), 
+       sslcertpath, sslprivkeypath, sslmethodstr);
 
-  if((rc = netio_ssl_init_srv(sslcertpath, sslprivkeypath)) < 0) {
+  if((rc = netio_ssl_init_srv(sslcertpath, sslprivkeypath, sslmethodstr)) < 0) {
     LOG(X_ERROR("SSL TLS server initialization failed. Certifcate: %s, key-file: %s"), sslcertpath, sslprivkeypath);
   } else if(g_warn_default_tls == 1) {
     LOG(X_WARNING(WARN_DEFAULT_CERT_KEY_MSG));
@@ -2193,7 +2201,7 @@ int vsxlib_ssl_initclient(NETIO_SOCK_T *pnetsock) {
     return 0;
   }
 
-  if((rc = netio_ssl_init_cli(NULL, NULL)) < 0) {
+  if((rc = netio_ssl_init_cli(NULL, NULL, g_client_ssl_method)) < 0) {
     LOG(X_ERROR("SSL client initialization failed."));
   }
 

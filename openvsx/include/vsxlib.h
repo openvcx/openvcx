@@ -1434,6 +1434,13 @@ typedef struct VSXLIB_STREAM_PARAMS {
 
   /**
    *
+   * SSL/TLS client|server method
+   *
+   */
+  const char *sslmethod;
+
+  /**
+   *
    * RTCP Sender Report interval
    *
    */

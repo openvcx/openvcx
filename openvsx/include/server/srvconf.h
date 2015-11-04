@@ -133,6 +133,7 @@
 #define SRV_CONF_KEY_RTSPFORCETCPUALIST    "RTSPForceTCPUserAgents"
 #define SRV_CONF_KEY_SSLCERTPATH           "SSLCertificate"
 #define SRV_CONF_KEY_SSLPRIVKEYPATH        "SSLPrivateKey"
+#define SRV_CONF_KEY_SSLMETHOD             "SSLMethod"
 
 #define SRV_CONF_KEY_DTLSCERTPATH          "DTLSCertificate"
 #define SRV_CONF_KEY_DTLSPRIVKEYPATH       "DTLSPrivateKey"

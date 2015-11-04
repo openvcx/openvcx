@@ -52,6 +52,8 @@ static int netio_ssl_recvnb_exact(NETIO_SOCK_T *pnetsock, unsigned char *buf, un
 static int netio_ssl_recv_exact(NETIO_SOCK_T *pnesock, const struct sockaddr *psa,
                             unsigned char *buf, unsigned int len);
 
+static const void *netio_ssl_getmethod(int server, const char *str);
+
 #endif // VSX_HAVE_SSL
 
 extern int net_recvnb(SOCKET sock, unsigned char *buf, unsigned int len, unsigned int mstmt);
@@ -673,7 +675,7 @@ static int netio_ssl_init() {
 }
 */
 
-int netio_ssl_init_srv(const char *certPath, const char *privKeyPath) {
+int netio_ssl_init_srv(const char *certPath, const char *privKeyPath, const char *methodstr) {
   int rc = 0;
   const SSL_METHOD *method = NULL;
 
@@ -691,16 +693,10 @@ int netio_ssl_init_srv(const char *certPath, const char *privKeyPath) {
     return 0;
   }
 
-  //if((rc = netio_ssl_init()) >= 0) {
   if((rc = sslutil_init()) >= 0) {
-
-    //TODO: make this configurable
-
-    //method = SSLv2_server_method();
-    //method = SSLv23_server_method();
-    method = TLSv1_server_method();
-    //method = SSLv3_server_method();
-
+    if(!(method = netio_ssl_getmethod(1, methodstr))) {
+      return -1;
+    }
   }
 
   if(rc >= 0 && method && !(g_ssl_ctx_srv = SSL_CTX_new(method))) {
@@ -763,13 +759,9 @@ int netio_ssl_init_srv(const char *certPath, const char *privKeyPath) {
   return rc;
 }
 
-int netio_ssl_init_cli(const char *certPath, const char *privKeyPath) {
+int netio_ssl_init_cli(const char *certPath, const char *privKeyPath, const char *methodstr) {
   int rc = 0;
   const SSL_METHOD *method = NULL;
-
-  //if(!certPath || !privKeyPath) {
-  //  return -1;
-  //}
 
   //
   // g_ssl_mtx is defined as a system global in in vsxlib.c
@@ -781,14 +773,11 @@ int netio_ssl_init_cli(const char *certPath, const char *privKeyPath) {
     return 0;
   }
 
-  //if((rc = netio_ssl_init()) >= 0) {
+
   if((rc = sslutil_init()) >= 0) {
-
-    //method = SSLv2_client_method();
-    //method = SSLv23_client_method();
-    method = TLSv1_client_method();
-    //method = SSLv3_client_method();
-
+    if(!(method = (const SSL_METHOD *) netio_ssl_getmethod(0, methodstr))) {
+      return -1;
+    }
   }
 
   if(rc >= 0 && method && !(g_ssl_ctx_cli = SSL_CTX_new(method))) {
@@ -828,6 +817,32 @@ int netio_ssl_init_cli(const char *certPath, const char *privKeyPath) {
   pthread_mutex_unlock(&g_ssl_mtx);
 
   return rc;
+}
+
+static const void *netio_ssl_getmethod(int server, const char *str) {
+
+  if(!str) {
+    str = NETIO_SSL_METHODSTR_DEFAULT;
+  }
+
+  VSX_DEBUG_SSL( LOG(X_DEBUG("SSL - netio_ssl_getmethod %s method: '%s'"), server ? "server" : "client", str););
+
+  if(!strcasecmp(str, NETIO_SSL_METHODSTR_SSLV2)) {
+    return server ? SSLv2_server_method() : SSLv2_client_method();    
+  } else if(!strcasecmp(str, NETIO_SSL_METHODSTR_SSLV3)) {
+    return server ? SSLv3_server_method() : SSLv3_client_method();    
+  } else if(!strcasecmp(str, NETIO_SSL_METHODSTR_SSLV23)) {
+    return server ? SSLv23_server_method() : SSLv23_client_method();    
+  } else if(!strcasecmp(str, NETIO_SSL_METHODSTR_TLSV1)) {
+    return server ? TLSv1_server_method() : TLSv1_client_method();    
+  } else if(!strcasecmp(str, NETIO_SSL_METHODSTR_TLSV1_1)) {
+    return server ? TLSv1_1_server_method() : TLSv1_1_client_method();    
+  } else if(!strcasecmp(str, NETIO_SSL_METHODSTR_TLSV1_2)) {
+    return server ? TLSv1_2_server_method() : TLSv1_2_client_method();    
+  } else {
+    LOG(X_ERROR("Invalid %s SSL method %s"), server ? "server" : "client", str);
+    return NULL;
+  }
 }
 
 #else // VSX_HAVE_SSL

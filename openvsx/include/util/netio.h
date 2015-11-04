@@ -28,6 +28,23 @@
 #include "netutil.h"
 #include "timers.h"
 
+#define NETIO_SSL_METHODSTR_SSLV2       "sslv2"
+#define NETIO_SSL_METHODSTR_SSLV3       "sslv3"
+#define NETIO_SSL_METHODSTR_SSLV23      "sslv23"
+#define NETIO_SSL_METHODSTR_TLSV1       "tlsv1"
+#define NETIO_SSL_METHODSTR_TLSV1_1     "tlsv1_1"
+#define NETIO_SSL_METHODSTR_TLSV1_2     "tlsv1_2"
+
+#define NETIO_SSL_METHODSTR_DEFAULT     NETIO_SSL_METHODSTR_TLSV1
+
+#define NETIO_SSL_METHODS_STR  \
+                 NETIO_SSL_METHODSTR_SSLV2"|" \
+                 NETIO_SSL_METHODSTR_SSLV3"|" \
+                 NETIO_SSL_METHODSTR_SSLV23"|" \
+                 NETIO_SSL_METHODSTR_TLSV1"|" \
+                 NETIO_SSL_METHODSTR_TLSV1_1"|" \
+                NETIO_SSL_METHODSTR_TLSV1_2 \
+
 typedef enum NETIO_FLAG {
   NETIO_FLAG_NONE                  = 0x0000,
   NETIO_FLAG_SSL_TLS               = 0x0001,
@@ -140,8 +157,8 @@ SOCKET netio_opensocket(NETIO_SOCK_T *psock, int socktype, unsigned int rcvbufsz
                        const struct sockaddr *psa);
 int netio_acceptssl(NETIO_SOCK_T *psock);
 int netio_connectssl(NETIO_SOCK_T *psock);
-int netio_ssl_init_srv(const char *certPath, const char *privKeyPath);
-int netio_ssl_init_cli(const char *certPath, const char *privKeyPath);
+int netio_ssl_init_srv(const char *certPath, const char *privKeyPath, const char *methodstr);
+int netio_ssl_init_cli(const char *certPath, const char *privKeyPath, const char *methodstr);
 int netio_ssl_close();
 int netio_ssl_enabled(int server);
 

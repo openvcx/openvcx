@@ -234,6 +234,7 @@ extern int g_verbosity;
 extern const char *g_http_log_path;
 extern TIME_VAL g_debug_ts;
 extern int g_debug_flags;
+extern const char *g_client_ssl_method;
 extern const char *vsxlib_get_appnamestr( char *buf, unsigned int len);
 extern const char *vsxlib_get_appnamewwwstr(char *buf, unsigned int len);
 extern const char *vsxlib_get_useragentstr(char *buf, unsigned int len);
