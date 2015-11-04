@@ -816,15 +816,17 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
   if(maxRtmpLive > 0) {
 
     if((rc = vsxlib_parse_listener((const char **) pParams->rtmpliveaddr, SRV_LISTENER_MAX_RTMP,
-                               pSrv->startcfg.listenRtmp, URL_CAP_RTMPLIVE, 
+                               pSrv->startcfg.listenRtmp,  
+                               URL_CAP_RTMPLIVE | ((BOOL_ISENABLED(pParams->rtmpdotunnel) ? URL_CAP_RTMPTLIVE : 0)),
                                pStreamerCfg->creds[STREAMER_AUTH_IDX_RTMP].stores)) < 0) {
       vsxlib_closeServer(pSrv);
       return rc;
-    }
-    if((rc = vsxlib_check_other_listeners(&pSrv->startcfg, pSrv->startcfg.listenRtmp)) > 0) {
-      LOG(X_WARNING("RTMP server listener %s:%d cannot be shared with another protocol"),
-          INET_NTOP(pSrv->startcfg.listenRtmp[rc - 1].sa, tmp, sizeof(tmp)),
-          htons(INET_PORT(pSrv->startcfg.listenRtmp[rc - 1].sa)));
+    } else if(rc == 0) {
+      LOG(X_WARNING("No active RTMP listeners added"));
+    } else if((rc = vsxlib_check_other_listeners(&pSrv->startcfg, pSrv->startcfg.listenRtmp)) > 0) {
+        LOG(X_WARNING("RTMP server listener %s:%d cannot be shared with another protocol"),
+            INET_NTOP(pSrv->startcfg.listenRtmp[rc - 1].sa, tmp, sizeof(tmp)),
+            htons(INET_PORT(pSrv->startcfg.listenRtmp[rc - 1].sa)));
     } else {
 
       pStreamerCfg->action.do_rtmplive = 1;

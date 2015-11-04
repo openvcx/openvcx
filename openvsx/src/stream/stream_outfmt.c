@@ -552,16 +552,38 @@ OUTFMT_CFG_T *outfmt_setCb(STREAMER_OUTFMT_T *pLiveFmt,
   return pOutFmt;
 }
 
+int outfmt_setTunneled(OUTFMT_CFG_T *pOutFmt, int istunneled) {
+  STREAMER_OUTFMT_T *pLiveFmt = NULL;
+  int rc = 0;
+
+  if(!pOutFmt || !(pLiveFmt = pOutFmt->pLiveFmt)) {
+    return -1;
+  }
+
+  pthread_mutex_lock(&pLiveFmt->mtx);
+
+  if(istunneled && !pOutFmt->istunneled) {
+    pLiveFmt->numTunneled++;
+  } else if(!istunneled && pOutFmt->istunneled) {
+    if(pLiveFmt->numTunneled > 0) {
+      pLiveFmt->numTunneled--;
+    }
+  }
+  pOutFmt->istunneled = istunneled;
+
+  pthread_mutex_unlock(&pLiveFmt->mtx);
+
+  return rc;
+}
+
 int outfmt_removeCb(OUTFMT_CFG_T *pOutFmt) {
   STREAMER_OUTFMT_T *pLiveFmt = NULL;
   int rc = 0;
   //pthread_t tid;
 
-  if(!pOutFmt || !pOutFmt->pLiveFmt) {
+  if(!pOutFmt || !(pLiveFmt = pOutFmt->pLiveFmt)) {
     return -1;
   }
-
-  pLiveFmt = pOutFmt->pLiveFmt;
 
   //
   // Stop the liveq callback thread
@@ -598,6 +620,9 @@ int outfmt_removeCb(OUTFMT_CFG_T *pOutFmt) {
   pOutFmt->pstats = NULL;
   pOutFmt->do_outfmt = 0;
   pOutFmt->pLiveFmt = NULL;
+  if(pOutFmt->istunneled && pLiveFmt->numTunneled > 0) {
+    pLiveFmt->numTunneled--;
+  }
   if(pLiveFmt->numActive > 0) {
     pLiveFmt->numActive--;
   }
@@ -1165,7 +1190,6 @@ static void liveq_proc(void *pArg) {
 #else
   pCtxt->tid = pthread_self();
 #endif // WIN32
-
 
   if(!pid) {
     snprintf(buf, sizeof(buf), "%u", pCtxt->idx);

@@ -96,7 +96,7 @@ static int resp_sendmediafile(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq,
     if((rc = http_resp_sendhdr(pSd, pReq->version, statusCode,
                         0, NULL,
                         http_getConnTypeStr(pReq->connType), pReq->cookie,
-                        NULL, etag, NULL, NULL)) < 0) {
+                        NULL, etag, NULL, NULL, NULL)) < 0) {
     }
     return rc;
   }
@@ -143,7 +143,7 @@ static int resp_sendmediafile(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq,
   if((rc = http_resp_sendhdr(pSd, pReq->version, statusCode,
                         contentLen, pMedia->pContentType, 
                         http_getConnTypeStr(pReq->connType), pReq->cookie, 
-                        &reqRange, etag, NULL, NULL)) < 0) {
+                        &reqRange, etag, NULL, NULL, NULL)) < 0) {
     return rc;
   }
 
@@ -372,7 +372,7 @@ int http_resp_sendtslive(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq,
 
   if((rc = http_resp_sendhdr(pSd, pReq->version, HTTP_STATUS_OK,
                    lenLive, pContentType, http_getConnTypeStr(pReq->connType), 
-                   pReq->cookie, NULL, NULL, NULL, NULL)) < 0) {
+                   pReq->cookie, NULL, NULL, NULL, NULL, NULL)) < 0) {
     return rc;
   }
 

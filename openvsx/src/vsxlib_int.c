@@ -1698,8 +1698,23 @@ int vsxlib_check_other_listeners(const SRV_START_CFG_T *pStartCfg,
   return 0;
 }
 
+static int vsxlib_getTransportUrlCap(CAPTURE_FILTER_TRANSPORT_T transType) {
+  enum URL_CAPABILITY urlCap = 0;
+
+  switch(transType) {
+    case CAPTURE_FILTER_TRANSPORT_RTMPT:
+    case CAPTURE_FILTER_TRANSPORT_RTMPTS:
+      urlCap = URL_CAP_RTMPTLIVE;
+      break;
+    default:
+      break;
+  }
+
+  return urlCap;
+}
+
 int vsxlib_parse_listener(const char *arrAddr[], unsigned int maxListenerCfgs, SRV_LISTENER_CFG_T *arrCfgs,
-                          enum URL_CAPABILITY urlCap, AUTH_CREDENTIALS_STORE_T *ppAuthStores) {
+                          enum URL_CAPABILITY urlCap0, AUTH_CREDENTIALS_STORE_T *ppAuthStores) {
 
   CAPTURE_FILTER_TRANSPORT_T transType;
   SOCKET_LIST_T sockList;
@@ -1710,8 +1725,9 @@ int vsxlib_parse_listener(const char *arrAddr[], unsigned int maxListenerCfgs, S
   const char *strListen;
   int rc;
   int countActive = 0;
+  enum URL_CAPABILITY urlCap;
 
-  if(!arrAddr || !arrCfgs) {
+  if(!arrAddr || !arrCfgs || urlCap0 == 0) {
     return -1;
   }
 
@@ -1731,7 +1747,22 @@ int vsxlib_parse_listener(const char *arrAddr[], unsigned int maxListenerCfgs, S
     //
     transType = capture_parseTransportStr(&strListen);
     memset(&authStore, 0, sizeof(authStore));
+    //
+    // Get the capability from the URL, such as rtmpt:// -> URL_CAP_RTMPTLIVE
+    // Note: that rtmp:// is intentionally ambigious to mean (URL_CAP_RTMPLIVE | URL_CAP_RTMPTLIVE)
+    // vsxlib.h::rtmpdotunnel is used to control if RTMPT is explicitly enabled or disabled
+    //
+    if((urlCap = vsxlib_getTransportUrlCap(transType)) != 0) {
+      // Ensure that the capability fits within the pre-configured mask
+      urlCap &= urlCap0;
+      if(urlCap == 0) {
+        continue;
+      }
+    } else {
+      urlCap = urlCap0;
+    }
 
+    //LOG(X_DEBUG("strListen: '%s', TRANSTYPE: %d, URLCAP: 0x%x (0x%x)"), strListen, transType, urlCap, urlCap0);
     //
     // Retrieve any user:pass@<address> authorization credentials from URL
     //
@@ -1762,7 +1793,7 @@ int vsxlib_parse_listener(const char *arrAddr[], unsigned int maxListenerCfgs, S
         if((arrCfgs[rc - 1].urlCapabilities & urlCap)) {
           LOG(X_WARNING("Duplicate listener specified with %s"), arrAddr[idxArr]);
         }
-        //fprintf(stderr, "REUSING idxArr[%d] with new urlCap: 0x%x\n", idxArr, urlCap);
+        //LOG(X_DEBUG("REUSING idxArr[%d] with new urlCap: 0x%x |= 0x%x"), idxArr, arrCfgs[rc - 1].urlCapabilities, urlCap);
         arrCfgs[rc - 1].urlCapabilities |= urlCap;
         continue;
       }
@@ -1796,7 +1827,8 @@ int vsxlib_parse_listener(const char *arrAddr[], unsigned int maxListenerCfgs, S
 
     arrCfgs[idxCfgs].active = 1;
     countActive++;
-  }
+
+  } // end of for(idxArr...
 
   return countActive;
 }

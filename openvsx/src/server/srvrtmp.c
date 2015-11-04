@@ -246,14 +246,24 @@ static int rtmp_create_publishstart(RTMP_CTXT_T *pRtmp) {
 static int rtmp_create_playresponse(RTMP_CTXT_T *pRtmp) {
   int rc = 0;
 
+  if(pRtmp->ishttptunnel) {
+    rtmp_create_ping(pRtmp, 0x00, 1);
+  }
+
   //rtmp_create_onstatus(pRtmp, RTMP_ONSTATUS_TYPE_PUBNOTIFY);
   rtmp_create_onstatus(pRtmp, RTMP_ONSTATUS_TYPE_RESET);
-  rtmp_create_ping(pRtmp, 0x04, 1);
-  rtmp_create_ping(pRtmp, 0, 1);      // stream begin
+  if(!pRtmp->ishttptunnel) {
+    rtmp_create_ping(pRtmp, 0x04, 1);
+    rtmp_create_ping(pRtmp, 0, 1);      // stream begin
+  }
   rtmp_create_onstatus(pRtmp, RTMP_ONSTATUS_TYPE_PLAYSTART);
   rtmp_create_notify(pRtmp);
   rtmp_create_notify_netstart(pRtmp);
   //rtmp_create_ping(pRtmp, 0x20, 1); // buffer ready
+
+  if(pRtmp->ishttptunnel) {
+    rtmp_create_ping(pRtmp, 0x20, 1); // buffer ready
+  }
 
   //
   // Change the state to connected - ready to process vid/aud frames
@@ -384,6 +394,7 @@ int rtmp_addFrame(void *pArg, const OUTFMT_FRAME_DATA_T *pFrame) {
       if((rc = rtmp_create_onmeta(pRtmp)) < 0) {
         return rc;
       }
+
     }
 
     if(rc >= 0 && !pRtmp->novid) {
@@ -467,8 +478,11 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
   AUTH_LIST_T authList;
   const char *p = NULL;
   char tmp[128];
+  char buf[4096];
 
   pRtmp->state = RTMP_STATE_CLI_START;
+  pRtmp->rtmpt.pbuftmp = (unsigned char *) buf;
+  pRtmp->rtmpt.szbuftmp = sizeof(buf);
 
   //
   // Accept handshake
@@ -516,12 +530,15 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
   rtmp_create_clientbw(pRtmp, 2500000);
   rtmp_create_ping(pRtmp, 0, 0);
   pRtmp->chunkSzOut = RTMP_CHUNK_SZ_OUT;
+  //pRtmp->chunkSzOut = 128;
   rtmp_create_chunksz(pRtmp);
   rtmp_create_result_invoke(pRtmp);
 
   if((rc = rtmp_send(pRtmp, "rtmp_handle_conn server initial response")) < 0) {
     return -1;
   }
+
+  pRtmp->rtmpt.doQueueOut = 1; pRtmp->rtmpt.doQueueIdle = 0;
 
   do {
 
@@ -538,14 +555,23 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
 
     if(pRtmp->methodParsed == RTMP_METHOD_PING ||
        pRtmp->methodParsed == RTMP_METHOD_SERVERBW) {
-      VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - method received was: 0x%x")); );
+      VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - method received was: 0x%x"), pRtmp->methodParsed); );
+
+      if(pRtmp->ishttptunnel && pRtmp->rtmpt.idxInContentLen >= pRtmp->rtmpt.contentLen) {
+        //
+        // Respond with 200 OK right away since the client may not bundle a Connect request
+        //
+        rtmpt_send(pRtmp, NULL, 0, "rtmp_handle_conn wait for createstream");
+      }
+
       continue;
+
     } else if(pRtmp->methodParsed == RTMP_METHOD_RELEASESTREAM ||
               pRtmp->methodParsed == RTMP_METHOD_FCPUBLISH) {
       //
       // No server response for releaseStream or FCPublish
       //
-      VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - method received was: 0x%x")); );
+      VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - method received was: 0x%x"), pRtmp->methodParsed); );
       continue;
     } else if(pRtmp->methodParsed == RTMP_METHOD_CREATESTREAM) {
       VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - method received was: 0x%x (createStream)")); );
@@ -556,6 +582,8 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
     }
 
   } while(1);
+
+  pRtmp->rtmpt.doQueueOut = 0; pRtmp->rtmpt.doQueueIdle = 0;
 
   if(pRtmp->state != RTMP_STATE_CLI_CREATESTREAM) {
     LOG(X_ERROR("Did not receive rtmp createstream request.  State: 0x%x"), pRtmp->state);
@@ -577,6 +605,8 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
   VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - waiting for play/publish ct: %d, methodParsed: %d, state: %d"), 
            pRtmp->contentTypeLastInvoke, pRtmp->methodParsed, pRtmp->state) );
 
+  pRtmp->rtmpt.doQueueOut = 1; pRtmp->rtmpt.doQueueIdle = 0;
+
   //
   // Get RTMP play
   //
@@ -597,9 +627,31 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
         }
       }
       return -1;
+
+    } else if(pRtmp->methodParsed == RTMP_METHOD_PING ||
+              pRtmp->methodParsed == RTMP_METHOD_SERVERBW) {
+
+      VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - method received was: 0x%x"), pRtmp->methodParsed); );
+
+      if(pRtmp->ishttptunnel && pRtmp->rtmpt.idxInContentLen >= pRtmp->rtmpt.contentLen) {
+        //
+        // Respond with 200 OK right away since the client may not bundle a play request
+        //
+        rtmpt_send(pRtmp, NULL, 0, "rtmp_handle_conn wait for play");
+      }
+
     }
 
   } while(pRtmp->state != RTMP_STATE_CLI_PLAY);
+
+  if(pRtmp->ishttptunnel) {
+    //
+    // Respond with 200 OK right away
+    //
+    rtmpt_send(pRtmp, NULL, 0, "rtmp_handle_conn play done");
+    //pRtmp->rtmpt.doQueueOut = 1; // do not respond to idle requests from srv_recv handler
+    pRtmp->rtmpt.doQueueOut = 1; pRtmp->rtmpt.doQueueIdle = 1;
+  }
 
   //
   // Obtain the requested xcode output outidx 
@@ -627,6 +679,7 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
   //  return -1;
   //}
 
+  pRtmp->rtmpt.httpTmtMs = 0;
   TIME_TV_SET(tv, pRtmp->tvLastRd);
 
   //
@@ -657,7 +710,7 @@ int rtmp_handle_conn(RTMP_CTXT_T *pRtmp) {
 
   }
 
-  LOG(X_DEBUG("RTMP connection ending with state: %d"), pRtmp->state);
+  LOG(X_DEBUG("RTMP %sconnection ending with state: %d"), pRtmp->ishttptunnel ? "tunneled " : "", pRtmp->state);
   pRtmp->state = RTMP_STATE_DISCONNECTED;
 
   return rc;
@@ -697,6 +750,14 @@ void rtmp_close(RTMP_CTXT_T *pRtmp) {
 
 
   if(pRtmp) {
+
+    if(pRtmp->ishttptunnel) {
+      if(pRtmp->rtmpt.pbufdyn) {
+        avc_free((void *) &pRtmp->rtmpt.pbufdyn);
+        pRtmp->rtmpt.szbufdyn = 0;
+      } 
+    }
+
     rtmp_parse_close(pRtmp);
     codecfmt_close(&pRtmp->av);
     pRtmp->state = RTMP_STATE_INVALID;

@@ -187,6 +187,8 @@ int rtmp_create_chunksz(RTMP_CTXT_T *pRtmp) {
   *((uint32_t *) &pRtmp->out.buf[pRtmp->out.idx + rc]) = htonl(pRtmp->chunkSzOut);
   pRtmp->out.idx += (rc + 4);
 
+  VSX_DEBUG_RTMP(LOG(X_DEBUG("RTMP - rtmp_create_chunksz: %d"), pRtmp->chunkSzOut); ); 
+
   return rc + 4; 
 }
 
@@ -1000,15 +1002,21 @@ int rtmp_cbReadDataNet(void *pArg, unsigned char *pData, unsigned int len) {
   RTMP_CTXT_T *pRtmp = (RTMP_CTXT_T *) pArg;
   int rc;
 
-  if((rc = netio_recvnb_exact(&pRtmp->pSd->netsocket, pData, len, pRtmp->rcvTmtMs)) != len) {
-    if(rc == 0) {
-      return rc;
-    }
+  if(pRtmp->ishttptunnel) {
+    rc = rtmpt_recv(pRtmp, pData, len);
+  } else {
+    rc = netio_recvnb_exact(&pRtmp->pSd->netsocket, pData, len, pRtmp->rcvTmtMs);
+  }
+
+  if(rc == 0) {
+    // timeout reached
+    return rc;
+  } else if(rc != len) {
     return -1;
   }
 
   VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_read len:%d/%d"), rc, len);
-                  LOGHEXT_DEBUGV(pData, rc); );
+                  if(rc > 0) { LOGHEXT_DEBUGV(pData, rc); }  );
 
   pRtmp->bytesRead += len;
 
@@ -1088,11 +1096,17 @@ int rtmp_sendbuf(RTMP_CTXT_T *pRtmp, const unsigned char *buf, unsigned int sz, 
     return -1;
   }
 
-  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - %s send: %d"), descr ? descr : "", sz);
-                  LOGHEXT_DEBUGV(buf, sz); );
+  if(pRtmp->ishttptunnel) {
+    rc = rtmpt_send(pRtmp, buf, sz, descr);  
+  } else {
 
-  if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, buf, sz)) < 0) {
-    return -1;
+    VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - %s send: %d"), descr ? descr : "", sz);
+                    LOGHEXT_DEBUGV(buf, sz); );
+
+    if((rc = netio_send(&pRtmp->pSd->netsocket, (const struct sockaddr *) &pRtmp->pSd->sa, buf, sz)) < 0) {
+      return -1;
+    }
+
   }
 
   return rc;

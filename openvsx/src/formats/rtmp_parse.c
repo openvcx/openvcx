@@ -24,6 +24,7 @@
 
 #include "vsx_common.h"
 
+//#define DEBUG_RTMP_READ 1
 
 static int rtmp_parse_chunksz(RTMP_CTXT_T *pRtmp) {
   int rc = 0;
@@ -36,6 +37,8 @@ static int rtmp_parse_chunksz(RTMP_CTXT_T *pRtmp) {
   }
 
   chunkSzIn = htonl(*((uint32_t *) &pRtmp->in.buf[pRtmp->in.idx]));
+
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_parse_chunksz %d -> %d"), pRtmp->chunkSzIn, chunkSzIn););
 
   if(chunkSzIn <= 0 || chunkSzIn > 0xffff) {
     LOG(X_WARNING("refusing to set rtmp chunk size to %u"), chunkSzIn);

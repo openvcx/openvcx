@@ -94,7 +94,8 @@ function cbMPInfo(id, txt) {
 
     strname+='Showing <i>'+unescape(_dispname)+'</i>&nbsp;&nbsp;&nbsp;'
 
-    strname+='<a target="_top" href="'+location.protocol+'//'+location.host+'/'+strip_ext(file)+'">';
+    //strname+='<a target="_top" href="'+location.protocol+'//'+location.host+'/'+strip_ext(file)+'">';
+    strname+='<a target="_top" href="'+location.protocol+'//'+location.host+'/'+file+'">';
     strname+='<b>Link to this video</b>';
     strname+='</a>';
     //strname+=' <a href="#" onclick="javascript:sharelink();">Share this video</a>';

@@ -48,6 +48,7 @@
 #define STREAM_METHOD_RTSP_INTERLEAVED_STR  "rtspi"
 #define STREAM_METHOD_RTSP_HTTP_STR         "rtspt"
 #define STREAM_METHOD_RTMP_STR              "rtmp"
+#define STREAM_METHOD_RTMPT_STR             "rtmpt"
 #define STREAM_METHOD_PROGDOWNLOAD_STR      "http"
 #define STREAM_METHOD_FLASHHTTP_STR         "flashhttp"
 #define STREAM_METHOD_UDP_RTP_STR           "rtp"
@@ -70,9 +71,10 @@ typedef enum STREAM_METHOD {
   STREAM_METHOD_RTSP_INTERLEAVED   = 10,
   STREAM_METHOD_RTSP_HTTP          = 11,
   STREAM_METHOD_RTMP               = 12,
-  STREAM_METHOD_UDP_RTP            = 13,
-  STREAM_METHOD_UDP                = 14,
-  STREAM_METHOD_MAX                = 15 
+  STREAM_METHOD_RTMPT              = 13,
+  STREAM_METHOD_UDP_RTP            = 14,
+  STREAM_METHOD_UDP                = 15,
+  STREAM_METHOD_MAX                = 16 
 } STREAM_METHOD_T;
 
 typedef enum STREAM_DEVICE_TYPE {

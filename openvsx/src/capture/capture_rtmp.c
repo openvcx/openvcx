@@ -689,6 +689,12 @@ static int rtmp_connect(RTMP_CTXT_CLIENT_T *pClient, const char *flashVer) {
     return rc; 
   }
 
+  //
+  // If we're doing RTMP tunneling, and have been previously queuing outbound data (from handshake)
+  // then make sure we flush everything out here
+  //
+  pClient->ctxt.rtmpt.doQueueOut = 0;
+
   if((rc = rtmp_send(&pClient->ctxt, "rtmp_connect")) < 0) {
     return -1;
   }
@@ -727,7 +733,7 @@ static CONNECT_RETRY_RC_T rtmp_fcpublish(RTMP_CTXT_T *pRtmp, const RTMP_CLIENT_P
   CONNECT_RETRY_RC_T retryRc = CONNECT_RETRY_RC_OK;
   int rc = 0;
 
-  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_fcpublish called...")) );
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_fcpublish called [out.idx: %d]..."), pRtmp->out.idx) );
 
   if(rc >= 0 && (rc = rtmp_create_fcpublish(pRtmp, pClientParams)) < 0) {
     retryRc = CONNECT_RETRY_RC_ERROR;
@@ -752,7 +758,7 @@ static CONNECT_RETRY_RC_T rtmp_publish(RTMP_CTXT_T *pRtmp, const RTMP_CLIENT_PAR
   CONNECT_RETRY_RC_T retryRc = CONNECT_RETRY_RC_OK;
   int rc = 0;
 
-  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_publish called...")) );
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_publish called [out.idx: %d]..."), pRtmp->out.idx) );
 
   if(rc >= 0 && (rc = rtmp_create_publish(pRtmp, pClientParams)) < 0) {
     retryRc = CONNECT_RETRY_RC_ERROR;
@@ -777,7 +783,7 @@ static CONNECT_RETRY_RC_T rtmp_serverBw(RTMP_CTXT_T *pRtmp) {
   CONNECT_RETRY_RC_T retryRc = CONNECT_RETRY_RC_OK;
   int rc = 0;
 
-  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_serverBw called...")) );
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_serverBw called [out.idx: %d]..."), pRtmp->out.idx) );
 
   if(pRtmp->serverbw > 0) {
     if(rc >= 0 && (rc = rtmp_create_serverbw(pRtmp, pRtmp->serverbw)) < 0) {
@@ -798,7 +804,10 @@ static CONNECT_RETRY_RC_T rtmp_createStream(RTMP_CTXT_T *pRtmp, int contentType,
   CONNECT_RETRY_RC_T retryRc = CONNECT_RETRY_RC_OK;
   int rc = 0;
 
-  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_createStream called...")) );
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_createStream called [out.idx: %d]..."), pRtmp->out.idx) );
+
+  pRtmp->rtmpt.doQueueOut = 1;
+
 /*
   if(pRtmp->serverbw > 0) {
     if(rc >= 0 && (rc = rtmp_create_serverbw(pRtmp, pRtmp->serverbw)) < 0) {
@@ -815,6 +824,8 @@ static CONNECT_RETRY_RC_T rtmp_createStream(RTMP_CTXT_T *pRtmp, int contentType,
     retryRc = CONNECT_RETRY_RC_ERROR;
   }
 
+  pRtmp->rtmpt.doQueueOut = 0;
+
   if(rc >= 0) {
 
     if((rc = rtmp_send(pRtmp, "createStream")) < 0) {
@@ -830,39 +841,43 @@ static CONNECT_RETRY_RC_T rtmp_createStream(RTMP_CTXT_T *pRtmp, int contentType,
   return retryRc;
 }
 
-static CONNECT_RETRY_RC_T rtmp_play(RTMP_CTXT_CLIENT_T *pRtmp) {
+static CONNECT_RETRY_RC_T rtmp_play(RTMP_CTXT_CLIENT_T *pClient) {
   CONNECT_RETRY_RC_T retryRc = CONNECT_RETRY_RC_OK; 
   int rc = 0;
   unsigned int lenData;
 
-  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_play called...")) );
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - rtmp_play called [out.idx: %d]..."), pClient->ctxt.out.idx) );
 
-  if(rc >= 0 && (rc = rtmp_create_play(&pRtmp->ctxt, &pRtmp->client)) < 0) {
+  pClient->ctxt.rtmpt.doQueueOut = 1;
+
+  if(rc >= 0 && (rc = rtmp_create_play(&pClient->ctxt, &pClient->client)) < 0) {
     retryRc = CONNECT_RETRY_RC_ERROR;
   }
 
   if(rc >= 0) {
-    lenData = pRtmp->ctxt.out.idx - 12;
-    pRtmp->ctxt.out.idx = 12;
-    if((rc = rtmp_send_chunkdata(&pRtmp->ctxt, RTMP_STREAM_IDX_INVOKE, 
-                               &pRtmp->ctxt.out.buf[12], lenData, 0)) < 0) {
+    lenData = pClient->ctxt.out.idx - 12;
+    pClient->ctxt.out.idx = 12;
+    if((rc = rtmp_send_chunkdata(&pClient->ctxt, RTMP_STREAM_IDX_INVOKE, 
+                               &pClient->ctxt.out.buf[12], lenData, 0)) < 0) {
       retryRc = CONNECT_RETRY_RC_ERROR;
     }
-    pRtmp->ctxt.out.idx = 0; 
+    pClient->ctxt.out.idx = 0; 
   }
 
-  if(rc >= 0 && (rc = rtmp_create_ping_client(&pRtmp->ctxt, 0x03, 0x01, 1, 0x0bb8)) < 0) {
+  if(rc >= 0 && (rc = rtmp_create_ping_client(&pClient->ctxt, 0x03, 0x01, 1, 0x0bb8)) < 0) {
     retryRc = CONNECT_RETRY_RC_ERROR;
   }
 
-  if(rc >= 0 && (rc = rtmp_send(&pRtmp->ctxt, "play")) < 0) {
+  pClient->ctxt.rtmpt.doQueueOut = 0;
+
+  if(rc >= 0 && (rc = rtmp_send(&pClient->ctxt, "play")) < 0) {
     retryRc = CONNECT_RETRY_RC_ERROR;
   }
 
-  pRtmp->ctxt.out.idx = 0; 
+  pClient->ctxt.out.idx = 0; 
 
   if(rc < 0) {
-    pRtmp->ctxt.state = RTMP_STATE_ERROR;
+    pClient->ctxt.state = RTMP_STATE_ERROR;
   }
 
   return retryRc;
@@ -1445,7 +1460,8 @@ static CONNECT_RETRY_RC_T run_capture_client(CAP_ASYNC_DESCR_T *pCfg) {
   CONNECT_RETRY_RC_T rc = CONNECT_RETRY_RC_OK;
   int contentType = 0;
   RTMP_CTXT_CLIENT_T rtmp;
-  unsigned char rtmptbuf[2048];
+  unsigned char rtmptbufin[2048];
+  unsigned char rtmptbufout[4096];
   SOCKET_DESCR_T sockDescr;
   unsigned int idx;
   const char *p = NULL;
@@ -1476,7 +1492,7 @@ static CONNECT_RETRY_RC_T run_capture_client(CAP_ASYNC_DESCR_T *pCfg) {
   strncpy(uribuf, pCfg->pcommon->addrsExt[0], sizeof(uribuf) - 1);
   rtmp.puri = uribuf;
   rtmp.puridocname = "";
-  rtmp.ctxt.phosthdr = pCfg->pcommon->addrsExtHost[0];
+  rtmp.ctxt.rtmpt.phosthdr = pCfg->pcommon->addrsExtHost[0];
 
   capture_rtmpUriParts(uribuf, NULL, (char **) &rtmp.puridocname);
 
@@ -1490,11 +1506,9 @@ static CONNECT_RETRY_RC_T run_capture_client(CAP_ASYNC_DESCR_T *pCfg) {
   //
   if(pCfg->pcommon->filt.filters[0].transType == CAPTURE_FILTER_TRANSPORT_RTMPT ||
      pCfg->pcommon->filt.filters[0].transType == CAPTURE_FILTER_TRANSPORT_RTMPTS) {
-    if(rtmpt_setupclient(&rtmp, rtmptbuf, sizeof(rtmptbuf)) < 0) {
+    if(rtmpt_setupclient(&rtmp, rtmptbufin, sizeof(rtmptbufin), rtmptbufout, sizeof(rtmptbufout)) < 0) {
       LOG(X_ERROR("Failed to setup RTMPT tunnel session"));
       return -1;
-    } else {
-      rtmp.ctxt.ishttptunnel = 1;
     }
   }
 
@@ -1539,6 +1553,7 @@ static CONNECT_RETRY_RC_T run_capture_client(CAP_ASYNC_DESCR_T *pCfg) {
          (rtmp.ctxt.methodParsed == RTMP_METHOD_RESULT || rtmp.ctxt.methodParsed == RTMP_METHOD_ERROR)) {
 
       if((rc = onresp_connect(&rtmp, &amfEntries[0])) >= CONNECT_RETRY_RC_OK) {
+         rtmp.ctxt.rtmpt.doQueueOut = 1;
          rc = rtmp_serverBw(&rtmp.ctxt);
          if((rc = rtmp_createStream(&rtmp.ctxt, RTMP_CONTENT_TYPE_MSG, 1)) < CONNECT_RETRY_RC_OK) {
          }
@@ -1692,7 +1707,10 @@ static int cap_rtmp_handle_conn(RTMP_CTXT_CLIENT_T *pRtmp) {
   int haveConnect = 0;
   int haveCreateStream = 0;
   int havePublish = 0;
+  unsigned char buf[4096];
 
+  pRtmp->ctxt.rtmpt.pbuftmp = buf;
+  pRtmp->ctxt.rtmpt.szbuftmp = sizeof(buf);
   pRtmp->ctxt.state = RTMP_STATE_CLI_START;
 
   //

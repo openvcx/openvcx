@@ -574,12 +574,14 @@ int http_resp_sendhdr(SOCKET_DESCR_T *pSd,
                       const HTTP_RANGE_HDR_T *pRange,
                       const char *etag,
                       const char *location,
-                      const char *auth) {
+                      const char *auth,
+                      const KEYVAL_PAIR_T *pHdrs) {
   int rc;
   size_t sz = 0;
   char buf[2048];
   char dateStr[96];
   char tmp[128];
+  const KEYVAL_PAIR_T *pHdr = NULL;
 
   if(!pSd) {
     return -1;
@@ -603,6 +605,18 @@ int http_resp_sendhdr(SOCKET_DESCR_T *pSd,
    return -1;
   }
   sz += rc;
+
+
+  pHdr = pHdrs;
+  while(pHdr) {
+    if(pHdr->key[0] != '\0' && pHdr->val[0] != '\0') {
+      if((rc = snprintf(&buf[sz], sizeof(buf) - sz, "%s: %s\r\n", pHdr->key, pHdr->val)) < 0) {
+        return -1;
+      }
+      sz += rc;
+    }
+    pHdr = pHdr->pnext;
+  }
 
   if(location) {
     if((rc = snprintf(&buf[sz], sizeof(buf) - sz, "%s: %s\r\n",
@@ -752,7 +766,7 @@ int http_resp_send(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq,
   if((rc = http_resp_sendhdr(pSd, pReq->version, statusCode,
                              (FILE_OFFSET_T) len, CONTENT_TYPE_TEXTHTML, 
                              http_getConnTypeStr(pReq->connType), 
-                             pReq->cookie, NULL, NULL, NULL, NULL)) < 0) {
+                             pReq->cookie, NULL, NULL, NULL, NULL, NULL)) < 0) {
     return rc;
   }
 
@@ -788,7 +802,7 @@ static int http_resp_send_unauthorized(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq, co
   if((rc = http_resp_sendhdr(pSd, pReq->version, statusCode,
                              (FILE_OFFSET_T) 0, CONTENT_TYPE_TEXTHTML, 
                              http_getConnTypeStr(pReq->connType), 
-                             pReq->cookie, NULL, NULL, NULL, auth)) < 0) {
+                             pReq->cookie, NULL, NULL, NULL, auth, NULL)) < 0) {
     return rc;
   }
 
@@ -824,7 +838,7 @@ static int resp_sendfile(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq,
       rc = http_resp_sendhdr(pSd, pReq->version, HTTP_STATUS_NOTMODIFIED,
                         0, NULL,
                         http_getConnTypeStr(pReq->connType), pReq->cookie,
-                        NULL, etag, NULL, NULL);
+                        NULL, etag, NULL, NULL, NULL);
       return rc;
     }
   }
@@ -841,7 +855,7 @@ static int resp_sendfile(SOCKET_DESCR_T *pSd, HTTP_REQ_T *pReq,
 
   if((rc = http_resp_sendhdr(pSd, pReq->version, HTTP_STATUS_OK,
                   lentot, contentType, http_getConnTypeStr(pReq->connType), 
-                  pReq->cookie, NULL, etag, NULL, NULL)) < 0) {
+                  pReq->cookie, NULL, etag, NULL, NULL, NULL)) < 0) {
     CloseMediaFile(&fileStream);
     return rc;
   }
@@ -976,7 +990,7 @@ int http_resp_moved(SOCKET_DESCR_T *pSd,
   if((rc = http_resp_sendhdr(pSd, pReq->version, statusCode,
                              (FILE_OFFSET_T) len, CONTENT_TYPE_TEXTHTML, 
                              http_getConnTypeStr(pReq->connType), 
-                             pReq->cookie, NULL, NULL, location, NULL)) < 0) {
+                             pReq->cookie, NULL, NULL, location, NULL, NULL)) < 0) {
     return rc;
   }
 

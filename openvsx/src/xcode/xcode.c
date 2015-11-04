@@ -323,8 +323,8 @@ int xcode_checkresetresume(STREAM_XCODE_DATA_T *pXcode) {
     pXcode->curFrame.tm.starttv0 = timer_GetTime();
   }
 
-  LOG(X_DEBUGV("xcode_checkresetresume waspaused: %d, starttv0: %llu"), 
-       pXcode->curFrame.tm.waspaused, pXcode->curFrame.tm.starttv0);
+  VSX_DEBUG_XCODE( LOG(X_DEBUGV("xcode_checkresetresume waspaused: %d, starttv0: %llu"), 
+       pXcode->curFrame.tm.waspaused, pXcode->curFrame.tm.starttv0););
 
   if(pXcode->curFrame.tm.waspaused) {
     pXcode->curFrame.tm.durationTotPrior = (uint64_t)

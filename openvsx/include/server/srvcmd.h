@@ -92,16 +92,21 @@ enum URL_CAPABILITY {
   URL_CAP_TSHTTPLIVE   =  1 << 9,  
   URL_CAP_MOOFLIVE     =  1 << 10,  
   URL_CAP_RTMPLIVE     =  1 << 11, 
-  URL_CAP_RTSPLIVE     =  1 << 12, 
-  URL_CAP_FLVLIVE      =  1 << 13, 
-  URL_CAP_MKVLIVE      =  1 << 14, 
-  URL_CAP_CMD          =  1 << 15,
-  URL_CAP_LIVE         =  1 << 16,   
-  URL_CAP_STATUS       =  1 << 17,
-  URL_CAP_PIP          =  1 << 18,
-  URL_CAP_DIRLIST      =  1 << 19,
-  URL_CAP_CONFIG       =  1 << 20 
+  URL_CAP_RTMPTLIVE    =  1 << 12, 
+  URL_CAP_RTSPLIVE     =  1 << 13, 
+  URL_CAP_FLVLIVE      =  1 << 14, 
+  URL_CAP_MKVLIVE      =  1 << 15, 
+  URL_CAP_CMD          =  1 << 16,
+  URL_CAP_LIVE         =  1 << 17,   
+  URL_CAP_STATUS       =  1 << 18,
+  URL_CAP_PIP          =  1 << 19,
+  URL_CAP_DIRLIST      =  1 << 20,
+  URL_CAP_CONFIG       =  1 << 21 
 };
+
+#define IS_URL_CAP_RTMP(c) ((c) == URL_CAP_RTMPLIVE || \
+                            (c) == URL_CAP_RTMPTLIVE || \
+                            (c) == (URL_CAP_RTMPLIVE | URL_CAP_RTMPTLIVE))
 
 typedef struct SRV_CFG {
   const char                      *livepwd;      // live / httplive password

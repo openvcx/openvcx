@@ -219,15 +219,17 @@ int http_readhdr(HTTP_PARSE_CTXT_T *pCtxt) {
 
   do {
 
-    //fprintf(stderr, "http_readhdr... pCtxt->hdrslen:%d, tmtms:%d\n", pCtxt->hdrslen, pCtxt->tmtms);
+    VSX_DEBUG_HTTP( LOG(X_DEBUG("HTTP - http_readhdr hdrslen:%d, idxbuf: %d, tmtms:%d"), 
+                   pCtxt->hdrslen, pCtxt->idxbuf, pCtxt->tmtms); );
 
     rcvd = 0;
     if(pCtxt->tmtms > 0) {
-      //fprintf(stderr, "calling net_recvnb %d into buf[%d]\n", pCtxt->tmtms, pCtxt->idxbuf);
+      
       if((rcvd = netio_recvnb(pCtxt->pnetsock, (unsigned char *) &pCtxt->pbuf[pCtxt->idxbuf], 
                             pCtxt->szbuf - pCtxt->idxbuf, pCtxt->tmtms)) < 0) {
 
-        //fprintf(stderr, "netio_recvnb idxbuf:%d rcvd:%d\n", pCtxt->idxbuf, rcvd);
+        LOG(X_DEBUG("HTTP - http_readhdr netio_recvnb rc: %d, idxbuf:%d, startidxbuf: %d, tmtms: %d"), 
+              rcvd, pCtxt->idxbuf, startidxbuf, pCtxt->tmtms);
 
         //
         // Its possible that the first read will return 0 (connection closed) because
@@ -254,7 +256,7 @@ int http_readhdr(HTTP_PARSE_CTXT_T *pCtxt) {
       //LOG(X_DEBUG("calling recv with %d, szbuf: %d, idxbuf: %d"), pCtxt->szbuf-pCtxt->idxbuf, pCtxt->szbuf, pCtxt->idxbuf);
       if((rcvd = netio_recv(pCtxt->pnetsock, NULL, (unsigned char *) &pCtxt->pbuf[pCtxt->idxbuf], 
                           pCtxt->szbuf - pCtxt->idxbuf)) < 0) {
-        //fprintf(stderr, "bad %d errno:%d\n", rcvd, errno);
+        LOG(X_DEBUG("HTTP - netio_recv rc: %d, errno:%d"), rcvd, errno);
         return rcvd;
       }
       if(rcvd == 0) {

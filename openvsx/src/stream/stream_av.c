@@ -1048,7 +1048,7 @@ static enum STREAM_NET_ADVFR_RC advanceFrame(AV_PROG_T *pProg,
     //
     // Ensure that curFrame.tm.durationTotPrior is set in case the input stream is reset
     //
-    LOG(X_DEBUGV("Calling xcode_checkresetrestume from stream_av"));
+    VSX_DEBUG_STREAMAV( LOG(X_DEBUGV("Calling xcode_checkresetrestume from stream_av")); );
     xcode_checkresetresume(pProg->pXcodeData);
   }
 

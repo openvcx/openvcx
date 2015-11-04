@@ -431,7 +431,8 @@ static int handle_rtsphttp_postdata(RTSP_REQ_CTXT_T *pRtsp, RTSP_REQ_T *pRtspReq
         memcpy(buf, &pRtspReq->hdrCtxt.pbuf[pRtspReq->hdrCtxt.hdrslen], rc);
         //fprintf(stderr, "POST copied from prior recv %d %c%c%c\n", rc, buf[0], buf[1], buf[2]);
       }
-      pRtspReq->hdrCtxt.idxbuf = pRtspReq->hdrCtxt.hdrslen = 0;
+      //pRtspReq->hdrCtxt.idxbuf = pRtspReq->hdrCtxt.hdrslen = 0;
+      HTTP_PARSE_CTXT_RESET(pRtspReq->hdrCtxt);
 
     } else {
 
@@ -533,7 +534,7 @@ static int handle_rtsphttp_req(RTSP_REQ_CTXT_T *pRtsp, RTSP_REQ_T *pRtspReq) {
       rc = http_resp_sendhdr(pRtsp->pSd, pHttpReq->version, HTTP_STATUS_OK, 0,
                            CONTENT_TYPE_RTSPTUNNELED, 
                            http_getConnTypeStr(HTTP_CONN_TYPE_CLOSE),
-                           NULL, NULL, NULL, NULL, NULL);
+                           NULL, NULL, NULL, NULL, NULL, NULL);
     }
 
   } else if(!strncmp(pHttpReq->method, HTTP_METHOD_POST, 5)) {

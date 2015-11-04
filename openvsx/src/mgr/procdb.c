@@ -55,6 +55,7 @@ static void procdb_dump(SYS_PROCLIST_T *pProcs, int lock) {
 typedef struct PROC_STATUS_RESP_DATA {
   float bps;
   int numActiveRtmp;
+  int numActiveRtmpTunneled;
   int numActiveRtsp;
   int numActiveRtspInterleaved;
   int numActiveTsLive;
@@ -69,7 +70,9 @@ int cbparse_procstatus_resp(void *pArg, const char *p) {
 
   memset(&kv, 0, sizeof(kv));
   if((rc = conf_parse_keyval(&kv, p, 0, '=', 0)) == 2) {
-    if(!strncasecmp(kv.key, "rtmp", 4)) {
+    if(!strncasecmp(kv.key, "rtmpt", 5)) {
+      pResp->numActiveRtmpTunneled = atoi(kv.val);
+    } else if(!strncasecmp(kv.key, "rtmp", 4)) {
       pResp->numActiveRtmp = atoi(kv.val);
     } else if(!strncasecmp(kv.key, "rtspi", 5)) {
       pResp->numActiveRtspInterleaved = atoi(kv.val);
@@ -99,7 +102,6 @@ static int check_status(SYS_PROC_T *pProc) {
   char host[256];
   char tmp[64];
   PROC_STATUS_RESP_DATA_T status;
-
 
   snprintf(host, sizeof(host), "http://127.0.0.1:%d", MGR_GET_PORT_STATUS(pProc->startPort));
 
@@ -133,11 +135,11 @@ static int check_status(SYS_PROC_T *pProc) {
   }
   pProc->bps = status.bps;
 
-  VSX_DEBUG_MGR( LOG(X_DEBUG("Status for %s (%s, profile:%s) %s:%d rtmp:%d rtsp:%d (interleaved:%d) ts:%d flv: %d "
-                             "mkv:%d, bps: %s (%.1f) (szdata:%d '%s')"), 
+  VSX_DEBUG_MGR( LOG(X_DEBUG("Status for %s (%s, profile:%s) %s:%d rtmp:%d (rmtpt: %d), rtsp:%d (interleaved:%d), "
+                             "ts:%d, flv: %d, mkv:%d, bps: %s (%.1f) (szdata:%d '%s')"), 
      pProc->name, pProc->instanceId, pProc->id, host, MGR_GET_PORT_STATUS(pProc->startPort), 
-     status.numActiveRtmp, status.numActiveRtsp, status.numActiveRtspInterleaved, status.numActiveTsLive, 
-     status.numActiveFlvLive, status.numActiveMkvLive, 
+     status.numActiveRtmp, status.numActiveRtmpTunneled, status.numActiveRtsp, status.numActiveRtspInterleaved, 
+     status.numActiveTsLive, status.numActiveFlvLive, status.numActiveMkvLive, 
      burstmeter_printBitrateStr(tmp, sizeof(tmp), (float) status.bps), status.bps, szdata, page););
 
   return szdata;
@@ -634,13 +636,15 @@ static char *get_methods_str(int methodBits,
                  (1 << STREAM_METHOD_MKVLIVE) |
                  (1 << STREAM_METHOD_TSLIVE) |
                  (1 << STREAM_METHOD_RTSP) |
-                 (1 << STREAM_METHOD_RTMP);
+                 (1 << STREAM_METHOD_RTMP) |
+                 (1 << STREAM_METHOD_RTMPT);
   }
 
   buf[0] = '\0';
 
 #define HTTP_PROTO_STR "http"
 #define RTMP_PROTO_STR "rtmp"
+#define RTMPT_PROTO_STR "rtmpt"
 #define RTSP_PROTO_STR "rtsp"
 
   for(idxMethod = 0; idxMethod < STREAM_METHOD_MAX; idxMethod++) {
@@ -683,6 +687,12 @@ static char *get_methods_str(int methodBits,
         break;
       case (1 << STREAM_METHOD_RTMP):
         if((rc = write_listener(&lastPort, MGR_GET_PORT_RTMP(startPort), ssl, "rtmp", RTMP_PROTO_STR, 
+                            userpass, NULL, idxbuf > 0 ? 1 : 0, &buf[idxbuf], szbuf - idxbuf)) > 0) {
+          idxbuf += rc;
+        }
+        break;
+      case (1 << STREAM_METHOD_RTMPT):
+        if((rc = write_listener(&lastPort, MGR_GET_PORT_RTMP(startPort), ssl, "rtmp", RTMPT_PROTO_STR, 
                             userpass, NULL, idxbuf > 0 ? 1 : 0, &buf[idxbuf], szbuf - idxbuf)) > 0) {
           idxbuf += rc;
         }

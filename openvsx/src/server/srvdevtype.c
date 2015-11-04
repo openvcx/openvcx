@@ -159,6 +159,8 @@ const char *devtype_methodstr(enum STREAM_METHOD method) {
       return STREAM_METHOD_RTSP_INTERLEAVED_STR;
     case STREAM_METHOD_RTSP_HTTP:
       return STREAM_METHOD_RTSP_HTTP_STR;
+    case STREAM_METHOD_RTMPT:
+      return STREAM_METHOD_RTMPT_STR;
     case STREAM_METHOD_RTMP:
       return STREAM_METHOD_RTMP_STR;
     case STREAM_METHOD_PROGDOWNLOAD:
@@ -197,6 +199,9 @@ STREAM_METHOD_T devtype_methodfromstr(const char *str) {
   } else if(!strncasecmp(str, STREAM_METHOD_RTSP_HTTP_STR, 
                   strlen(STREAM_METHOD_RTSP_HTTP_STR) + 1)) {
     return STREAM_METHOD_RTSP_HTTP;
+  } else if(!strncasecmp(str, STREAM_METHOD_RTMPT_STR, 
+                  strlen(STREAM_METHOD_RTMPT_STR) + 1)) {
+    return STREAM_METHOD_RTMPT;
   } else if(!strncasecmp(str, STREAM_METHOD_RTMP_STR, 
                   strlen(STREAM_METHOD_RTMP_STR) + 1)) {
     return STREAM_METHOD_RTMP;

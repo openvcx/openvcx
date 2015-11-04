@@ -155,6 +155,7 @@ typedef struct LIVEQ_CB_CTXT {
 typedef struct OUTFMT_CFG {
   int                          do_outfmt;
   int                          paused;
+  int                          istunneled;
 
   PKTQUEUE_T                  *pQ;
   STREAM_STATS_T              *pstats;
@@ -172,6 +173,7 @@ typedef struct STREAMER_OUTFMT {
   PKTQUEUE_CONFIG_T            qCfg;
   int                          do_outfmt;
   unsigned int                 numActive;
+  unsigned int                 numTunneled;  // RTMPT counter
   float                        bufferDelaySec; 
   GOP_HISTORY_CTXT_T           gopHistory;
 } STREAMER_OUTFMT_T;
@@ -249,5 +251,6 @@ typedef struct OUTFMT_QUEUED_FRAMES {
 
 int outfmt_queueframe(OUTFMT_QUEUED_FRAMES_T *pQueued, const OUTFMT_FRAME_DATA_T *pFrame);
 void outfmt_freequeuedframes(OUTFMT_QUEUED_FRAMES_T *pQueued);
+int outfmt_setTunneled(OUTFMT_CFG_T *pOutFmt, int istunneled);
 
 #endif // __STREAM_OUTFMT_H__

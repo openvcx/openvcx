@@ -570,25 +570,82 @@ static int fill_srv_handshake(unsigned char *pOut, unsigned char *pClient) {
 
 int rtmp_handshake_srv(RTMP_CTXT_T *pRtmp) {
   int rc;
-  unsigned char buf[RTMP_HANDSHAKE_SZ + 1];
+  unsigned int rcvTmtMs = 0;
+  const unsigned int szread0 = 16;
+  unsigned int idxprebuf = 0;
+  char tmp[128];
+  unsigned char *buf = NULL;
+
+  if(!pRtmp || !(buf = pRtmp->rtmpt.pbuftmp ) || pRtmp->rtmpt.szbuftmp < RTMP_HANDSHAKE_SZ + 1) {
+    return -1;
+  }
+
+  rcvTmtMs = pRtmp->rcvTmtMs;
+  pRtmp->rcvTmtMs = RTMP_HANDSHAKE_TMT_MS;
+
+  //
+  // Already pre-configured with first 16 bytes from client to see if connection is RTMP or RMTPT
+  //
+  if(pRtmp->prebufdata && pRtmp->prebufsz > 0) {
+    if(pRtmp->prebufsz != szread0) {
+      return -1;
+    }
+    memcpy(buf, pRtmp->prebufdata, pRtmp->prebufsz);
+    idxprebuf += pRtmp->prebufsz; 
+  }
+
+  //
+  // Read the first 16 bytes to see if the connection is RTMP or RTMPT
+  //
+  if((idxprebuf < szread0) && (rc = netio_recvnb_exact(&pRtmp->pSd->netsocket, &buf[idxprebuf],
+                              szread0 - idxprebuf, RTMP_HANDSHAKE_TMT_MS)) != szread0 - idxprebuf) {
+    LOG(X_ERROR("Failed to receive %d rtmp handshake bytes"), szread0);
+    return rc;
+  }
+
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - handshake_srv recv: %d/%d"), rc, szread0);
+                  LOGHEXT_DEBUGVV(buf, szread0) );
+
+  if(rtmpt_istunneled(buf, szread0)) {
+
+    if(!pRtmp->dohttptunnel) {
+      LOG(X_ERROR("RTMP tunneling not enabled"));
+      return -1;
+    }
+    
+    if((rc = rtmpt_setupserver(pRtmp, buf, szread0)) != 0) {
+      return rc;
+    }
+
+    LOG(X_DEBUG("RTMP tunneled connection from %s:%d"), 
+             FORMAT_NETADDR(pRtmp->pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pRtmp->pSd->sa)));
+
+    //
+    // If tunneling, need to re-read the first 16 bytes of RTMP handshake payload so that the next
+    // read operation starts at the same offset regardless.
+    //
+    if((rc = pRtmp->cbRead(pRtmp, buf, szread0)) != szread0) {
+      LOG(X_ERROR("Failed to receive %d rtmp handshake bytes"), szread0);
+      return rc;
+    }
+    
+    pRtmp->rtmpt.doQueueOut = 0;
+  } else if(pRtmp->donotunnel) {
+    LOG(X_ERROR("Only RTMP tunneling is enabled"));
+    return -1;
+  }
 
   // Ensure pRtmp->in.sz >= 2 * RTMP_HANDSHAKE_SZ 
-  if((rc = netio_recvnb_exact(&pRtmp->pSd->netsocket, buf, 
-                              RTMP_HANDSHAKE_SZ + 1, RTMP_HANDSHAKE_TMT_MS)) < 0) {
+  if((rc = pRtmp->cbRead(pRtmp, &buf[szread0], RTMP_HANDSHAKE_SZ + 1 - szread0)) < 0) {
     LOG(X_ERROR("Failed to receive %d rtmp handshake bytes"), RTMP_HANDSHAKE_SZ + 1);
     return rc;
   }
 
-  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - handshake_srv recv: %d/%d"), rc, RTMP_HANDSHAKE_SZ + 1);
+  VSX_DEBUG_RTMP( LOG(X_DEBUG("RTMP - handshake_srv recv: %d + %d/%d"), szread0, rc, RTMP_HANDSHAKE_SZ + 1);
                   LOGHEXT_DEBUGVV(buf, RTMP_HANDSHAKE_SZ + 1) );
 
   if(buf[0] != RTMP_HANDSHAKE_HDR) {
-    if(!memcmp("POST /fcs/ident2", buf, 16)) {
-      LOG(X_ERROR("RTMPT client tunnel request not supported"));
-      //http_resp_error(pRtmp->pSd, , HTTP_STATUS_NOTFOUND, 1, NULL, NULL);
-    } else {
-      LOG(X_ERROR("Invalid rtmp handshake header 0x%x"), buf[0]);
-    }
+    LOG(X_ERROR("Invalid rtmp handshake header 0x%x"), buf[0]);
     return -1;
   }
 
@@ -606,9 +663,7 @@ int rtmp_handshake_srv(RTMP_CTXT_T *pRtmp) {
     return -1;
   }
 
-  if((rc = netio_recvnb_exact(&pRtmp->pSd->netsocket, buf, RTMP_HANDSHAKE_SZ, 
-                            RTMP_HANDSHAKE_TMT_MS)) < 0) {
-
+  if((rc = pRtmp->cbRead(pRtmp, buf, RTMP_HANDSHAKE_SZ)) < 0) {
     LOG(X_ERROR("Failed to receive %d rtmp handshake bytes"), RTMP_HANDSHAKE_SZ);
     return rc;
   }
@@ -619,6 +674,7 @@ int rtmp_handshake_srv(RTMP_CTXT_T *pRtmp) {
   //TODO: verify client handshake
   // memcmp(&buf[1], &pRtmp->in.buf[1], RTMP_HANDSHAKE_SZ);
 
+  pRtmp->rcvTmtMs = rcvTmtMs;
   pRtmp->state = RTMP_STATE_CLI_HANDSHAKEDONE;
   LOG(X_DEBUG("rtmp handshake completed"));
 
@@ -749,6 +805,11 @@ int rtmp_handshake_cli(RTMP_CTXT_T *pRtmp, int fp9) {
 
   }
 #endif // VSX_HAVE_RTMP_HMAC
+
+  if(pRtmp->ishttptunnel) {
+    // Bundle the handshake response along with the subsequent connect RTMP packet(s)
+    pRtmp->rtmpt.doQueueOut = 1;
+  }
 
   if((rc = rtmp_sendbuf(pRtmp, bufout, RTMP_HANDSHAKE_SZ, "handshake_cli")) < 0) {
     return rc;

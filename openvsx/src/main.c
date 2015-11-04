@@ -564,6 +564,7 @@ static void usage_stream(int argc, const const char *argv[]) {
       "   --rtmpnosig   Disable RTMP Handshake signature (when using --stream=rtmp[s]://[remote-address]/)\n"
       "   --rtmppageurl=[ RTMP Page URL String ] (when using --stream=rtmp[s]://[[remote-address]/\n"
       "   --rtmpswfurl=[ RTMP SWF URL String ] (when using --stream=rtmp[s]://[remote-address]/)\n"
+      "   --rtmpt[ 0 | 1 ]   Explicitly enable or disable RTMP Tunneling server\n"
       "\n   Parameters affecting RTSP stream output\n\n"
       "   --rtsp=[ address:port ] RTSP broadcast server listener\n"
       "                 (default=%s)\n"
@@ -1003,6 +1004,7 @@ enum CMD_OPT {
   CMD_OPT_RTMP_NOSIG,
   CMD_OPT_RTMP_PAGEURL,
   CMD_OPT_RTMP_SWFURL,
+  CMD_OPT_RTMP_DORTMPT,
   CMD_OPT_STATUSMAX,
   CMD_OPT_STATUSPORT,
   CMD_OPT_CONFIGMAX,
@@ -1059,6 +1061,7 @@ enum CMD_OPT {
   CMD_OPT_DEBUG_RTCP,
   CMD_OPT_DEBUG_RTSP,
   CMD_OPT_DEBUG_RTMP,
+  CMD_OPT_DEBUG_RTMPT,
   CMD_OPT_DEBUG_STREAMAV,
   CMD_OPT_DEBUG_SSL,
   CMD_OPT_DEBUG_SRTP,
@@ -1148,9 +1151,10 @@ int main(int argc, char *argv[]) {
                  { "debug-outfmt",optional_argument,       NULL, CMD_OPT_DEBUG_OUTFMT },
                  { "debug-remb",  optional_argument,       NULL, CMD_OPT_DEBUG_REMB },
                  { "debug-rtsp ", optional_argument,       NULL, CMD_OPT_DEBUG_RTSP },
-                 { "debug-rtp ",  optional_argument,       NULL, CMD_OPT_DEBUG_RTP },
-                 { "debug-rtcp ", optional_argument,       NULL, CMD_OPT_DEBUG_RTCP },
-                 { "debug-rtmp ", optional_argument,       NULL, CMD_OPT_DEBUG_RTMP },
+                 { "debug-rtp",   optional_argument,       NULL, CMD_OPT_DEBUG_RTP },
+                 { "debug-rtcp",  optional_argument,       NULL, CMD_OPT_DEBUG_RTCP },
+                 { "debug-rtmp",  optional_argument,       NULL, CMD_OPT_DEBUG_RTMP },
+                 { "debug-rtmpt", optional_argument,       NULL, CMD_OPT_DEBUG_RTMPT },
                  { "debug-streamav", optional_argument,    NULL, CMD_OPT_DEBUG_STREAMAV },
                  { "debug-ssl",   optional_argument,       NULL, CMD_OPT_DEBUG_SSL },
                  { "debug-srtp",  optional_argument,       NULL, CMD_OPT_DEBUG_SRTP },
@@ -1318,8 +1322,9 @@ int main(int argc, char *argv[]) {
                  { "rtmp",        optional_argument,       NULL, CMD_OPT_RTMPLIVEADDRPORT },
                  { "rtmpmax",     required_argument,       NULL, CMD_OPT_RTMPLIVEMAX },
                  { "rtmpnosig",   no_argument,             NULL, CMD_OPT_RTMP_NOSIG },
-                 { "rtmppageurl", required_argument,       NULL, CMD_OPT_RTMP_PAGEURL},
-                 { "rtmpswfurl",  required_argument,       NULL, CMD_OPT_RTMP_SWFURL},
+                 { "rtmppageurl", required_argument,       NULL, CMD_OPT_RTMP_PAGEURL },
+                 { "rtmpswfurl",  required_argument,       NULL, CMD_OPT_RTMP_SWFURL },
+                 { "rtmpt",       optional_argument,       NULL, CMD_OPT_RTMP_DORTMPT },
                  { "rtsp",        optional_argument,       NULL, CMD_OPT_RTSPLIVEADDRPORT },
                  { "rtspmax",     required_argument,       NULL, CMD_OPT_RTSPLIVEMAX },
                  { "rtsp-interleaved", optional_argument,  NULL, CMD_OPT_RTSPINTERLEAVED },
@@ -2311,6 +2316,9 @@ int main(int argc, char *argv[]) {
       case CMD_OPT_RTMP_SWFURL:
         streamParams.rtmpswfurl = optarg;
         break;
+      case CMD_OPT_RTMP_DORTMPT:
+        streamParams.rtmpdotunnel = (!optarg || atoi(optarg)) != 0 ? BOOL_ENABLED_OVERRIDE : BOOL_DISABLED_OVERRIDE;
+        break;
       case CMD_OPT_SDPOUT:
         streamParams.sdpoutpath = optarg;
         break;
@@ -2535,6 +2543,10 @@ int main(int argc, char *argv[]) {
             g_debug_flags |= VSX_DEBUG_FLAG_RTP;
           } else if(!strcasecmp("rtcp", optarg)) {  
             g_debug_flags |= VSX_DEBUG_FLAG_RTCP;
+          } else if(!strcasecmp("rtmp", optarg)) {  
+            g_debug_flags |= VSX_DEBUG_FLAG_RTMP;
+          } else if(!strcasecmp("rtmpt", optarg)) {  
+            g_debug_flags |= VSX_DEBUG_FLAG_RTMPT;
           } else if(!strcasecmp("rtsp", optarg)) {  
             g_debug_flags |= VSX_DEBUG_FLAG_RTSP;
             g_debug_flags |= VSX_DEBUG_FLAG_HTTP;
@@ -2591,6 +2603,9 @@ int main(int argc, char *argv[]) {
         break;
       case CMD_OPT_DEBUG_RTMP:
         g_debug_flags |= VSX_DEBUG_FLAG_RTMP;
+        break;
+      case CMD_OPT_DEBUG_RTMPT:
+        g_debug_flags |= VSX_DEBUG_FLAG_RTMPT;
         break;
       case CMD_OPT_DEBUG_NET:
         g_debug_flags |= VSX_DEBUG_FLAG_NET;

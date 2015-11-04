@@ -30,6 +30,7 @@ static int ctrl_status_show_output(STREAMER_CFG_T *pStreamerCfg, char *buf, unsi
   unsigned int idx = 0;
   unsigned int outidx;
   unsigned int numRtmp = 0;
+  unsigned int numRtmpTunneled = 0;
   unsigned int numRtsp = 0;
   unsigned int numRtspInterleaved = 0;
   unsigned int numTsLive = 0;
@@ -43,6 +44,7 @@ static int ctrl_status_show_output(STREAMER_CFG_T *pStreamerCfg, char *buf, unsi
   if(pStreamerCfg) {
     if(pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_RTMP].do_outfmt) {
       numActive += (numRtmp = pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_RTMP].numActive);
+      numRtmpTunneled += pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_RTMP].numTunneled;
     }
     if(pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_FLV].do_outfmt) {
       numActive += (numFlvLive = pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_FLV].numActive);
@@ -74,8 +76,12 @@ static int ctrl_status_show_output(STREAMER_CFG_T *pStreamerCfg, char *buf, unsi
     }
   }
 
-  if((rc = snprintf(&buf[idx], szbuf - idx, "&rtmp=%u&rtspi=%u&rtsp=%u&tslive=%u&flvlive=%u&mkvlive=%u",
-                   numRtmp, numRtspInterleaved, numRtsp, numTsLive, numFlvLive, numMkvLive)) > 0) {
+  //
+  // numRtmp is superset of RTMP and RTMPT
+  // numRtsp is superset of RTSP and RTSP-interleaved
+  //
+  if((rc = snprintf(&buf[idx], szbuf - idx, "&rtmp=%u&rtmpt=%u&rtspi=%u&rtsp=%u&tslive=%u&flvlive=%u&mkvlive=%u",
+              numRtmp, numRtmpTunneled, numRtspInterleaved, numRtsp, numTsLive, numFlvLive, numMkvLive)) > 0) {
     idx += rc;
   }
 

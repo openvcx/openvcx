@@ -767,7 +767,7 @@ int flvsrv_sendHttpResp(FLVSRV_CTXT_T *pFlvCtxt) {
 
   if((rc = http_resp_sendhdr(pFlvCtxt->pSd, pFlvCtxt->pReq->version, HTTP_STATUS_OK,
                    lenLive, CONTENT_TYPE_FLV, http_getConnTypeStr(pFlvCtxt->pReq->connType),
-                   pFlvCtxt->pReq->cookie, NULL, NULL, NULL, NULL)) < 0) {
+                   pFlvCtxt->pReq->cookie, NULL, NULL, NULL, NULL, NULL)) < 0) {
     pFlvCtxt->state = FLVSRV_STATE_ERROR;
     return rc;
   }

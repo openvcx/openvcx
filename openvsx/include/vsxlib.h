@@ -996,6 +996,13 @@ typedef struct VSXLIB_STREAM_PARAMS {
 
   /**
    *
+   * Boolean controlling RTMP server tunneling mode
+   *
+   */
+  int rtmpdotunnel;
+
+  /**
+   *
    * RTSP configuration server listening address and port string
    *
    */
@@ -1635,7 +1642,7 @@ typedef struct VSXLIB_STREAM_PARAMS {
    * Dynamically Pre-allocate output buffering queue
    *
    */
-  unsigned int outq_prealloc;
+  int outq_prealloc;
 
 
   /**

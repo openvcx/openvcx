@@ -199,7 +199,8 @@ static void srv_rtmp_proc(void *pfuncarg) {
     //
     // Add a livefmt cb
     //
-    pOutFmt = outfmt_setCb(pLiveFmt, rtmp_addFrame, &rtmpCtxt, &pLiveFmt->qCfg, pstats, 1, pStreamerCfg->frameThin, &numQFull);
+    pOutFmt = outfmt_setCb(pLiveFmt, rtmp_addFrame, &rtmpCtxt, &pLiveFmt->qCfg, pstats, 
+                           1, pStreamerCfg->frameThin, &numQFull);
 
   } 
 
@@ -214,20 +215,32 @@ static void srv_rtmp_proc(void *pfuncarg) {
     rtmpCtxt.av.vid.pStreamerCfg = pStreamerCfg;
     rtmpCtxt.av.aud.pStreamerCfg = pStreamerCfg;
     rtmpCtxt.pAuthTokenId = pConn->pListenCfg->pAuthTokenId;
+    if(pstats) {
+      rtmpCtxt.pStreamMethod = &pstats->method;
+    }
+    rtmpCtxt.pOutFmt = pOutFmt;
+
+    if(!(pConn->pListenCfg->urlCapabilities & URL_CAP_RTMPLIVE)) {
+      rtmpCtxt.donotunnel = 1;
+    }
+    if((pConn->pListenCfg->urlCapabilities & URL_CAP_RTMPTLIVE)) {
+      rtmpCtxt.dohttptunnel = 1;
+    }
 
     //
     // Unpause the outfmt callback mechanism now that rtmp_init was called
     //
     outfmt_pause(pOutFmt, 0);
 
-    LOG(X_INFO("Starting rtmp stream[%d] %d/%d to %s:%d"), pOutFmt->cbCtxt.idx, numQFull + 1, 
-           pLiveFmt->max,
-           FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
+    LOG(X_INFO("Starting rtmp%s stream[%d] %d/%d to %s:%d"), 
+          (pConn->sd.netsocket.flags & NETIO_FLAG_SSL_TLS) ? "s" : "", pOutFmt->cbCtxt.idx, numQFull + 1, 
+          pLiveFmt->max, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
 
     rtmp_handle_conn(&rtmpCtxt);
 
-    LOG(X_INFO("Ending rtmp stream[%d] to %s:%d"), pOutFmt->cbCtxt.idx,
-           FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
+    LOG(X_INFO("Ending rtmp%s stream[%d] to %s:%d"), 
+         (pConn->sd.netsocket.flags & NETIO_FLAG_SSL_TLS) ? "s" : "", pOutFmt->cbCtxt.idx, 
+         FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
 
     //
     // Remove the livefmt cb
@@ -294,8 +307,10 @@ static void srvlisten_rtmplive_proc(void *pArg) {
   pListenCfg->pnetsockSrv = &netsocksrv; 
   pthread_mutex_unlock(&pListenCfg->mtx);
 
-  LOG(X_INFO("rtmp %sserver available at "URL_RTMP_FMT_STR"%s max:%d"), 
+  LOG(X_INFO("rtmp %s%sserver available at "URL_RTMP_FMT_STR"%s max:%d"), 
            ((pListenCfg->netflags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : ""), 
+           ((pListenCfg->urlCapabilities == URL_CAP_RTMPTLIVE) ? "(tunneled only) " : 
+            ((pListenCfg->urlCapabilities & URL_CAP_RTMPTLIVE) ? "(tunneled) " : "")),
            URL_PROTO_FMT2_ARGS(
                (pListenCfg->netflags & NETIO_FLAG_SSL_TLS),
                  FORMAT_NETADDR(sa, tmp, sizeof(tmp))), ntohs(INET_PORT(sa)), 

@@ -2768,6 +2768,7 @@ VSX_RC_T vsxlib_open(VSXLIB_STREAM_PARAMS_T *pParams) {
   pParams->caphighprio = 1;
   pParams->xmithighprio = 1;
   pParams->rtmpfp9 = RTMP_CLIENT_FP9;
+  pParams->rtmpdotunnel = BOOL_ENABLED_DFLT;
   pParams->statusmax = 0;
   pParams->enable_symlink = HTTP_FOLLOW_SYMLINKS_DEFAULT; // Follow symlinks by default
   //pParams->httpmax = VSX_CONNECTIONS_DEFAULT;

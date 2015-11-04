@@ -144,9 +144,10 @@ static inline int logger_syslogSeverity(int severity) {
 }
 #endif // WIN32
 
-static int logger_open(LOG_PROPERTIES_T *pLogProperties) {
+static int logger_openFile(LOG_PROPERTIES_T *pLogProperties) {
+  const char *flags = (pLogProperties->g_log_flags & LOG_FLAG_TRUNCATEFILE) ? "w" : "a";
 
-  if((pLogProperties->g_fp = fopen(pLogProperties->g_logName, "a")) == NULL) {
+  if((pLogProperties->g_fp = fopen(pLogProperties->g_logName, flags)) == NULL) {
     return -1;
   }
 
@@ -215,8 +216,8 @@ int logger_SetFile(const char *fileDir,
   pLogProperties->g_maxFileSz = maxFileSz;
   // XOR with flags suitable for fileoutput 
   pLogProperties->g_log_flags |= LOG_FLAG_USEFILEOUTPUT | (outputFlags & 
-         (LOG_FLAG_USELOCKING | LOG_OUTPUT_PRINT_DATE | LOG_OUTPUT_PRINT_SEV | LOG_OUTPUT_PRINT_SEV_WARNING | 
-          LOG_OUTPUT_PRINT_PID | LOG_OUTPUT_PRINT_TID | LOG_OUTPUT_PRINT_TAG));
+         (LOG_FLAG_USELOCKING | LOG_FLAG_TRUNCATEFILE | LOG_OUTPUT_PRINT_DATE | LOG_OUTPUT_PRINT_SEV | 
+          LOG_OUTPUT_PRINT_SEV_WARNING | LOG_OUTPUT_PRINT_PID | LOG_OUTPUT_PRINT_TID | LOG_OUTPUT_PRINT_TAG));
   
 
   if(fileDir) {
@@ -248,7 +249,7 @@ int logger_SetFile(const char *fileDir,
            sizeof(pLogProperties->g_logName) - (len+1));
   }
 
-  return logger_open(pLogProperties);
+  return logger_openFile(pLogProperties);
 }
 
 int logger_Init(const char *filePath,
@@ -321,7 +322,7 @@ int logger_Init(const char *filePath,
     strncat(&pLogProperties->g_logName[len], ".log", sizeof(pLogProperties->g_logName) - (len+1));
   }
 
-  return logger_open(pLogProperties);
+  return logger_openFile(pLogProperties);
 }
 
 int logger_SetHistory(unsigned int maxFiles, unsigned int maxFileBytes) {
@@ -600,7 +601,7 @@ static int logger_rollFiles(LOG_PROPERTIES_T *pLogProperties) {
 
   }
 
-  logger_open(pLogProperties);
+  logger_openFile(pLogProperties);
 
   //gettimeofday(&tv1, NULL);
 

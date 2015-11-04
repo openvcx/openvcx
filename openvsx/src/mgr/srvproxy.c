@@ -498,8 +498,8 @@ static int get_remote_conn(const char *pvirtRsrc,
       //mediaRsrc.puri = (char *) pvirtRsrc;
       //TODO: set the media action to live or not...
       if((rc = srvmgr_check_start_proc(pConn, &mediaRsrc, &mediaDescr, &proc, &devtype, 
-                                       MEDIA_ACTION_UNKNOWN, STREAM_METHOD_UNKNOWN, isShared, &startProc)) < 0) {
-                          //&proc, &devtype, MEDIA_ACTION_UNKNOWN, streamMethod, &startProc)) < 0) {
+                          //MEDIA_ACTION_UNKNOWN, STREAM_METHOD_UNKNOWN, isShared, &startProc)) < 0) {
+                          MEDIA_ACTION_UNKNOWN, streamMethod, isShared, &startProc)) < 0) {
         LOG(X_ERROR("Unable to %s process for '%s'"), 
             (startProc ? "start" : "find"), mediaRsrc.filepath);
         return -1;
@@ -689,7 +689,7 @@ static int mgr_rtmp_handle_conn(RTMP_CTXT_T *pRtmp, SRV_MGR_CONN_T *pConn) {
   //
   if((rc = rtmp_handshake_srv(pRtmp)) < 0) {
     LOG(X_ERROR("RTMP handshake failed for %s:%d"),
-        FORMAT_NETADDR(pRtmp->pSd->sa, path, sizeof(path)), ntohs(INET_PORT(pRtmp->pSd->sa)));
+        FORMAT_NETADDR(pRtmp->pSd->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pRtmp->pSd->sa)));
     return rc;
   }
 
@@ -776,16 +776,19 @@ static int mgr_rtmp_handle_conn(RTMP_CTXT_T *pRtmp, SRV_MGR_CONN_T *pConn) {
 void srvmgr_rtmpclient_proc(void *pfuncarg) {
 
   SRV_MGR_CONN_T *pConn = (SRV_MGR_CONN_T *) pfuncarg;
-  char buf[SAFE_INET_NTOA_LEN_MAX];
+  char tmp[SAFE_INET_NTOA_LEN_MAX];
   RTMP_CTXT_T rtmpCtxt;
+  unsigned char buf[4096];
 
   LOG(X_DEBUG("Handling RTMP connection from %s:%d"), 
-       FORMAT_NETADDR(pConn->conn.sd.sa, buf, sizeof(buf)), ntohs(INET_PORT(pConn->conn.sd.sa)));
+       FORMAT_NETADDR(pConn->conn.sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->conn.sd.sa)));
 
   memset(&rtmpCtxt, 0, sizeof(rtmpCtxt));
 
   mgr_rtmp_init(&rtmpCtxt);
   rtmpCtxt.pSd = &pConn->conn.sd;
+  rtmpCtxt.rtmpt.pbuftmp = buf;
+  rtmpCtxt.rtmpt.szbuftmp = sizeof(buf);
 
   mgr_rtmp_handle_conn(&rtmpCtxt, pConn);
 
@@ -793,7 +796,7 @@ void srvmgr_rtmpclient_proc(void *pfuncarg) {
   netio_closesocket(&pConn->conn.sd.netsocket);
 
   LOG(X_DEBUG("RTMP Connection ended %s:%d"), 
-      FORMAT_NETADDR(pConn->conn.sd.sa, buf, sizeof(buf)), ntohs(INET_PORT(pConn->conn.sd.sa)));
+      FORMAT_NETADDR(pConn->conn.sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->conn.sd.sa)));
 
 }
 

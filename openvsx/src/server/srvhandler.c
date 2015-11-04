@@ -363,6 +363,7 @@ fprintf(stderr, "COOKIE: '%s' 0x%x\n", phdrcookie, pSession);
           !strncasecmp(pConn->httpReq.puri, VSX_FLV_URL, MAX(urilen, strlen(VSX_FLV_URL))) ||
           !strncasecmp(pConn->httpReq.puri, VSX_RTSP_URL, MAX(urilen, strlen(VSX_RTSP_URL))) ||
           !strncasecmp(pConn->httpReq.puri, VSX_RTMP_URL, MAX(urilen, strlen(VSX_RTMP_URL))) ||
+          !strncasecmp(pConn->httpReq.puri, VSX_RTMPT_URL, MAX(urilen, strlen(VSX_RTMPT_URL))) ||
           !strncasecmp(pConn->httpReq.puri, VSX_RSRC_URL, MAX(urilen, strlen(VSX_RSRC_URL))) ||
           !strncasecmp(pConn->httpReq.puri, VSX_WEBM_URL, MAX(urilen, strlen(VSX_WEBM_URL))) ||
           !strncasecmp(pConn->httpReq.puri, VSX_MKV_URL, MAX(urilen, strlen(VSX_MKV_URL)))) {

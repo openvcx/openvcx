@@ -118,7 +118,7 @@ int httpcli_req_send(NETIO_SOCK_T *pnetsock,
 
   if(postData && szpost > 0) {
     VSX_DEBUG_HTTP(
-      LOG(X_DEBUG("HTTP - Sending POST %d bytes"), sz);
+      LOG(X_DEBUG("HTTP - Sending POST %d bytes"), szpost);
       LOGHEXT_DEBUG(postData, szpost);
     );
     if((rc = netio_send(pnetsock, psa, postData, szpost)) < 0) {
@@ -388,10 +388,7 @@ static int http_req_sendread(HTTP_PARSE_CTXT_T *pHdrCtxt,
     memset(pHttpResp, 0, sizeof(HTTP_RESP_T));
 
     //pHdrCtxt->tmtms = 0;
-    pHdrCtxt->hdrslen = 0;
-    pHdrCtxt->idxbuf = 0;
-    pHdrCtxt->termcharidx = 0;
-    pHdrCtxt->rcvclosed = 0;
+    HTTP_PARSE_CTXT_RESET(*pHdrCtxt);
 
     if((rc = httpcli_req_queryhdrs(pHdrCtxt, pHttpResp, psa, pAuthCliCtxt, "HTTP")) < 0) {
       //LOG(X_DEBUG("--REQ_QUERY_H rc:%d, idxretry:%d, statuscode:%d"), rc, idxretry, pHttpResp->statusCode);

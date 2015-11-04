@@ -63,7 +63,9 @@
 #include "formats/bmp.h"
 #include "formats/image.h"
 #include "formats/codecfmt.h"
+#include "formats/http_parse.h"
 #include "formats/rtmp_auth.h"
+#include "formats/rtmp_tunnel.h"
 #include "formats/rtmp_parse.h"
 #include "formats/flv_write.h"
 #include "formats/mkv_write.h"
@@ -72,9 +74,7 @@
 #include "formats/sdputil.h"
 #include "formats/stun.h"
 #include "formats/ice.h"
-#include "formats/http_parse.h"
 #include "formats/rtsp_parse.h"
-#include "formats/rtmp_tunnel.h"
 #include "formats/filetype.h"
 
 

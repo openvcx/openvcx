@@ -63,7 +63,8 @@ int http_resp_sendhdr(SOCKET_DESCR_T *pSd,
                       const HTTP_RANGE_HDR_T *pRange,
                       const char *etag,
                       const char *location,
-                      const char *auth);
+                      const char *auth, 
+                      const KEYVAL_PAIR_T *pHdrs);
 
 int http_parse_rangehdr(const char *rangestr, HTTP_RANGE_HDR_T *pRange);
 

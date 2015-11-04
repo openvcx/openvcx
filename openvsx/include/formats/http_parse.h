@@ -146,6 +146,7 @@ typedef struct HTTP_RESP {
 } HTTP_RESP_T;
 
 
+#define HTTP_PARSE_CTXT_RESET(c) (c).hdrslen = 0; (c).idxbuf = 0; (c).termcharidx = 0; (c).rcvclosed = 0;
 
 typedef struct HTTP_PARSE_CTXT {
   NETIO_SOCK_T      *pnetsock;

@@ -571,11 +571,12 @@ static MEDIA_ACTION_T get_media_action(const MEDIA_DESCRIPTION_T *pMediaDescr,
     return action;
 
   } else if(methodAuto == STREAM_METHOD_RTMP || 
-     methodAuto == STREAM_METHOD_FLVLIVE ||
-     methodAuto == STREAM_METHOD_MKVLIVE ||
-     methodAuto == STREAM_METHOD_RTSP ||
-     methodAuto == STREAM_METHOD_RTSP_INTERLEAVED ||
-     methodAuto == STREAM_METHOD_RTSP_HTTP) {
+            methodAuto == STREAM_METHOD_RTMPT ||
+            methodAuto == STREAM_METHOD_FLVLIVE ||
+            methodAuto == STREAM_METHOD_MKVLIVE ||
+            methodAuto == STREAM_METHOD_RTSP ||
+            methodAuto == STREAM_METHOD_RTSP_INTERLEAVED ||
+            methodAuto == STREAM_METHOD_RTSP_HTTP) {
 
     //
     // Check if the requested virtual resource actually corresponds to a download
@@ -623,7 +624,8 @@ static MEDIA_ACTION_T get_media_action(const MEDIA_DESCRIPTION_T *pMediaDescr,
     //
     // mp4 / 3gp / 3gpp / 3gp+
     //
-    if(methodAuto == STREAM_METHOD_RTMP || methodAuto == STREAM_METHOD_FLVLIVE) {
+    if(methodAuto == STREAM_METHOD_RTMP || methodAuto == STREAM_METHOD_RTMPT || 
+       methodAuto == STREAM_METHOD_FLVLIVE) {
       action = MEDIA_ACTION_CANNED_INFLASH;
     } else if(methodAuto == STREAM_METHOD_MKVLIVE) {
       action = MEDIA_ACTION_CANNED_WEBM;
@@ -633,7 +635,8 @@ static MEDIA_ACTION_T get_media_action(const MEDIA_DESCRIPTION_T *pMediaDescr,
 
   } else if(pMediaDescr->type == MEDIA_FILE_TYPE_FLV) {
 
-    if(methodAuto == STREAM_METHOD_RTMP || methodAuto == STREAM_METHOD_FLVLIVE) {
+    if(methodAuto == STREAM_METHOD_RTMP || methodAuto == STREAM_METHOD_RTMPT || 
+       methodAuto == STREAM_METHOD_FLVLIVE) {
       action = MEDIA_ACTION_CANNED_INFLASH;
 
     } else if(pdevtype->methods[0] != STREAM_METHOD_HTTPLIVE &&
@@ -883,7 +886,7 @@ static int process_liveoverhttp(SRV_MGR_CONN_T *pMgrConn,
     rc = srv_ctrl_rtsp(pConn, pvirtRsrc, is_remoteargfile, cfg.pListenRtsp);
 
   } else {
-    rc = srv_ctrl_rtmp(pConn, pvirtRsrc, is_remoteargfile, rsrcurl, cfg.pListenRtmp, 0);
+    rc = srv_ctrl_rtmp(pConn, pvirtRsrc, is_remoteargfile, rsrcurl, cfg.pListenRtmp, 0, method);
   }
 
   pConn->pCfg = pCfgOrig;
@@ -1355,11 +1358,18 @@ int srvmgr_check_start_proc(SRV_MGR_CONN_T *pConn,
     return -1;
   } else  if(pMediaRsrc->pmethodBits && *pMediaRsrc->pmethodBits != 0 && 
             !( *pMediaRsrc->pmethodBits & (1 << methodAuto))) {
-    LOG(X_ERROR("The media resource configuration for '%s' file path '%s' does not enable %s (%d), mask: 0x%x"), 
-                pConn->conn.httpReq.puri, pMediaRsrc->filepath, devtype_methodstr(methodAuto), methodAuto, 
-                *pMediaRsrc->pmethodBits);
-    *pstartProc = 1;
-    return -1;
+
+    //
+    // rtmp is abmiguous and allows both RTMPT and RTMP access on the rtmp stream method
+    //
+    if(!(methodAuto == STREAM_METHOD_RTMPT && !(*pMediaRsrc->pmethodBits & methodAuto) &&
+                                             (*pMediaRsrc->pmethodBits & (1 << STREAM_METHOD_RTMP)))) {
+      LOG(X_ERROR("The media resource configuration for '%s' file path '%s' does not enable %s (%d), mask: 0x%x"), 
+                  pConn->conn.httpReq.puri, pMediaRsrc->filepath, devtype_methodstr(methodAuto), methodAuto, 
+                  *pMediaRsrc->pmethodBits);
+      *pstartProc = 1;
+      return -1;
+    }
   }
 
   *pstartProc = 0;
@@ -1495,6 +1505,8 @@ static STREAM_METHOD_T get_method_fromurl(const CLIENT_CONN_T *pConn,
 
   if(!strncasecmp(pConn->httpReq.puri, VSX_RTSP_URL, strlen(VSX_RTSP_URL))) {
     method = STREAM_METHOD_RTSP;
+  } else if(!strncasecmp(pConn->httpReq.puri, VSX_RTMPT_URL, strlen(VSX_RTMPT_URL))) {
+    method = STREAM_METHOD_RTMPT;
   } else if(!strncasecmp(pConn->httpReq.puri, VSX_RTMP_URL, strlen(VSX_RTMP_URL))) {
     method = STREAM_METHOD_RTMP;
   } else if(!strncasecmp(pConn->httpReq.puri, VSX_HTTPLIVE_URL, strlen(VSX_HTTPLIVE_URL))) {
@@ -1983,7 +1995,8 @@ void srvmgr_client_proc(void *pfuncarg) {
 
             rc = process_dash(pConn, &mediaRsrc, &proc, &httpStatus);
 
-          } else if(methodAuto == STREAM_METHOD_RTMP || methodAuto == STREAM_METHOD_FLASHHTTP ||
+          } else if(methodAuto == STREAM_METHOD_RTMP || methodAuto == STREAM_METHOD_RTMPT ||
+                    methodAuto == STREAM_METHOD_FLASHHTTP ||
                     methodAuto == STREAM_METHOD_FLVLIVE || methodAuto == STREAM_METHOD_MKVLIVE) {
 
             rc = process_liveoverhttp(pConn, &mediaRsrc, &proc, action, methodAuto, startProc);

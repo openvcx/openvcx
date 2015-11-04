@@ -39,7 +39,7 @@ int mkvsrv_sendHttpResp(MKVSRV_CTXT_T *pMkvCtxt, const char *contentType) {
   if((rc = http_resp_sendhdr(pMkvCtxt->pSd, pMkvCtxt->pReq->version, HTTP_STATUS_OK,
                    lenLive, contentType, 
                    http_getConnTypeStr(pMkvCtxt->pReq->connType),
-                   pMkvCtxt->pReq->cookie, NULL, NULL, NULL, NULL)) < 0) {
+                   pMkvCtxt->pReq->cookie, NULL, NULL, NULL, NULL, NULL)) < 0) {
     pMkvCtxt->state = FLVSRV_STATE_ERROR;
     return rc;
   }

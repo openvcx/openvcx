@@ -196,20 +196,18 @@ typedef struct RTMP_CTXT {
   unsigned int             rcvTmtMs;
   struct timeval           tvLastRd;
   const char              *pAuthTokenId;
-
-  uint64_t                 tunnelSessionId;
-  unsigned int             tunnelSeqnum;
-  int                      tunneldatasz;
-  char                    *phosthdr;
-  HTTP_PARSE_CTXT_T        tunnelHttpCtxt;
-  unsigned int             idxInHttpBuf;
-  unsigned int             idxContent; 
-  unsigned int             contentLen; 
+  RTMPT_CTXT_T             rtmpt;
+  STREAM_METHOD_T         *pStreamMethod;
 
   //TODO: seperate server output stream context from parse ctxt
   int                      isclient;
   int                      ishttptunnel;
-  enum RTMP_TUNNEL_STATE   tunnelState;
+  struct OUTFMT_CFG       *pOutFmt;
+  int                      dohttptunnel; 
+  int                      donotunnel; 
+  //enum RTMP_TUNNEL_STATE   tunnelState;
+  unsigned char           *prebufdata;
+  unsigned int             prebufsz;
   enum RTMP_STATE          state;
   enum RTMP_METHOD         methodParsed;
   double                   advCapabilities; 

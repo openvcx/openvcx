@@ -86,10 +86,10 @@
 #define BOOL_ENABLED_DFLT        1
 #define BOOL_DISABLED_OVERRIDE   -1
 #define BOOL_DISABLED_DFLT       0
-#define MAKE_BOOL(x) (x) > 0 ? 1 : 0
-#define BOOL_ISDFLT(x) ((x) == BOOL_ENABLED_DFLT || (x) == BOOL_DISABLED_DFLT)
-#define BOOL_ISENABLED(x) ((x) > 0 ? 1 : 0)
-#define BOOL_ISDISABLED(x) ((x) <= 0 ? 1 : 0)
+#define MAKE_BOOL(x) ((int)x) > 0 ? 1 : 0
+#define BOOL_ISDFLT(x) (((int)x) == BOOL_ENABLED_DFLT || ((int)x) == BOOL_DISABLED_DFLT)
+#define BOOL_ISENABLED(x) (((int)x) > 0 ? 1 : 0)
+#define BOOL_ISDISABLED(x) (((int)x) <= 0 ? 1 : 0)
 
 typedef struct SRV_PARAM {
   int                      isinit;

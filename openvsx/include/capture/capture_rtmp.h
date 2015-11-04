@@ -27,6 +27,7 @@
 
 #include "capture.h"
 #include "formats/rtmp_auth.h"
+#include "formats/rtmp_tunnel.h"
 #include "formats/rtmp_parse.h"
 #include "formats/rtmp_pkt.h"
 

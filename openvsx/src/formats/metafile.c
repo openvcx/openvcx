@@ -790,7 +790,7 @@ int metafile_open(const char *path,
       p++;
     }
 
-    if(*p == '#') {
+    if(*p == '#' || *p == '\r' || *p == '\n') {
       continue;
     } 
 
@@ -799,6 +799,9 @@ int metafile_open(const char *path,
     //
     reset_parsedata_ctxt(&parseData);
 
+    //
+    // We allow multiple configuration items on one line, separated by comma
+    //
     rc = strutil_parse_csv(cbparse_entry_metafile, &parseData, p);
 
     if(parseData.flags == 0) {

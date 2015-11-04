@@ -53,7 +53,8 @@ int srv_ctrl_httplive(CLIENT_CONN_T *pConn, const char *uri, const char *virtFil
 int srv_ctrl_mooflive(CLIENT_CONN_T *pConn, const char *uri, const char *virtFilePath, const char *filepath, 
                       HTTP_STATUS_T *pHttpStatus);
 int srv_ctrl_rtmp(CLIENT_CONN_T *pConn, const char *uri, int is_remoteargfile, 
-                  const char *rsrcUrl, const SRV_LISTENER_CFG_T *pListenHttp, unsigned int outidx);
+                  const char *rsrcUrl, const SRV_LISTENER_CFG_T *pListenHttp, unsigned int outidx, 
+                  STREAM_METHOD_T streamMethod);
 int srv_ctrl_flv(CLIENT_CONN_T *pConn, const char *uri,  int is_remoteargfile, 
                  const SRV_LISTENER_CFG_T *pListenHttp);
 int srv_ctrl_mkv(CLIENT_CONN_T *pConn, const char *uri, int is_remoteargfile, 
@@ -77,6 +78,7 @@ const SRV_LISTENER_CFG_T *srv_ctrl_findlistener(const SRV_LISTENER_CFG_T *arrCfg
 
 #define URL_RTSP_FMT_STR                   "rtsp%s://%s:%d"
 #define URL_RTMP_FMT_STR                   "rtmp%s://%s:%d"
+#define URL_RTMPT_FMT_STR                  "rtmpt%s://%s:%d"
 #define URL_HTTP_FMT_STR                   "http%s://%s:%d"
 
 #define URL_HTTP_FMT_PROTO_HOST(sockflags, location) ((sockflags) & NETIO_FLAG_SSL_TLS) ? "s" : "", (location)

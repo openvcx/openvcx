@@ -50,6 +50,7 @@
 #define VSX_MKVLIVE_URL           "/mkvlive"
 #define VSX_WEBM_URL              "/webm"
 #define VSX_RTMP_URL              "/rtmp"
+#define VSX_RTMPT_URL             "/rtmpt"
 #define VSX_RSRC_URL              "/rsrc"
 #define VSX_HTTP_URL              "/http"
 #define VSX_RTSP_URL              "/rtsp"

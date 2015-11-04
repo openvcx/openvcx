@@ -847,6 +847,7 @@ static int srv_ctrl_is_uri_virtual(const char *puri) {
   //fprintf(stderr, "CHECK URI '%s'\n", puri);
 
   if(!strncasecmp(puri, VSX_RTSP_URL, strlen(VSX_RTSP_URL)) ||
+     !strncasecmp(puri, VSX_RTMPT_URL, strlen(VSX_RTMPT_URL)) ||
      !strncasecmp(puri, VSX_RTMP_URL, strlen(VSX_RTMP_URL)) ||
      !strncasecmp(puri, VSX_HTTPLIVE_URL, strlen(VSX_HTTPLIVE_URL)) ||
      !strncasecmp(puri, VSX_DASH_URL, strlen(VSX_DASH_URL)) ||
