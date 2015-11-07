@@ -561,7 +561,7 @@ dev:
 	@ln -fs ../${THIRDPARTYPATH}/opus-1.0.3/lib/libopus_floatapprox.so lib/libopus_floatapprox.0.dyilb
 	@ln -fs ../${THIRDPARTYPATH}/opus-1.0.3/lib/libopus_float.so lib/libopus.0.dyilb
 	@${E} Creating symbolic links in vcx/mobicents-sip        ;
-	@ln -fs ../../openvsx ../vcx/mobicents-sip/openvsx 
+	@ln -fs ../../openvsx ../vcx/mobicents-sip/openvsx
 	@${E} --------------------------------------- ;
 	
 

@@ -6,7 +6,7 @@
 
 function checkvsx {
   VSX_HOME=$1
-  VSX_PATH="${VSX_HOME}/${VSX}"
+  VSX_PATH="${VSX_HOME}/${VSXBIN}"
   if [ ! -f "${VSX_PATH}" ]; then
     VSX_PATH=""
   fi
@@ -19,10 +19,10 @@ function findvsx {
       PWD=`pwd`
       VSX_HOME=`dirname ${PWD}`
     fi
-    VSX="bin/${VSX}"
+    VSXBIN="bin/${VSXBIN}"
   fi
   if [ "${VSX_PATH}" == "" ]; then
-    checkvsx ${VSX_HOME} 
+    checkvsx ${VSX_HOME}
   fi
   if [ "${VSX_PATH}" == "" ]; then
     checkvsx .
@@ -38,12 +38,12 @@ function findvsx {
   fi
   if [ "${VSX_PATH}" == "" ]; then
     echo "Unable to find your VSX installation directory."
-    echo "Please set VSX_HOME or run this script from your VSX installation directory."
+    echo "Please set VSX_HOME or run this script from your OpenVSX installation directory."
     exit 0
   fi
 }
 
-VSX="vsxbin"
+VSXBIN="vsxbin"
 VSX_PATH=""
 
 findvsx
@@ -62,5 +62,5 @@ if [ -d ${VSX_HOME}/lib ]; then
 
 fi
 
-#echo ./${VSX} "$@"
-./${VSX} "$@"
+#echo ./${VSXBIN} "$@"
+./${VSXBIN} "$@"

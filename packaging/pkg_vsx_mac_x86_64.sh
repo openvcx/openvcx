@@ -20,6 +20,7 @@ fi
 SELFEXTRACTING_OUTPUT=$1
 ARCH=mac_x86_64
 DIRNAME=${ARCH}
+OUTIN=vsx
 OUT=vsx
 OUTDIR=openvsx
 
@@ -77,9 +78,6 @@ fi
 if [ ! -d ${OUTDIR}/log ]; then
   mkdir ${OUTDIR}/log
 fi
-if [ ! -d ${OUTDIR}/include ]; then
-  mkdir ${OUTDIR}/include
-fi
 
 
 SRCDIR=../../${OUTDIR}
@@ -130,7 +128,7 @@ fi
 
 cp ${EXESRC} ${OUTDIR}/bin/${EXENAME}
 cp ${EXEMGRSRC} ${OUTDIR}/bin/${EXEMGR}
-cp ${EXESRCPATH}/../include/${OUT}lib.h ${OUTDIR}/include/
+#cp ${EXESRCPATH}/../include/${OUTIN}lib.h ${OUTDIR}/include/${OUT}lib.h
 #cp ${EXEIPCSRC} ${OUTDIR}/bin/${EXEIPCNAME}
 #cp ${EXEXCODESRC} ${OUTDIR}/bin/${EXEXCODENAME}
 cp ${EXELIB} ${OUTDIR}/lib/
@@ -138,11 +136,11 @@ cp ${EXELIB} ${OUTDIR}/lib/
 
 #cp ${SRCDIR}/scripts/pkg/broadcastctrl.sh ${OUTDIR}/bin/broadcastctrl.sh
 cp ${SRCDIR}/scripts/pkg/examplestart.sh ${OUTDIR}/bin/examplestart.sh
-cp ${SRCDIR}/scripts/pkg/${OUT}wrapper.sh ${OUTDIR}/bin/${OUT}wrapper.sh
-cp ${SRCDIR}/scripts/pkg/start${OUT}wp.sh ${OUTDIR}/bin/start${OUT}wp.sh
-cp ${SRCDIR}/scripts/pkg/${OUT}child.sh ${OUTDIR}/bin/${OUT}child.sh
-cp ${SRCDIR}/etc/${OUT}${ARCH}.conf ${OUTDIR}/etc/${OUT}.conf
-cp ${SRCDIR}/etc/${OUT}wp${ARCH}.conf ${OUTDIR}/etc/${OUT}wp.conf
+cp ${SRCDIR}/scripts/pkg/${OUTIN}wrapper.sh ${OUTDIR}/bin/${OUT}wrapper.sh
+cp ${SRCDIR}/scripts/pkg/start${OUTIN}wp.sh ${OUTDIR}/bin/start${OUT}wp.sh
+cp ${SRCDIR}/scripts/pkg/${OUTIN}child.sh ${OUTDIR}/bin/${OUT}child.sh
+cp ${SRCDIR}/etc/${OUTIN}${ARCH}.conf ${OUTDIR}/etc/${OUT}.conf
+cp ${SRCDIR}/etc/${OUTIN}wp${ARCH}.conf ${OUTDIR}/etc/${OUT}wp.conf
 cp ${SRCDIR}/etc/devices.conf ${OUTDIR}/etc/devices.conf
 cp ${SRCDIR}/etc/pip.conf ${OUTDIR}/etc/pip.conf
 cp ${SRCDIR}/etc/xcode.conf ${OUTDIR}/etc/xcode.conf
@@ -156,7 +154,7 @@ cp ${SRCDIR}/html/*.html ${OUTDIR}/html/
 cp -R ${SRCDIR}/html/img/* ${OUTDIR}/html/img/
 cp -R ${SRCDIR}/html/rsrc/* ${OUTDIR}/html/rsrc/
 cp -R ${SRCDIR}/scripts/pkg/${FFMPEGTN} ${OUTDIR}/bin/ffmpeg_tn
-cp ${SRCDIR}/scripts/pkg/${OUT}_license.txt ${OUTDIR}/LICENSE.txt
+cp ${SRCDIR}/scripts/pkg/${OUTIN}_license.txt ${OUTDIR}/LICENSE.txt
 cp -R ${SRCDIR}/scripts/pkg/mediaconvert.sh ${OUTDIR}/bin/mediaconvert.sh
 mkdir ${OUTDIR}/html/httplive
 mkdir ${OUTDIR}/html/dash
@@ -216,7 +214,7 @@ fi
 
 #${SRCDIR}/scripts/pkg/customize_readme.sh mac ${SRCDIR}/scripts/pkg/${OUT}${LITE_VERSION}_readme.txt ${OUTDIR}/README.txt
 ZIP_THIRDPARTY="${OUTDIR}thirdparty_${ARCH}_${VSXVERSION}.tar.gz"
-sed -e "s/@__THIRDPARTY_PACKAGE_NAME__@/$ZIP_THIRDPARTY/g" "${SRCDIR}/scripts/pkg/${OUT}${LITE_VERSION}_readme.txt" > "${OUTDIR}/README.txt"
+sed -e "s/@__THIRDPARTY_PACKAGE_NAME__@/$ZIP_THIRDPARTY/g" "${SRCDIR}/scripts/pkg/${OUTIN}${LITE_VERSION}_readme.txt" > "${OUTDIR}/README.txt"
 
 mv ${OUTDIR}/bin/${OUT}wrapper.sh ${OUTDIR}/bin/${OUT}
 

@@ -15,7 +15,7 @@ SUBDIRS_MEDIASERVER = openvsx/
 SUBDIRS_SIPSERVER= @SUBDIRS_SIPSERVER_VALUE@
 
 MKDATE_FILE = openvsx/version/include/build_info_date.h
-MKBLDNUM_FILE = buildopenvsx/version/include/build_info_ver.h
+MKBLDNUM_FILE = openvsx/version/include/build_info_ver.h
 
 
 all: openvsx openvcx
@@ -62,11 +62,11 @@ openvcx:
 #
 # Create self-extracting installation package for both OpenVCX and OpenVSX
 #
-installer-build: openvsx 
+installer-build: openvsx
 	@for i in ${SUBDIRS_SIPSERVER}; do echo "making installer-build... $${i}"; $(MAKE) installer-build -C $${i}; done;
-installer-run: openvsx 
+installer-run: openvsx
 	@for i in ${SUBDIRS_SIPSERVER}; do echo "making installer-run... $${i}"; $(MAKE) installer-run -C $${i}; done;
-install: openvsx 
+install: openvsx
 	@for i in ${SUBDIRS_SIPSERVER}; do echo "making install... $${i}"; $(MAKE) install -C $${i}; done;
 
 #
