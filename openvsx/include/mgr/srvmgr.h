@@ -42,7 +42,7 @@
 #define SRV_CONF_KEY_MAX_CLIENTS_PER_PROC  "maxClientsPerProcess"
 #define SRV_CONF_KEY_MONITOR               "Monitor"
 
-#define MGR_CONNECTIONS_MAX        500 
+#define MGR_CONNECTIONS_MAX        1000 
 #define MGR_CONNECTIONS_DEFAULT    50 
 
 
@@ -58,11 +58,15 @@
 
 #endif // WIN32
 
-#define MGR_PORT_ALLOC_COUNT         4
-#define MGR_GET_PORT_RTMP(port)      ((port)+3)
-#define MGR_GET_PORT_RTSP(port)      ((port)+2)
-#define MGR_GET_PORT_STATUS(port)    ((port)+1)
-#define MGR_GET_PORT_HTTP(port)      (port)
+//#define MGR_PORT_ALLOC_COUNT(ssl)         (2 + (ssl ? 1 : 0)) 
+//
+// Always increment by 3 (http,status,ssl)
+//
+#define MGR_PORT_ALLOC_COUNT(ssl)         (3)
+#define MGR_GET_PORT_HTTP(port, ssl)      ((port) + ((ssl) ? 2 : 0))
+#define MGR_GET_PORT_RTMP(port, ssl)      ((port) + ((ssl) ? 2 : 0))
+#define MGR_GET_PORT_RTSP(port, ssl)      ((port) + ((ssl) ? 2 : 0))
+#define MGR_GET_PORT_STATUS(port)         ((port)+1)
 
 
 typedef enum MEDIA_ACTION {
@@ -88,7 +92,7 @@ typedef enum MEDIA_ACTION {
 
 typedef struct SRV_MGR_PARAMS {
   char                    *confpath;
-  const char              *listenaddr[SRV_LISTENER_MAX_HTTP];
+  const char              *listenaddr[SRV_LISTENER_MAX];
   char                    *mediadir;
   char                    *homedir;
   char                    *dbdir;
@@ -110,6 +114,7 @@ typedef struct SRV_MGR_START_CFG {
   MGR_NODE_LIST_T              *pLbNodes;
   STREAM_STATS_MONITOR_T       *pMonitor;
   LIC_INFO_T                   *plic;
+  int                           enable_ssl_childlisteners;
 
   struct SRV_MGR_LISTENER_CFG  *pListenerRtmpProxy;
   struct SRV_MGR_LISTENER_CFG  *pListenerRtspProxy;
@@ -119,14 +124,14 @@ typedef struct SRV_MGR_START_CFG {
 
 
 typedef struct SRV_MGR_LISTENER_CFG {
-  SRV_MGR_START_CFG_T         *pStart;
+  const SRV_MGR_START_CFG_T   *pStart;
   SRV_LISTENER_CFG_T           listenCfg;
   AUTH_CREDENTIALS_STORE_T     authStore;
 } SRV_MGR_LISTENER_CFG_T;
 
 typedef struct SRV_MGR_CONN {
   CLIENT_CONN_T               conn;
-  SRV_MGR_START_CFG_T         cfg;
+  const  SRV_MGR_START_CFG_T  *pMgrCfg;
 } SRV_MGR_CONN_T;
 
 typedef struct SRVMEDIA_RSRC {

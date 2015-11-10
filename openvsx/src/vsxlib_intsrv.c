@@ -145,6 +145,9 @@ void vsxlib_closeServer(SRV_PARAM_T *pSrv) {
     if(pSrv->pStreamerCfg->action.do_mkvlive) {
       pSrv->pStreamerCfg->action.do_mkvlive = 0;
     }
+    if(pSrv->pStreamerCfg->action.do_tslive) {
+      pSrv->pStreamerCfg->action.do_tslive = 0;
+    }
 
     //TODO: mutex protect
     //if(pSrv->rtspLive.psockSrv) {
@@ -169,21 +172,7 @@ void vsxlib_closeServer(SRV_PARAM_T *pSrv) {
       }
       pthread_mutex_unlock(&pSrv->pStreamerCfg->liveQs[outidx].mtx);
     }
-/*
-    //
-    // Signall all rtsp rtp queue listeners to exit
-    //
-    for(outidx = 0; outidx < IXCODE_VIDEO_OUT_MAX; outidx++) {
-      pthread_mutex_lock(&pSrv->pStreamerCfg->liveQ2s[outidx].mtx);
-      for(idx = 0; idx < pSrv->pStreamerCfg->liveQ2s[outidx].max; idx++) {
-        if(pSrv->pStreamerCfg->liveQ2s[outidx].pQs[idx]) {
-          pSrv->pStreamerCfg->liveQ2s[outidx].pQs[idx]->quitRequested = 1;
-          pktqueue_wakeup(pSrv->pStreamerCfg->liveQ2s[outidx].pQs[idx]);
-        }
-      }
-      pthread_mutex_unlock(&pSrv->pStreamerCfg->liveQ2s[outidx].mtx);
-    }
-*/
+
 #if 1
     //
     // Go through each pool in use list and close the respective socket
@@ -198,25 +187,7 @@ void vsxlib_closeServer(SRV_PARAM_T *pSrv) {
     }
     pthread_mutex_unlock(&pSrv->poolHttp.mtx);
 
-    pthread_mutex_lock(&pSrv->poolRtmp.mtx);
-    pConn = (CLIENT_CONN_T *) pSrv->poolRtmp.pInUse;
-    while(pConn) {
-      //fprintf(stderr, "RTMP POOL SOCK:%d free:%d/%d\n", pConn->sd.socket, pSrv->poolRtmp.freeElements, pSrv->poolRtmp.numElements);
-      netio_closesocket(&pConn->sd.netsocket);
-      pConn = (CLIENT_CONN_T *) pConn->pool.pNext;
-    }
-    pthread_mutex_unlock(&pSrv->poolRtmp.mtx);
-
-    pthread_mutex_lock(&pSrv->poolRtsp.mtx);
-    pConn = (CLIENT_CONN_T *) pSrv->poolRtsp.pInUse;
-    while(pConn) {
-      //fprintf(stderr, "RTSP POOL SOCK:%d free:%d/%d\n", pConn->sd.socket, pSrv->poolRtsp.freeElements, pSrv->poolRtsp.numElements);
-      netio_closesocket(&pConn->sd.netsocket);
-      pConn = (CLIENT_CONN_T *) pConn->pool.pNext;
-    }
-    pthread_mutex_unlock(&pSrv->poolRtsp.mtx);
-
-    for(idx = 0; idx < SRV_LISTENER_MAX_HTTP; idx++) {
+    for(idx = 0; idx < SRV_LISTENER_MAX; idx++) {
       if(pSrv->startcfg.listenHttp[idx].active) {
         pthread_mutex_lock(&pSrv->startcfg.listenHttp[idx].mtx);
         if(pSrv->startcfg.listenHttp[idx].pnetsockSrv) {
@@ -226,31 +197,10 @@ void vsxlib_closeServer(SRV_PARAM_T *pSrv) {
         pthread_mutex_destroy(&pSrv->startcfg.listenHttp[idx].mtx);
       }
     }
-    for(idx = 0; idx < SRV_LISTENER_MAX_RTMP; idx++) {
-      if(pSrv->startcfg.listenRtmp[idx].active) {
-        pthread_mutex_lock(&pSrv->startcfg.listenRtmp[idx].mtx);
-        if(pSrv->startcfg.listenRtmp[idx].pnetsockSrv) {
-          netio_closesocket(pSrv->startcfg.listenRtmp[idx].pnetsockSrv);
-        }
-        pthread_mutex_unlock(&pSrv->startcfg.listenRtmp[idx].mtx);
-        pthread_mutex_destroy(&pSrv->startcfg.listenRtmp[idx].mtx);
-      }
-    }
-    for(idx = 0; idx < SRV_LISTENER_MAX_RTSP; idx++) {
-      if(pSrv->startcfg.listenRtsp[idx].active) {
-        pthread_mutex_lock(&pSrv->startcfg.listenRtsp[idx].mtx);
-        if(pSrv->startcfg.listenRtsp[idx].pnetsockSrv) {
-          netio_closesocket(pSrv->startcfg.listenRtsp[idx].pnetsockSrv);
-        }
-        pthread_mutex_unlock(&pSrv->startcfg.listenRtsp[idx].mtx);
-        pthread_mutex_destroy(&pSrv->startcfg.listenRtsp[idx].mtx);
-      }
-    }
+
 #endif // 1
 
     pool_close(&pSrv->poolHttp, 3000);
-    pool_close(&pSrv->poolRtmp, 3000);
-    pool_close(&pSrv->poolRtsp, 3000);
 
     vsxlib_closeOutFmt(&pSrv->pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_RTMP]);
     vsxlib_closeOutFmt(&pSrv->pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_FLV]);
@@ -323,19 +273,16 @@ static int cbparse_entry_httplivebitrates(void *pArg, const char *p) {
 int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams, int do_httplive_segmentor) {
   int rc = 0;
   unsigned int numConn = 0;
+  unsigned int numHttp = 0;
   unsigned int outidx;
   unsigned int idx;
   STREAMER_OUTFMT_T *pLiveFmt;
   STREAMER_LIVEQ_T *pLiveQ;
-  //STREAMER_LIVEQ_T *pLiveQ2;
   HTTPLIVE_DATA_T *pHttpLiveData = NULL;
   CB_PARSE_HTTPLIVE_BITRATES_T httpLiveBitrates;
-  unsigned int numHttp = 0;
-  char tmp[128];
   char fileprefix[128];
   STREAMER_CFG_T *pStreamerCfg = pSrv->pStreamerCfg;
   HTTPLIVE_DATA_T *pHttpLiveDatas[IXCODE_VIDEO_OUT_MAX];
-  //unsigned int numXcodeOut = 0;
   unsigned int maxHttp = pParams->httpmax;
   unsigned int maxTsLive = pParams->tslivemax;
   unsigned int maxHttpLive = pParams->httplivemax;
@@ -389,7 +336,7 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
   if(!pParams->mkvliveaddr[0]) {
     maxMkvLive = 0;
   }
-  if(!pParams->rtmpliveaddr[0]) {
+  if(!pParams->rtmpliveaddr[0] && !pParams->rtmptliveaddr[0]) {
     maxRtmpLive = 0;
   }
   if(!pParams->rtspliveaddr[0]) {
@@ -407,7 +354,7 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
   }
 #if defined(VSX_HAVE_LICENSE)
 
-  if((pParams->rtmpliveaddr[0] || pParams->flvliveaddr[0]) &&
+  if((pParams->rtmpliveaddr[0] || pParams->rtmptliveaddr[0] || pParams->flvliveaddr[0]) &&
      (pStreamerCfg->lic.capabilities & LIC_CAP_NO_RTMP)) {
     LOG(X_ERROR("RTMP/FLV server not enabled in license"));
     return -1;
@@ -599,23 +546,11 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
   //
   // Create and init each available client connection instance
   //
-  if(numHttp > 0 &&
-     pool_open(&pSrv->poolHttp, numHttp, sizeof(CLIENT_CONN_T), 1) != 0) {
+  if((numHttp > 0 || maxRtmpLive > 0 || maxRtspLiveConn) &&
+     pool_open(&pSrv->poolHttp, numHttp + maxRtmpLive + maxRtspLiveConn, sizeof(CLIENT_CONN_T), 1) != 0) {
     return -1;
   }
-  pSrv->poolHttp.descr = STREAM_METHOD_PROGDOWNLOAD_STR;
-
-  if(maxRtmpLive > 0 &&
-    pool_open(&pSrv->poolRtmp, maxRtmpLive, sizeof(CLIENT_CONN_T), 1) != 0) {
-    return -1;
-  }
-  pSrv->poolRtmp.descr = STREAM_METHOD_RTMP_STR;
-
-  if(maxRtspLiveConn > 0 &&
-     pool_open(&pSrv->poolRtsp, maxRtspLiveConn, sizeof(CLIENT_CONN_T), 1) != 0) {
-    return -1;
-  }
-  pSrv->poolRtsp.descr = STREAM_METHOD_RTSP_STR;
+  pSrv->poolHttp.descr = "client-request";
 
   //
   // Setup the HTTP tslive parameters
@@ -695,8 +630,6 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
   pthread_mutex_init(&pSrv->mtx, NULL);
 
   init_conn(&pSrv->poolHttp, pSrv);
-  init_conn(&pSrv->poolRtmp, pSrv);
-  init_conn(&pSrv->poolRtsp, pSrv);
 
   //
   // Start the live / httplive server
@@ -704,7 +637,7 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
   if(numHttp > 0) {
 
     if(maxTsLive > 0) {
-      if((rc = vsxlib_parse_listener((const char **) pParams->tsliveaddr, SRV_LISTENER_MAX_HTTP,
+      if((rc = vsxlib_parse_listener((const char **) pParams->tsliveaddr, SRV_LISTENER_MAX,
                              pSrv->startcfg.listenHttp, URL_CAP_TSLIVE, 
                              pStreamerCfg->creds[STREAMER_AUTH_IDX_TSLIVE].stores)) < 0) {
         vsxlib_closeServer(pSrv);
@@ -714,7 +647,7 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
     }
 
     if(maxHttpLive > 0) {
-      if((rc = vsxlib_parse_listener((const char **) pParams->httpliveaddr, SRV_LISTENER_MAX_HTTP,
+      if((rc = vsxlib_parse_listener((const char **) pParams->httpliveaddr, SRV_LISTENER_MAX,
                              pSrv->startcfg.listenHttp, URL_CAP_TSHTTPLIVE, 
                              pStreamerCfg->creds[STREAMER_AUTH_IDX_HTTPLIVE].stores)) < 0) {
         vsxlib_closeServer(pSrv);
@@ -723,7 +656,7 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
     }
 
     if(maxMoofLive > 0) {
-      if((rc = vsxlib_parse_listener((const char **) pParams->dashliveaddr, SRV_LISTENER_MAX_HTTP,
+      if((rc = vsxlib_parse_listener((const char **) pParams->dashliveaddr, SRV_LISTENER_MAX,
                              pSrv->startcfg.listenHttp, URL_CAP_MOOFLIVE, 
                              pStreamerCfg->creds[STREAMER_AUTH_IDX_MOOFLIVE].stores)) < 0) {
         vsxlib_closeServer(pSrv);
@@ -732,7 +665,7 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
     }
 
     if(maxFlvLive > 0) {
-      if((rc = vsxlib_parse_listener((const char **) pParams->flvliveaddr, SRV_LISTENER_MAX_HTTP,
+      if((rc = vsxlib_parse_listener((const char **) pParams->flvliveaddr, SRV_LISTENER_MAX,
                              pSrv->startcfg.listenHttp, URL_CAP_FLVLIVE, 
                              pStreamerCfg->creds[STREAMER_AUTH_IDX_FLV].stores)) < 0) {
         vsxlib_closeServer(pSrv);
@@ -743,7 +676,7 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
     }
 
     if(maxMkvLive > 0) {
-      if((rc = vsxlib_parse_listener((const char **) pParams->mkvliveaddr, SRV_LISTENER_MAX_HTTP,
+      if((rc = vsxlib_parse_listener((const char **) pParams->mkvliveaddr, SRV_LISTENER_MAX,
                                      pSrv->startcfg.listenHttp, URL_CAP_MKVLIVE, 
                                      pStreamerCfg->creds[STREAMER_AUTH_IDX_MKV].stores)) < 0) {
         vsxlib_closeServer(pSrv);
@@ -754,7 +687,7 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
     }
 
     if(maxWww > 0) {
-      if((rc = vsxlib_parse_listener((const char **) pParams->liveaddr, SRV_LISTENER_MAX_HTTP,
+      if((rc = vsxlib_parse_listener((const char **) pParams->liveaddr, SRV_LISTENER_MAX,
                              pSrv->startcfg.listenHttp, URL_CAP_LIVE | URL_CAP_IMG, 
                              pStreamerCfg->creds[STREAMER_AUTH_IDX_ROOT].stores)) < 0) {
         vsxlib_closeServer(pSrv);
@@ -763,7 +696,7 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
     }
 
     if(maxStatus > 0) {
-      if((rc = vsxlib_parse_listener((const char **) pParams->statusaddr, SRV_LISTENER_MAX_HTTP,
+      if((rc = vsxlib_parse_listener((const char **) pParams->statusaddr, SRV_LISTENER_MAX,
                              pSrv->startcfg.listenHttp, URL_CAP_STATUS, 
                              pStreamerCfg->creds[STREAMER_AUTH_IDX_STATUS].stores)) < 0) {
         vsxlib_closeServer(pSrv);
@@ -772,7 +705,7 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
     }
 
     if(maxConfig > 0) {
-      if((rc = vsxlib_parse_listener((const char **) pParams->configaddr, SRV_LISTENER_MAX_HTTP,
+      if((rc = vsxlib_parse_listener((const char **) pParams->configaddr, SRV_LISTENER_MAX,
                              pSrv->startcfg.listenHttp, URL_CAP_CONFIG, 
                              pStreamerCfg->creds[STREAMER_AUTH_IDX_CONFIG].stores)) < 0) {
         vsxlib_closeServer(pSrv);
@@ -781,7 +714,7 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
     }
 
     if(maxPip > 0) {
-      if((rc = vsxlib_parse_listener((const char **) pParams->pipaddr, SRV_LISTENER_MAX_HTTP,
+      if((rc = vsxlib_parse_listener((const char **) pParams->pipaddr, SRV_LISTENER_MAX,
                              pSrv->startcfg.listenHttp, URL_CAP_PIP,
                              pStreamerCfg->creds[STREAMER_AUTH_IDX_PIP].stores)) < 0) {
         vsxlib_closeServer(pSrv);
@@ -789,123 +722,55 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
       }
     }
 
-
-    for(idx = 0; idx < SRV_LISTENER_MAX_HTTP; idx++) {
-
-      if(pSrv->startcfg.listenHttp[idx].active) {
-
-        pSrv->startcfg.listenHttp[idx].max = numHttp;
-        pSrv->startcfg.listenHttp[idx].pConnPool = &pSrv->poolHttp;
-        pSrv->startcfg.listenHttp[idx].pCfg = &pSrv->startcfg;
-        pSrv->startcfg.listenHttp[idx].pAuthTokenId = pParams->tokenid;
-        pthread_mutex_init(&pSrv->startcfg.listenHttp[idx].mtx, NULL);
-
-        if((rc = vsxlib_ssl_initserver(pParams, &pSrv->startcfg.listenHttp[idx])) < 0 ||
-           (rc = srvlisten_starthttp(&pSrv->startcfg.listenHttp[idx], 1)) < 0) {
-          vsxlib_closeServer(pSrv);
-          return rc;
-        }
-      }
-    }
-
   } // end of if(pSrv->startcfg.maxhttp...
 
-  //
-  // Start the RTMP server
-  // 
   if(maxRtmpLive > 0) {
 
-    if((rc = vsxlib_parse_listener((const char **) pParams->rtmpliveaddr, SRV_LISTENER_MAX_RTMP,
-                               pSrv->startcfg.listenRtmp,  
-                               URL_CAP_RTMPLIVE | ((BOOL_ISENABLED(pParams->rtmpdotunnel) ? URL_CAP_RTMPTLIVE : 0)),
-                               pStreamerCfg->creds[STREAMER_AUTH_IDX_RTMP].stores)) < 0) {
+    if((rc = vsxlib_parse_listener((const char **) pParams->rtmpliveaddr, SRV_LISTENER_MAX,
+                             pSrv->startcfg.listenHttp,
+                             URL_CAP_RTMPLIVE | ((BOOL_ISENABLED(pParams->rtmpnotunnel) ? 0 : URL_CAP_RTMPTLIVE)),
+                             pStreamerCfg->creds[STREAMER_AUTH_IDX_RTMP].stores)) < 0) {
       vsxlib_closeServer(pSrv);
       return rc;
-    } else if(rc == 0) {
-      LOG(X_WARNING("No active RTMP listeners added"));
-    } else if((rc = vsxlib_check_other_listeners(&pSrv->startcfg, pSrv->startcfg.listenRtmp)) > 0) {
-        LOG(X_WARNING("RTMP server listener %s:%d cannot be shared with another protocol"),
-            INET_NTOP(pSrv->startcfg.listenRtmp[rc - 1].sa, tmp, sizeof(tmp)),
-            htons(INET_PORT(pSrv->startcfg.listenRtmp[rc - 1].sa)));
-    } else {
-
-      pStreamerCfg->action.do_rtmplive = 1;
-
-      for(idx = 0; idx < SRV_LISTENER_MAX_RTMP; idx++) {
-
-        if(pSrv->startcfg.listenRtmp[idx].active) {
-          pSrv->startcfg.listenRtmp[idx].max = maxRtmpLive;
-          pSrv->startcfg.listenRtmp[idx].pConnPool = &pSrv->poolRtmp;
-          pSrv->startcfg.listenRtmp[idx].pCfg = &pSrv->startcfg;
-          pSrv->startcfg.listenRtmp[idx].pAuthTokenId = pParams->tokenid;
-          pthread_mutex_init(&pSrv->startcfg.listenRtmp[idx].mtx, NULL);
-
-          if((rc = vsxlib_ssl_initserver(pParams, &pSrv->startcfg.listenRtmp[idx])) < 0 ||
-             (rc = srvlisten_startrtmplive(&pSrv->startcfg.listenRtmp[idx])) < 0) {
-            vsxlib_closeServer(pSrv);
-            return rc;
-          }
-        }
-      }
-
-      pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_RTMP].do_outfmt = 1;
-
     }
 
-  } // end of if(maxRtmpLive...
+    //
+    // RTMP tunneling only
+    //
+    if((rc = vsxlib_parse_listener((const char **) pParams->rtmptliveaddr, SRV_LISTENER_MAX,
+                             pSrv->startcfg.listenHttp, URL_CAP_RTMPTLIVE,
+                             pStreamerCfg->creds[STREAMER_AUTH_IDX_RTMP].stores)) < 0) {
+      vsxlib_closeServer(pSrv);
+      return rc;
+    }
 
-  //
-  // Start the RTSP server
-  // 
+    pStreamerCfg->action.liveFmts.out[STREAMER_OUTFMT_IDX_RTMP].do_outfmt = 1;
+    pStreamerCfg->action.do_rtmplive = 1;
+  }
+
   if(maxRtspLive > 0) {
 
-    if((rc = vsxlib_parse_listener((const char **) pParams->rtspliveaddr, SRV_LISTENER_MAX_RTSP,
-                               pSrv->startcfg.listenRtsp, URL_CAP_RTSPLIVE, 
+    if((rc = vsxlib_parse_listener((const char **) pParams->rtspliveaddr, SRV_LISTENER_MAX,
+                               pSrv->startcfg.listenHttp, URL_CAP_RTSPLIVE, 
                                pStreamerCfg->creds[STREAMER_AUTH_IDX_RTSP].stores)) < 0) {
       vsxlib_closeServer(pSrv);
       return rc;
     }
 
-    if((rc = vsxlib_check_other_listeners(&pSrv->startcfg, pSrv->startcfg.listenRtsp)) > 0) {
-      LOG(X_WARNING("RTSP server listener %s:%d cannot be shared with another protocol"),
-          INET_NTOP(pSrv->startcfg.listenRtsp[rc - 1].sa, tmp, sizeof(tmp)),
-          htons(INET_PORT(pSrv->startcfg.listenRtsp[rc - 1].sa)));
+    pStreamerCfg->action.do_rtsplive = 1;
+    pSrv->startcfg.prtspsessiontimeout = &pParams->rtspsessiontimeout;
+    pSrv->startcfg.prtsprefreshtimeoutviartcp = &pParams->rtsprefreshtimeoutviartcp;
+    pSrv->startcfg.cfgShared.pRtspSessions->psessionTmtSec = &pParams->rtspsessiontimeout;
+    pSrv->startcfg.cfgShared.pRtspSessions->prefreshtimeoutviartcp = &pParams->rtsprefreshtimeoutviartcp;
+    pSrv->startcfg.cfgShared.pRtspSessions->psessions = NULL;
+    *((unsigned int *) &pSrv->startcfg.cfgShared.pRtspSessions->max) = maxRtspLive;
 
-    } else {
-
-      pStreamerCfg->action.do_rtsplive = 1;
-      pSrv->startcfg.prtspsessiontimeout = &pParams->rtspsessiontimeout;
-      pSrv->startcfg.prtsprefreshtimeoutviartcp = &pParams->rtsprefreshtimeoutviartcp;
-      pSrv->startcfg.cfgShared.pRtspSessions->psessionTmtSec = &pParams->rtspsessiontimeout;
-      pSrv->startcfg.cfgShared.pRtspSessions->prefreshtimeoutviartcp = &pParams->rtsprefreshtimeoutviartcp;
-      pSrv->startcfg.cfgShared.pRtspSessions->psessions = NULL;
-      *((unsigned int *) &pSrv->startcfg.cfgShared.pRtspSessions->max) = maxRtspLive;
-
-      if(rtspsrv_init(pSrv->startcfg.cfgShared.pRtspSessions) < 0)  {
-        vsxlib_closeServer(pSrv);
-        return -1;
-      }
-
-      for(idx = 0; idx < SRV_LISTENER_MAX_RTSP; idx++) {
-
-        if(pSrv->startcfg.listenRtsp[idx].active) {
-          pSrv->startcfg.listenRtsp[idx].max = maxRtspLiveConn;
-          pSrv->startcfg.listenRtsp[idx].pConnPool = &pSrv->poolRtsp;
-          pSrv->startcfg.listenRtsp[idx].pCfg = &pSrv->startcfg;
-          pSrv->startcfg.listenRtsp[idx].pAuthTokenId = pParams->tokenid;
-          pthread_mutex_init(&pSrv->startcfg.listenRtsp[idx].mtx, NULL);
-
-          if((rc = vsxlib_ssl_initserver(pParams, &pSrv->startcfg.listenRtsp[idx])) < 0 ||
-             (rc = srvlisten_startrtsplive(&pSrv->startcfg.listenRtsp[idx])) < 0) {
-            vsxlib_closeServer(pSrv);
-            return rc;
-          }
-        }
-      }
-
+    if(rtspsrv_init(pSrv->startcfg.cfgShared.pRtspSessions) < 0)  {
+      vsxlib_closeServer(pSrv);
+      return -1;
     }
 
-  } // end of if(maxRtspLive...
+  }
 
   //
   // Initialize the RTSP interleaved context
@@ -913,6 +778,27 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
   if((rc = vsxlib_initRtspInterleaved(pStreamerCfg, maxRtspLive, pParams) < 0)) {
     vsxlib_closeServer(pSrv);
     return rc;
+  }
+
+  if(numHttp > 0 || maxRtmpLive > 0 || maxRtspLive > 0) {
+
+    for(idx = 0; idx < SRV_LISTENER_MAX; idx++) {
+
+      if(pSrv->startcfg.listenHttp[idx].active) {
+
+        pSrv->startcfg.listenHttp[idx].max = numHttp + maxRtmpLive + maxRtspLive;
+        pSrv->startcfg.listenHttp[idx].pConnPool = &pSrv->poolHttp;
+        pSrv->startcfg.listenHttp[idx].pCfg = &pSrv->startcfg;
+        pSrv->startcfg.listenHttp[idx].pAuthTokenId = pParams->tokenid;
+        pthread_mutex_init(&pSrv->startcfg.listenHttp[idx].mtx, NULL);
+
+        if((rc = vsxlib_ssl_initserver(pParams, &pSrv->startcfg.listenHttp[idx])) < 0 ||
+           (rc = srvlisten_startmediasrv(&pSrv->startcfg.listenHttp[idx], 1)) < 0) {
+          vsxlib_closeServer(pSrv);
+          return rc;
+        }
+      }
+    }
   }
 
   pSrv->isinit = 1;

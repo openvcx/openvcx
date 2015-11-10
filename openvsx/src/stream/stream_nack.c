@@ -682,8 +682,7 @@ static int streamxmit_async_start(STREAM_RTP_MULTI_T *pRtp, STREAM_STATS_MONITOR
   }
 
   pRtp->asyncRtpRunning = 2;
-  pthread_attr_init(&attrCap);
-  pthread_attr_setdetachstate(&attrCap, PTHREAD_CREATE_DETACHED);
+  PHTREAD_INIT_ATTR(&attrCap);
 
   if(pthread_create(&ptdCap,
                     &attrCap,

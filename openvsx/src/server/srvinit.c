@@ -134,7 +134,7 @@ SRV_CONF_T *srv_init_conf(const char *listenArg, const char *mediaDirArg,
   int i;
   enum URL_CAPABILITY urlCapability;
   char path[VSX_MAX_PATH_LEN];
-  const char *listenaddr[SRV_LISTENER_MAX_HTTP];
+  const char *listenaddr[SRV_LISTENER_MAX];
   struct stat st;
 
   if(!pCfg || !pCfg->pParams) {
@@ -180,10 +180,10 @@ SRV_CONF_T *srv_init_conf(const char *listenArg, const char *mediaDirArg,
 
   memset(listenaddr, 0, sizeof(listenaddr));
   if(listenArg) {
-    //TODO: this should accept up to SRV_LISTENER_MAX_HTTP
+    //TODO: this should accept up to SRV_LISTENER_MAX
     listenaddr[0] = listenArg;
   } else {
-    conf_load_addr_multi(pConf, listenaddr, SRV_LISTENER_MAX_HTTP, SRV_CONF_KEY_LISTEN);
+    conf_load_addr_multi(pConf, listenaddr, SRV_LISTENER_MAX, SRV_CONF_KEY_LISTEN);
 
     if(!listenaddr[0]) {
       LOG(X_ERROR("'%s=' not found in configuration"), SRV_CONF_KEY_LISTEN);
@@ -192,7 +192,7 @@ SRV_CONF_T *srv_init_conf(const char *listenArg, const char *mediaDirArg,
     }
   }
 
-  if((rc = vsxlib_parse_listener((const char **) listenaddr, SRV_LISTENER_MAX_HTTP,
+  if((rc = vsxlib_parse_listener((const char **) listenaddr, SRV_LISTENER_MAX,
                             pCfg->listenHttp, urlCapability, ppAuthStores)) < 0) {
     conf_free(pConf);
     return NULL;
@@ -289,11 +289,11 @@ SRV_CONF_T *srv_init_conf(const char *listenArg, const char *mediaDirArg,
   }
 
   if(pCfg->pParams->rtmplivemax > 0) {
-    pCfg->listenRtmp[0].max = pCfg->pParams->rtmplivemax;
+    //pCfg->listenRtmp[0].max = pCfg->pParams->rtmplivemax;
 
     if(pCfg->pParams->rtmpliveaddr[0] && pCfg->pParams->rtmpliveaddr[0][0] != '\0') {
 
-      if(vsxlib_parse_listener(pCfg->pParams->rtmpliveaddr, 1, pCfg->listenRtmp, URL_CAP_RTMPLIVE, NULL) < 0) {
+      if(vsxlib_parse_listener(pCfg->pParams->rtmpliveaddr, 1, pCfg->listenHttp, URL_CAP_RTMPLIVE, NULL) < 0) {
         LOG(X_ERROR("Invalid RTMP listen address:port '%s'"), pCfg->pParams->rtmpliveaddr[0]);
         conf_free(pConf);
         return NULL;
@@ -303,11 +303,11 @@ SRV_CONF_T *srv_init_conf(const char *listenArg, const char *mediaDirArg,
   }
 
   if(pCfg->pParams->rtsplivemax > 0) {
-    pCfg->listenRtsp[0].max = pCfg->pParams->rtsplivemax;
+    //pCfg->listenRtsp[0].max = pCfg->pParams->rtsplivemax;
 
     if(pCfg->pParams->rtspliveaddr[0] && pCfg->pParams->rtspliveaddr[0][0] != '\0') {
 
-      if(vsxlib_parse_listener(pCfg->pParams->rtspliveaddr, 1, pCfg->listenRtsp, URL_CAP_RTSPLIVE, NULL) < 0) {
+      if(vsxlib_parse_listener(pCfg->pParams->rtspliveaddr, 1, pCfg->listenHttp, URL_CAP_RTSPLIVE, NULL) < 0) {
         LOG(X_ERROR("Invalid RTSP listen address:port '%s'"), pCfg->pParams->rtspliveaddr[0]);
         conf_free(pConf);
         return NULL;

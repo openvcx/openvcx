@@ -21,3 +21,23 @@
  * -->
  */
 
+
+#include "vsx_common.h"
+
+
+int rtsp_isrtsp(const unsigned char *pData, unsigned int len) {
+  int rc = 0;
+
+  if(!pData || len < 7) {
+    return 0;
+  }
+
+  if(!memcmp(RTSP_REQ_OPTIONS, pData, strlen(RTSP_REQ_OPTIONS)) ||
+     !memcmp(RTSP_REQ_DESCRIBE, pData, strlen(RTSP_REQ_DESCRIBE)) ||
+     !memcmp("GET "VSX_RTSPLIVE_URL, pData, 4 + strlen(VSX_RTSPLIVE_URL)) ||
+     !memcmp("POST "VSX_RTSPLIVE_URL, pData, 5 + strlen(VSX_RTSPLIVE_URL))) {
+    rc = 1;
+  }
+
+  return rc;
+}

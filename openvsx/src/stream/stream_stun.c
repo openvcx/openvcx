@@ -961,8 +961,7 @@ int stream_stun_start(STREAM_RTP_DEST_T *pDest, int lock) {
   }
 
   *pdoStunXmit = 2;
-  pthread_attr_init(&attrCap);
-  pthread_attr_setdetachstate(&attrCap, PTHREAD_CREATE_DETACHED);
+  PHTREAD_INIT_ATTR(&attrCap);
 
   if(pthread_create(&ptdCap,
                     &attrCap,

@@ -349,8 +349,7 @@ int capture_send_dummy_frames_start(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_STATE_T *pS
   pthread_t ptd;
   pthread_attr_t attr;
 
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+  PHTREAD_INIT_ATTR(&attr);
   memset(&args, 0, sizeof(args));
   args.pCfg = pCfg;
   args.pState = pState;

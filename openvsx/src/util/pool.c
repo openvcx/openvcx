@@ -54,6 +54,8 @@ int pool_open(POOL_T *pPool, unsigned int numElements, unsigned int szElement,
     return -1;
   }
 
+  VSX_DEBUG_MEM( LOG(X_DEBUG("MEM - pool_open %d x %d"), numElements, szElement); );
+
   if(!(pPool->pElements = (POOL_ELEMENT_T *) avc_calloc(numElements, szElement))) {
     return -1;
   }
@@ -133,11 +135,12 @@ static void pool_free(POOL_T *pPool) {
   pPool->pFree = pPool->pInUse = NULL;
 
   if(pPool->pElements) {
-    free(pPool->pElements); 
-    pPool->pElements = NULL;
+    VSX_DEBUG_MEM( LOG(X_DEBUG("MEM - pool_freed")); );
+    avc_free((void **) &pPool->pElements); 
   }
 
   if(pPool->lock) {
+    pPool->lock = 0;
     pthread_mutex_destroy(&pPool->mtx);
   }
 

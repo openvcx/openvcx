@@ -30,6 +30,32 @@
 #include "formats/http_parse.h"
 
 
+#define URL_RTSP_FMT2_STR                   "rtsp%s://%s"
+#define URL_PROTO_FMT2_ARGS(ssl, location)    (ssl) ? "s" : "", (location) 
+
+#define URL_RTSP_FMT_STR                   "rtsp%s://%s:%d"
+#define URL_RTMP_FMT_STR                   "rtmp%s://%s:%d"
+#define URL_RTMPT_FMT_STR                  "rtmpt%s://%s:%d"
+#define URL_HTTP_FMT_STR                   "http%s://%s:%d"
+
+#define URL_HTTP_FMT_PROTO_HOST(sockflags, location) ((sockflags) & NETIO_FLAG_SSL_TLS) ? "s" : "", (location)
+#define URL_HTTP_FMT_ARGS2(p, location)              URL_HTTP_FMT_PROTO_HOST( (p)->netflags, (location)), \
+                                                     ntohs(INET_PORT((p)->sa))
+#define URL_HTTP_FMT_ARGS(p)                         URL_HTTP_FMT_ARGS2(p, net_getlocalhostname())   
+                                   
+
+
+typedef enum SRV_REQ_PEEK_TYPE {
+  SRV_REQ_PEEK_TYPE_INVALID    = -1,
+  SRV_REQ_PEEK_TYPE_UNKNOWN    = 0,
+  SRV_REQ_PEEK_TYPE_RTMP       = 1,
+  SRV_REQ_PEEK_TYPE_RTMPT      = 2,
+  SRV_REQ_PEEK_TYPE_RTSP       = 3,
+  SRV_REQ_PEEK_TYPE_HTTP       = 4
+} SRV_REQ_PEEK_TYPE_T;
+
+#define SRV_REQ_PEEK_SIZE      16
+
 //
 //TODO: these http controlhandlers need to be unified
 // rc < 0 the connetion loop will break
@@ -61,6 +87,7 @@ int srv_ctrl_mkv(CLIENT_CONN_T *pConn, const char *uri, int is_remoteargfile,
                  const SRV_LISTENER_CFG_T *pListenHttp);
 int srv_ctrl_rtsp(CLIENT_CONN_T *pConn, const char *uri, int is_remoteargfile, 
                   const SRV_LISTENER_CFG_T *pListenRtsp);
+SRV_REQ_PEEK_TYPE_T srv_ctrl_peek(CLIENT_CONN_T *pConn, HTTP_PARSE_CTXT_T *pHdrCtxt);
 int srv_ctrl_submitdata(CLIENT_CONN_T *pConn);
 int srv_ctrl_islegal_fpath(const char *path);
 int srv_ctrl_initmediafile(HTTP_MEDIA_STREAM_T *pMediaStream, int introspect);
@@ -71,28 +98,8 @@ int srv_ctrl_file_find_wext(char *filepath);
 
 const SRV_LISTENER_CFG_T *srv_ctrl_findlistener(const SRV_LISTENER_CFG_T *arrCfgs,
                                                 unsigned int maxCfgs, enum URL_CAPABILITY urlCap,
-                                                NETIO_FLAG_T flags, NETIO_FLAG_T flagsMask);
-
-#define URL_RTSP_FMT2_STR                   "rtsp%s://%s"
-#define URL_PROTO_FMT2_ARGS(ssl, location)    (ssl) ? "s" : "", (location) 
-
-#define URL_RTSP_FMT_STR                   "rtsp%s://%s:%d"
-#define URL_RTMP_FMT_STR                   "rtmp%s://%s:%d"
-#define URL_RTMPT_FMT_STR                  "rtmpt%s://%s:%d"
-#define URL_HTTP_FMT_STR                   "http%s://%s:%d"
-
-#define URL_HTTP_FMT_PROTO_HOST(sockflags, location) ((sockflags) & NETIO_FLAG_SSL_TLS) ? "s" : "", (location)
-#define URL_HTTP_FMT_ARGS2(p, location)              URL_HTTP_FMT_PROTO_HOST( (p)->netflags, (location)), \
-                                                     ntohs(INET_PORT((p)->sa))
-#define URL_HTTP_FMT_ARGS(p)                         URL_HTTP_FMT_ARGS2(p, net_getlocalhostname())   
-                                   
-
-
-
-
-
-
-
+                                                NETIO_FLAG_T flags, NETIO_FLAG_T flagsMask, 
+                                                int preferredPort);
 
 
 #endif // __SERVER_CTRL_H__

@@ -25,6 +25,9 @@
 #include "vsx_common.h"
 #include "vsxlib_int.h"
 
+#include <sys/time.h>
+#include <sys/resource.h>
+
 #define WARN_DEFAULT_CERT_KEY_MSG  "Please create your own server SSL DTLS certificate and key file.  The default certificate is not fit for production use!"
 static int vsxlib_dtls_init_certs(DTLS_CFG_T *pDtlsCfg, const SRTP_CFG_T *pSrtpCfg, const char *descr);
 
@@ -962,6 +965,14 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
   }
 
   //
+  // Get any thread stack size settings
+  //
+  if(pParams->thread_stack_size == 0 &&
+     (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_THREAD_STACKSIZE))) {
+    g_thread_stack_size = pParams->thread_stack_size = (unsigned int) strutil_read_numeric(parg, 0, 0, 0);
+  }
+
+  //
   // Get Frame pre-allocation settings 
   //
   if(BOOL_ISDFLT(pParams->outq_prealloc) &&
@@ -987,6 +998,9 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
 
   conf_load_addr_multi(pConf, pParams->rtmpliveaddr, sizeof(pParams->rtmpliveaddr) / 
                      sizeof(pParams->rtmpliveaddr[0]), SRV_CONF_KEY_RTMPLIVE);
+
+  conf_load_addr_multi(pConf, pParams->rtmptliveaddr, sizeof(pParams->rtmptliveaddr) / 
+                     sizeof(pParams->rtmptliveaddr[0]), SRV_CONF_KEY_RTMPTLIVE);
 
   if(pParams->rtmpq_slots == 0 &&
      (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_RTMPQSLOTS))) {
@@ -1651,58 +1665,6 @@ int vsxlib_check_prior_listeners(const SRV_LISTENER_CFG_T *arrCfgs,
   return 0;
 }
 
-int vsxlib_check_other_listeners(const SRV_START_CFG_T *pStartCfg,
-                                 const SRV_LISTENER_CFG_T *arrCfgThis) {
-  int rc;
-  unsigned int idx;
-  unsigned int max, max1, max2;
-  const SRV_LISTENER_CFG_T *arrCfgs1, *arrCfgs2;
-
-  if(!pStartCfg || !arrCfgThis) {
-    return -1;
-  }
-
-  if(arrCfgThis == pStartCfg->listenHttp) {
-    arrCfgs1 = pStartCfg->listenRtmp;
-    arrCfgs2 = pStartCfg->listenRtsp;
-    max = SRV_LISTENER_MAX_HTTP;
-    max1 = SRV_LISTENER_MAX_RTMP;
-    max2 = SRV_LISTENER_MAX_RTSP;
-  } else if(arrCfgThis == pStartCfg->listenRtmp) {
-    arrCfgs1 = pStartCfg->listenHttp;
-    arrCfgs2 = pStartCfg->listenRtsp;
-    max = SRV_LISTENER_MAX_RTMP;
-    max1 = SRV_LISTENER_MAX_HTTP;
-    max2 = SRV_LISTENER_MAX_RTSP;
-  } else if(arrCfgThis == pStartCfg->listenRtsp) {
-    arrCfgs1 = pStartCfg->listenHttp;
-    arrCfgs2 = pStartCfg->listenRtmp;
-    max = SRV_LISTENER_MAX_RTSP;
-    max1 = SRV_LISTENER_MAX_HTTP;
-    max2 = SRV_LISTENER_MAX_RTMP;
-  } else {
-    return -1;
-  }
-
-  for(idx = 0; idx < max; idx++) {
-
-    if(!arrCfgThis[idx].active) {
-      continue;
-    }
-
-    if(arrCfgs1 && (rc = vsxlib_check_prior_listeners(arrCfgs1, max1, (const struct sockaddr *) &arrCfgThis[idx].sa)) > 0) {
-      return idx + 1;
-    }
-
-    if(arrCfgs2 && (rc = vsxlib_check_prior_listeners(arrCfgs2, max2, (const struct sockaddr *) &arrCfgThis[idx].sa)) > 0) {
-      return idx + 1;
-    }
-
-  }
-
-  return 0;
-}
-
 static int vsxlib_getTransportUrlCap(CAPTURE_FILTER_TRANSPORT_T transType) {
   enum URL_CAPABILITY urlCap = 0;
 
@@ -1755,7 +1717,7 @@ int vsxlib_parse_listener(const char *arrAddr[], unsigned int maxListenerCfgs, S
     //
     // Get the capability from the URL, such as rtmpt:// -> URL_CAP_RTMPTLIVE
     // Note: that rtmp:// is intentionally ambigious to mean (URL_CAP_RTMPLIVE | URL_CAP_RTMPTLIVE)
-    // vsxlib.h::rtmpdotunnel is used to control if RTMPT is explicitly enabled or disabled
+    // vsxlib.h::rtmpnotunnel is used to control if RTMPT is explicitly disabled for RTMP listener
     //
     if((urlCap = vsxlib_getTransportUrlCap(transType)) != 0) {
       // Ensure that the capability fits within the pre-configured mask
@@ -2434,3 +2396,50 @@ int vsxlib_setupRtmpPublish(STREAMER_CFG_T *pStreamerCfg,
   return rc;
 }
 
+#define VSXLIB_STACK_MIN   0x10000
+
+int vsxlib_init_threads(const VSXLIB_STREAM_PARAMS_T *pParams) {
+  char tmp[256];
+  struct rlimit rl;
+  int rc = 0;
+  size_t rlimit_stack_size = 0;
+
+  //
+  // pthread_attr_setstacksize appears to not work when setting from a thread which
+  // has already been started with pthread_create.
+  // So, we may need another way to lower each thread's stack size from a high safe default
+  // value such as 10MB.  Using setrlimit doesn't appear to get the job done.
+  // What seems to work is 'ulimit -s <stack KB>' prior to launching our process
+  //
+
+  if(pParams && (g_thread_stack_size = pParams->thread_stack_size) != 0 &&
+     g_thread_stack_size < VSXLIB_STACK_MIN) {
+    g_thread_stack_size = VSXLIB_STACK_MIN;
+  }
+  rlimit_stack_size = g_thread_stack_size;
+
+  if(g_thread_stack_size > 0 && (rc = getrlimit(RLIMIT_STACK, &rl)) == 0) {
+
+    if(rlimit_stack_size < VSXLIB_STACK_MIN) {
+      rlimit_stack_size = VSXLIB_STACK_MIN;
+    }
+
+    LOG(X_DEBUG("setrlimit RLIMIT_STACK rlim_cur: %lld -> %ld, rlim_max: %lld"), 
+          rl.rlim_cur, rlimit_stack_size, rl.rlim_max);
+
+    rl.rlim_cur = rlimit_stack_size;
+
+    if((rc = setrlimit(RLIMIT_STACK, &rl)) != 0) {
+      LOG(X_ERROR("setrlimit RLIMIT_STACK failed with %d (%s) for rlim_cur: %lld, rlim_max: %lld"), 
+          errno, strerror(errno), rl.rlim_cur, rl.rlim_max);
+    } else {
+    }
+  }
+
+  if(g_thread_stack_size > 0) {
+    LOG(X_DEBUG("Using thread stack size %s"), 
+      burstmeter_printBytesStr(tmp, sizeof(tmp), g_thread_stack_size));
+  }
+
+  return rc;
+}

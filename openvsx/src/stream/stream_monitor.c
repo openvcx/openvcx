@@ -405,8 +405,7 @@ int stream_monitor_start(STREAM_STATS_MONITOR_T *pMonitor,
 
   pMonitor->runMonitor = 2;
   pMonitor->dumpIntervalMs = intervalMs;
-  pthread_attr_init(&attrMonitor);
-  pthread_attr_setdetachstate(&attrMonitor, PTHREAD_CREATE_DETACHED);
+  PHTREAD_INIT_ATTR(&attrMonitor);
 
   if(pthread_create(&ptdMonitor,
                     &attrMonitor,

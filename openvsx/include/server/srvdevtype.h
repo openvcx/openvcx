@@ -53,6 +53,7 @@
 #define STREAM_METHOD_FLASHHTTP_STR         "flashhttp"
 #define STREAM_METHOD_UDP_RTP_STR           "rtp"
 #define STREAM_METHOD_UDP_STR               "udp"
+#define STREAM_METHOD_ANYLIVE_STR           "anylive"
 
 #define STREAM_DEV_NAME_MAX       32
 
@@ -74,7 +75,8 @@ typedef enum STREAM_METHOD {
   STREAM_METHOD_RTMPT              = 13,
   STREAM_METHOD_UDP_RTP            = 14,
   STREAM_METHOD_UDP                = 15,
-  STREAM_METHOD_MAX                = 16 
+  STREAM_METHOD_ANYLIVE            = 16,
+  STREAM_METHOD_MAX                = 17 
 } STREAM_METHOD_T;
 
 typedef enum STREAM_DEVICE_TYPE {
@@ -85,7 +87,7 @@ typedef enum STREAM_DEVICE_TYPE {
   STREAM_DEVICE_TYPE_TABLET        = 3
 } STREAM_DEVICE_TYPE_T;
 
-#define STREAM_DEVICE_METHODS_MAX   4
+#define STREAM_DEVICE_METHODS_MAX   8
 
 typedef struct STREAM_DEVICE {
   char                     name[STREAM_DEV_NAME_MAX];
@@ -104,6 +106,7 @@ char *devtype_dump_methods(int methodBits, char *buf, unsigned int szbuf);
 const STREAM_DEVICE_T *devtype_finddevice(const char *userAgent, int matchany);
 int devtype_loadcfg(const char *path);
 int devtype_defaultcfg();
+int devtype_method_getbits(STREAM_METHOD_T method);
 
 
 

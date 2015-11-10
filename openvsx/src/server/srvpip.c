@@ -51,8 +51,8 @@ int srv_ctrl_pip(CLIENT_CONN_T *pConn) {
   STREAMER_CFG_T *pCfg = NULL;
   char *strxcodebuf = NULL;
 
-  LOG(X_DEBUG("Received PIP command %s%s from %s:%d"), pConn->httpReq.puri,  
-      http_req_dump_uri(&pConn->httpReq, buf, sizeof(buf)), FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), 
+  LOG(X_DEBUG("Received PIP command %s%s from %s:%d"), pConn->phttpReq->puri,  
+      http_req_dump_uri(pConn->phttpReq, buf, sizeof(buf)), FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), 
       htons(INET_PORT(pConn->sd.sa)));
 
   buf[0] = '\0';
@@ -68,42 +68,42 @@ int srv_ctrl_pip(CLIENT_CONN_T *pConn) {
 
     memset(&crop, 0, sizeof(crop));
 
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, PIP_KEY_PAD_TOP))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, PIP_KEY_PAD_TOP))) {
       crop.padTop = atoi(parg);
       do_crop = 1;
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, PIP_KEY_PAD_BOTTOM))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, PIP_KEY_PAD_BOTTOM))) {
       crop.padBottom = atoi(parg);
       do_crop = 1;
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, PIP_KEY_PAD_LEFT))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, PIP_KEY_PAD_LEFT))) {
       crop.padLeft = atoi(parg);
       do_crop = 1;
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, PIP_KEY_PAD_RGB))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, PIP_KEY_PAD_RGB))) {
       strutil_read_rgb(parg, crop.padRGB);
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, PIP_KEY_PAD_RIGHT))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, PIP_KEY_PAD_RIGHT))) {
       crop.padRight = atoi(parg);
       do_crop = 1;
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, PIP_KEY_CROP_TOP))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, PIP_KEY_CROP_TOP))) {
       crop.cropTop = atoi(parg);
       do_crop = 1;
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, PIP_KEY_CROP_BOTTOM))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, PIP_KEY_CROP_BOTTOM))) {
       crop.cropBottom = atoi(parg);
       do_crop = 1;
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, PIP_KEY_CROP_LEFT))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, PIP_KEY_CROP_LEFT))) {
       crop.cropLeft = atoi(parg);
       do_crop = 1;
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, PIP_KEY_CROP_RIGHT))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, PIP_KEY_CROP_RIGHT))) {
       crop.cropRight = atoi(parg);
       do_crop = 1;
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, PIP_KEY_PAD_ASPECT_RATIO))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, PIP_KEY_PAD_ASPECT_RATIO))) {
       crop.padAspectR = atoi(parg);
       do_crop = 1;
     }
@@ -123,84 +123,84 @@ int srv_ctrl_pip(CLIENT_CONN_T *pConn) {
     pipCfg.rtpPktzMode = -1;
     pipCfg.dtls_handshake_server = -1;
 
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipstatus"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipstatus"))) {
       do_status = 1;
       pip_id = atoi(parg);
-    } else if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipstop"))) {
+    } else if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipstop"))) {
       do_stop = 1;
       pip_id = atoi(parg);
-    } else if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipstart"))) {
+    } else if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipstart"))) {
       if(atoi(parg) > 0) {
         do_start = 1;
       }
-    } else if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipupdate"))) {
+    } else if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipupdate"))) {
       // start a PIP which was previously started with 'delaystart' parameter
       if((pip_id = atoi(parg)) > 0) {
         do_update = 1;
       }
     }
 
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipconf"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipconf"))) {
       do_pipconf = parg;
     }
 
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipxcode")) ||
-       (parg = conf_find_keyval(pConn->httpReq.uriPairs, "xcode"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipxcode")) ||
+       (parg = conf_find_keyval(pConn->phttpReq->uriPairs, "xcode"))) {
       pipCfg.strxcode = parg;
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "pip")) ||
-       (parg = conf_find_keyval(pConn->httpReq.uriPairs, "in")) ||
-       (parg = conf_find_keyval(pConn->httpReq.uriPairs, "input"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pip")) ||
+       (parg = conf_find_keyval(pConn->phttpReq->uriPairs, "in")) ||
+       (parg = conf_find_keyval(pConn->phttpReq->uriPairs, "input"))) {
       pipCfg.input = parg;
     }
 
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "out")) ||
-       (parg = conf_find_keyval(pConn->httpReq.uriPairs, "output"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "out")) ||
+       (parg = conf_find_keyval(pConn->phttpReq->uriPairs, "output"))) {
       pipCfg.output = parg;
 //pipCfg.output="dtlssrtp://127.0.0.1:5000,5008";
 //pipCfg.output="srtp://127.0.0.1:5000,5000";
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "tslive"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "tslive"))) {
       pipCfg.tsliveaddr = parg;
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "rtppayloadtype"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "rtppayloadtype"))) {
       pipCfg.output_rtpptstr = parg;
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "rtpssrc"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "rtpssrc"))) {
       pipCfg.output_rtpssrcsstr = parg;
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "mtu"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "mtu"))) {
       pipCfg.mtu = atoi(parg);
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "rtppktzmode"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "rtppktzmode"))) {
       pipCfg.rtpPktzMode = atoi(parg);
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "rtcpports"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "rtcpports"))) {
       pipCfg.rtcpPorts = parg;
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "srtpkey"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "srtpkey"))) {
       pipCfg.srtpKeysBase64 = parg;
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "dtls"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "dtls"))) {
       pipCfg.use_dtls = atoi(parg);
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "dtlssrtp"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "dtlssrtp"))) {
       pipCfg.use_dtls = pipCfg.use_srtp = atoi(parg);
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "dtlsserver"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "dtlsserver"))) {
       pipCfg.dtls_handshake_server = atoi(parg);
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "dtlsclient"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "dtlsclient"))) {
       pipCfg.dtls_handshake_server = !atoi(parg);
     }
-    //if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "dtlsoutserverkey"))) {
+    //if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "dtlsoutserverkey"))) {
     //  pipCfg.dtls_xmit_serverkey = atoi(parg);
    // }
-    //if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "dtlsinserverkey")) ||
-    //   (parg = conf_find_keyval(pConn->httpReq.uriPairs, "dtlsserverkey"))) {
+    //if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "dtlsinserverkey")) ||
+    //   (parg = conf_find_keyval(pConn->phttpReq->uriPairs, "dtlsserverkey"))) {
     //  pipCfg.dtls_capture_serverkey = atoi(parg);
     //}
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "stunrespond"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "stunrespond"))) {
       if((stunPolicy = atoi(parg)) != STUN_POLICY_ENABLED) {
         stunPolicy = STUN_POLICY_NONE;
       }
@@ -208,137 +208,137 @@ int srv_ctrl_pip(CLIENT_CONN_T *pConn) {
         pipCfg.stunRespUseSDPIceufrag = 1;
       }
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "stunrequestuser"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "stunrequestuser"))) {
       pipCfg.stunReqUsername = parg;
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "stunrequestpass"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "stunrequestpass"))) {
       pipCfg.stunReqPass = parg;
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "stunrequestrealm"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "stunrequestrealm"))) {
       pipCfg.stunReqRealm = parg;
     }
     if(pipCfg.stunBindingRequest == STUN_POLICY_NONE && (pipCfg.stunReqUsername || pipCfg.stunReqPass || pipCfg.stunReqRealm)) {
       pipCfg.stunBindingRequest = STUN_POLICY_XMIT_IF_RCVD;
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "stunrequest"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "stunrequest"))) {
       stunPolicy = atoi(parg);
       pipCfg.stunBindingRequest = stunPolicy;
     }
 
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "turnuser"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "turnuser"))) {
       pipCfg.turnCfg.turnUsername = parg; 
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "turnpass"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "turnpass"))) {
       pipCfg.turnCfg.turnPass = parg; 
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "turnrealm"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "turnrealm"))) {
       pipCfg.turnCfg.turnRealm = parg; 
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "turnserver"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "turnserver"))) {
       pipCfg.turnCfg.turnServer = parg; 
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "turnpeer"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "turnpeer"))) {
       pipCfg.turnCfg.turnPeerRelay = parg; 
     }
 
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "turnsdp"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "turnsdp"))) {
       pipCfg.turnCfg.turnSdpOutPath = parg; 
     }
 
-    //if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "turnout"))) {
+    //if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "turnout"))) {
     //  pipCfg.turnCfg.turnOutput = parg; 
     //} else if(pipCfg.turnCfg.turnServer) {
     //  pipCfg.turnCfg.turnOutput = pipCfg.turnCfg.turnServer;
     //}
 
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "delaystart"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "delaystart"))) {
       pipCfg.delayed_output = atoi(parg);
     }
 
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "abrself"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "abrself"))) {
       pipCfg.abrSelf = atoi(parg);
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "abrauto")) ||
-       (parg = conf_find_keyval(pConn->httpReq.uriPairs, "abr"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "abrauto")) ||
+       (parg = conf_find_keyval(pConn->phttpReq->uriPairs, "abr"))) {
       pipCfg.abrAuto = atoi(parg);
     }
 
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "piplayout")) ||
-       (parg = conf_find_keyval(pConn->httpReq.uriPairs, "layout"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "piplayout")) ||
+       (parg = conf_find_keyval(pConn->phttpReq->uriPairs, "layout"))) {
       pipCfg.layoutType = pip_str2layout(parg);
     }
 
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipx")) ||
-       (parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipxleft")) ||
-       (parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipxright"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipx")) ||
+       (parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipxleft")) ||
+       (parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipxright"))) {
       pipCfg.posx = atoi(parg);
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipy")) ||
-       (parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipytop")) ||
-       (parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipybottom"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipy")) ||
+       (parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipytop")) ||
+       (parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipybottom"))) {
       pipCfg.posy = atoi(parg);
     }
 
     // PIP_KEY_ZORDER "zorder"
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipzorder")) ||
-       (parg = conf_find_keyval(pConn->httpReq.uriPairs, "zorder"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipzorder")) ||
+       (parg = conf_find_keyval(pConn->phttpReq->uriPairs, "zorder"))) {
       pipCfg.zorder = atoi(parg);
     }
 
     // PIP_KEY_NOAUDIO
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipnoaudio")) ||
-       (parg = conf_find_keyval(pConn->httpReq.uriPairs, "noaud")) ||
-       (parg = conf_find_keyval(pConn->httpReq.uriPairs, "noaudio"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipnoaudio")) ||
+       (parg = conf_find_keyval(pConn->phttpReq->uriPairs, "noaud")) ||
+       (parg = conf_find_keyval(pConn->phttpReq->uriPairs, "noaudio"))) {
       pipCfg.noaud = 1;
     }
 
     // PIP_KEY_NOVIDEO
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipnovideo")) ||
-       (parg = conf_find_keyval(pConn->httpReq.uriPairs, "novid")) ||
-       (parg = conf_find_keyval(pConn->httpReq.uriPairs, "novideo"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipnovideo")) ||
+       (parg = conf_find_keyval(pConn->phttpReq->uriPairs, "novid")) ||
+       (parg = conf_find_keyval(pConn->phttpReq->uriPairs, "novideo"))) {
       pipCfg.novid = 1;
     }
 
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "duplicate"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "duplicate"))) {
       pipCfg.allowDuplicate = 1;
     }
 
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "startchime"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "startchime"))) {
       pipCfg.startChimeFile = parg;
     }
 
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "stopchime"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "stopchime"))) {
       pipCfg.stopChimeFile = parg;
     }
 
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "rtpretransmit"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "rtpretransmit"))) {
       pipCfg.nackRtpRetransmitVideo = atoi(parg);
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "rembxmitmaxrate"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "rembxmitmaxrate"))) {
       pipCfg.apprembRtcpSendVideoMaxRateBps =  (unsigned int) strutil_read_numeric(optarg, 0, 1000, 0);
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "rembxmitminrate"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "rembxmitminrate"))) {
       pipCfg.apprembRtcpSendVideoMinRateBps =  (unsigned int) strutil_read_numeric(optarg, 0, 1000, 0);
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "rembxmitforce"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "rembxmitforce"))) {
       pipCfg.apprembRtcpSendVideoForceAdjustment = atoi(parg);
     }
 
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipalphamax"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipalphamax"))) {
       pipCfg.alphamax_min1 = atoi(parg) + 1;
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipalphamin"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipalphamin"))) {
       pipCfg.alphamin_min1 = atoi(parg) + 1;
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipbefore"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipbefore"))) {
       if(atoi(parg) > 0) {
         pipCfg.flags |= PIP_FLAGS_INSERT_BEFORE_SCALE;
       }
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipxright"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipxright"))) {
       pipCfg.flags |= PIP_FLAGS_POSITION_RIGHT;
     }
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipybottom"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipybottom"))) {
       pipCfg.flags |= PIP_FLAGS_POSITION_BOTTOM;
     }
 
@@ -418,7 +418,7 @@ int srv_ctrl_pip(CLIENT_CONN_T *pConn) {
     statusCode = HTTP_STATUS_SERVERERROR;
   }
 
-  rc = http_resp_send(&pConn->sd, &pConn->httpReq, statusCode, (unsigned char *) buf, strlen(buf));
+  rc = http_resp_send(&pConn->sd, pConn->phttpReq, statusCode, (unsigned char *) buf, strlen(buf));
 
   LOG(X_DEBUG("Sent PIP response '%s' to %s:%d"), buf, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), 
                                                   htons(INET_PORT(pConn->sd.sa)));

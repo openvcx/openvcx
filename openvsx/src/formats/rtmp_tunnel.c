@@ -714,13 +714,13 @@ int rtmpt_setupclient(RTMP_CTXT_CLIENT_T *pClient, unsigned char *rtmptbufin, un
 
 int rtmpt_istunneled(const unsigned char *pData, unsigned int len) {
   int rc = 0;
-  const unsigned int verifyLen = 5 + strlen(RTMPT_URL_IDENT);
 
-  if(!pData || len < verifyLen) {
+  if(!pData || len < 12) {
     return 0;
   }
 
-  if(!memcmp("POST "RTMPT_URL_IDENT, pData, verifyLen)) {
+  if(!memcmp("POST "RTMPT_URL_IDENT, pData, 5 + strlen(RTMPT_URL_IDENT)) ||
+     !memcmp("POST "RTMPT_URL_OPEN, pData, 5 + strlen(RTMPT_URL_OPEN))) {
     rc = 1;
   }
 

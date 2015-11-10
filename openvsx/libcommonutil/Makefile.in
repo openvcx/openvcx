@@ -9,6 +9,7 @@ DEFS+=
 
 SRC_DIR = src
 INCLUDE_DIRS += -I./include \
+               -I../include \
                -I../liblogutil/include 
 
 LIB_OBJS = ${BUILD_DIR}/fileops.o \

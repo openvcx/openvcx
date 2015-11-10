@@ -450,7 +450,7 @@ static int netio_ssl_recvnb(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned
   struct timeval tv, tv0;
   fd_set fdsetRd;
   int rc = 0;
-  int rcerr;
+  int rcerr = SSL_ERROR_NONE;
   int tryread = 0;
   unsigned int mselapsed = 0;  
 
@@ -482,7 +482,9 @@ static int netio_ssl_recvnb(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned
       rc = SSL_read(pnetsock->ssl.pCtxt, buf, 0);
       VSX_DEBUG_SSL( LOG(X_DEBUG("SSL - netio_ssl_recvnb SSL_read (before select) len:%d rc:%d"), 0, rc));
       if(rc < 0) {
-        rcerr = SSL_get_error(pnetsock->ssl.pCtxt, rc);
+        if(pnetsock->ssl.pCtxt) {
+          rcerr = SSL_get_error(pnetsock->ssl.pCtxt, rc);
+        }
         VSX_DEBUG_SSL( LOG(X_DEBUG("SSL - netio_ssl_recvnb SSL_get_error: (before select) rc:%d"),  rcerr));
       }
     }
@@ -497,7 +499,9 @@ static int netio_ssl_recvnb(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned
 
       if(rc < 0) {
 
-        rcerr = SSL_get_error(pnetsock->ssl.pCtxt, rc);
+        if(pnetsock->ssl.pCtxt) {
+          rcerr = SSL_get_error(pnetsock->ssl.pCtxt, rc);
+        }
         if(!(rcerr == SSL_ERROR_WANT_READ || rcerr == SSL_ERROR_WANT_WRITE)) {
           LOG(X_ERROR("SSL_read nonblock %d returned "));
           rc = -1;
@@ -510,7 +514,9 @@ static int netio_ssl_recvnb(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned
         // SSL connection has been shut down
         //
 
-        rcerr = SSL_get_error(pnetsock->ssl.pCtxt, rc);
+        if(pnetsock->ssl.pCtxt) {
+          rcerr = SSL_get_error(pnetsock->ssl.pCtxt, rc);
+        }
         rc = -1;
         break;
 
@@ -531,7 +537,7 @@ static int netio_ssl_recvnb(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned
     mselapsed = TIME_TV_DIFF_MS(tv, tv0);
     tryread = 1;
 
-  } while(1);
+  } while(!g_proc_exit);
 
   return rc;
 }

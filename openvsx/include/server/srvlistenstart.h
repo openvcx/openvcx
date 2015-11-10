@@ -35,15 +35,6 @@
 
 #include "srvcmd.h"
 
-/*
-//
-// Maximum unique (http|https://address:port) listeners 
-//
-#define SRV_LISTENER_MAX          4 
-#define SRV_LISTENER_MAX_HTTP     SRV_LISTENER_MAX 
-#define SRV_LISTENER_MAX_RTMP     SRV_LISTENER_MAX 
-#define SRV_LISTENER_MAX_RTSP     SRV_LISTENER_MAX 
-*/
 
 typedef struct SRV_LISTENER_CFG {
   int                             active;
@@ -65,11 +56,9 @@ typedef struct SRV_LISTENER_CFG {
 
 typedef struct SRV_START_CFG {
 
-  SRV_LISTENER_CFG_T    listenHttp[SRV_LISTENER_MAX_HTTP];
-  SRV_LISTENER_CFG_T    listenRtmp[SRV_LISTENER_MAX_RTMP];
-  SRV_LISTENER_CFG_T    listenRtsp[SRV_LISTENER_MAX_RTSP];
+  SRV_LISTENER_CFG_T    listenHttp[SRV_LISTENER_MAX];
 
-  unsigned int        maxrtp;
+  unsigned int       maxrtp;
   const unsigned int *prtspsessiontimeout;
   const int          *prtsprefreshtimeoutviartcp;
   const char         *conf_file_name;
@@ -104,9 +93,9 @@ typedef struct SRV_START_CFG {
 } SRV_START_CFG_T;
 
 
-int srvlisten_startrtmplive(SRV_LISTENER_CFG_T *pListenCfg);
-int srvlisten_startrtsplive(SRV_LISTENER_CFG_T *pListenCfg);
-int srvlisten_starthttp(SRV_LISTENER_CFG_T *pListenCfg, int async);
+int srv_rtmp_proc(CLIENT_CONN_T *pConn, const unsigned char *prebuf, unsigned int prebufsz, int istunneled);
+int srv_rtsp_proc(CLIENT_CONN_T *pConn, const unsigned char *prebuf, unsigned int prebufsz);
+int srvlisten_startmediasrv(SRV_LISTENER_CFG_T *pListenCfg, int async);
 
 
 

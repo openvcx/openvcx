@@ -251,17 +251,15 @@ static char *listdir(CLIENT_CONN_T *pConn,
 }
 
 
-static char *find_entry_description(ENTRY_META_DESCRIPTION_T *pDescList,
+static char *find_entry_title(ENTRY_META_DESCRIPTION_T *pDescList,
                                     const char *filename) {
   if(!filename) {
     return NULL;
   }
 
-  //fprintf(stderr, "LOOK FOR DESC '%s'\n", filename);
-
   while(pDescList) {
     if(!strcasecmp(pDescList->filename, filename)) {
-      return pDescList->description;
+      return pDescList->title;
     }
     pDescList = pDescList->pnext;
   }
@@ -290,11 +288,11 @@ static int check_metafile_default(char *filepath, char *pData, int len) {
     }
 
     //
-    // Check for a resource description in the metafile
+    // Check for a resource title in the metafile
     //
     rc = 0;
     if(metafile_open(buf, &metaFile, 0, 1) == 0 && 
-      (parg = find_entry_description(metaFile.pDescriptionList, pathMedia))) {
+      (parg = find_entry_title(metaFile.pDescriptionList, pathMedia))) {
 
       http_urlencode(parg, buf, sizeof(buf));
 
@@ -338,18 +336,18 @@ static int check_metafile(const CLIENT_CONN_T *pConn, char *filepath,
 
   if(rc >= 0) {
     if((userAgent = conf_find_keyval((const KEYVAL_PAIR_T *)
-                        &pConn->httpReq.reqPairs, HTTP_HDR_USER_AGENT))) {
+                        &pConn->phttpReq->reqPairs, HTTP_HDR_USER_AGENT))) {
       pdevtype = devtype_finddevice(userAgent, 1);
     }
 
-    if((parg = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->httpReq.uriPairs,
+    if((parg = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->phttpReq->uriPairs,
                                            "chkprofile"))) {
       chkprofile = atoi(parg);
     }
 
     if(chkprofile) {
 
-      if(!(profile = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->httpReq.uriPairs, 
+      if(!(profile = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->phttpReq->uriPairs, 
                                        "profile"))) {
         profile = "";
       }
@@ -473,17 +471,17 @@ int srv_ctrl_listmedia(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
   //
   if(pConn->pCfg->pMediaDb->mediaDir == NULL) {
     snprintf(entry, sizeof(entry), "cnt=-1");
-    if(http_resp_send(&pConn->sd, &pConn->httpReq,
+    if(http_resp_send(&pConn->sd, pConn->phttpReq,
        HTTP_STATUS_OK, (unsigned char *) entry, strlen(entry)) < 0) {
       return -1;
     }
     return 0;
   }
 
-  if((pargfile = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->httpReq.uriPairs, 
+  if((pargfile = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->phttpReq->uriPairs, 
                                          "file"))) {
     parg = pargfile;
-  } else if((pargdir = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->httpReq.uriPairs, 
+  } else if((pargdir = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->phttpReq->uriPairs, 
                                          "dir"))) {
     parg = pargdir;
     if(!strncmp(pargdir, "undefined", 9)) {
@@ -523,15 +521,14 @@ int srv_ctrl_listmedia(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
 
   if(rc < 0) {
     LOG(X_ERROR("List media failed for '%s' %s, %s"), parg, pargfile ? pargfile : "", pargdir ? pargdir : ""); 
-    if(http_resp_send(&pConn->sd, &pConn->httpReq, 
-                             HTTP_STATUS_SERVERERROR, NULL, 0) < 0) {
+    if(http_resp_send(&pConn->sd, pConn->phttpReq, HTTP_STATUS_SERVERERROR, NULL, 0) < 0) {
       return -1;
     }
   }
 
   if(pargdir) {
 
-    if((parg = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->httpReq.uriPairs, "dirsort"))) {
+    if((parg = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->phttpReq->uriPairs, "dirsort"))) {
       sort = atoi(parg);
 
       // Store the destination in the user config file
@@ -545,20 +542,20 @@ int srv_ctrl_listmedia(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
       }
 
     }
-    if((parg = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->httpReq.uriPairs, 
+    if((parg = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->phttpReq->uriPairs, 
                                          "start"))) {
       if((startIdx = atoi(parg)) < 0) {
         startIdx = 0;
       }
     }
-    if((parg = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->httpReq.uriPairs, 
+    if((parg = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->phttpReq->uriPairs, 
                                          "max"))) {
       if((max = atoi(parg)) < 0) {
         max = 0;
       }
     }
 
-    searchstr = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->httpReq.uriPairs, 
+    searchstr = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->phttpReq->uriPairs, 
                                          "search");
 
     //
@@ -598,7 +595,7 @@ int srv_ctrl_listmedia(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
 
   }
 
-  if(http_resp_send(&pConn->sd, &pConn->httpReq, 
+  if(http_resp_send(&pConn->sd, pConn->phttpReq, 
                            HTTP_STATUS_OK, (unsigned char *) pbuf, lenbuf) < 0) {
     if(pbuf) {
       free(pbuf);
@@ -629,7 +626,7 @@ int srv_ctrl_prop(CLIENT_CONN_T *pConn) {
   havexcoder = (xcode_enabled(0) >= XCODE_CFG_OK);
 
   // Set User-Agent specific flag back to client javascript context
-  if((parg = conf_find_keyval(pConn->httpReq.reqPairs, HTTP_HDR_USER_AGENT))) {
+  if((parg = conf_find_keyval(pConn->phttpReq->reqPairs, HTTP_HDR_USER_AGENT))) {
 
     if(strnstr(parg, "iPod", 48) || strnstr(parg, "iPhone", 48)) {
       // set to non-0, this val is appended to button image src
@@ -637,7 +634,7 @@ int srv_ctrl_prop(CLIENT_CONN_T *pConn) {
     }
   }
 
-  if((parg = conf_find_keyval((const KEYVAL_PAIR_T *) pConn->httpReq.uriPairs, 
+  if((parg = conf_find_keyval((const KEYVAL_PAIR_T *) pConn->phttpReq->uriPairs, 
                                          "dstaddr"))) {
     if(pConn->pCfg->propFilePath) {
       memset(&props, 0, sizeof(props));
@@ -718,7 +715,7 @@ int srv_ctrl_prop(CLIENT_CONN_T *pConn) {
     lenresp += rc;
   }
 
-  if(http_resp_send(&pConn->sd, &pConn->httpReq,
+  if(http_resp_send(&pConn->sd, pConn->phttpReq,
                     HTTP_STATUS_OK,  (unsigned char *) buf, lenresp) < 0) {
     //LOG(X_ERROR("Failed to send %d bytes back to client"), 0);
     return -1;
@@ -929,7 +926,7 @@ int srv_ctrl_loadmedia(CLIENT_CONN_T *pConn, const char *pargfile) {
   if(pargfile) {
     path = (char *) pargfile;
   } else {
-    if(!(pargfile = srv_ctrl_mediapath_fromuri(pConn->httpReq.puri, pConn->pCfg->pMediaDb->mediaDir, pathbuf))) {
+    if(!(pargfile = srv_ctrl_mediapath_fromuri(pConn->phttpReq->puri, pConn->pCfg->pMediaDb->mediaDir, pathbuf))) {
       rc = -1;
     }
   }
@@ -941,7 +938,7 @@ int srv_ctrl_loadmedia(CLIENT_CONN_T *pConn, const char *pargfile) {
 
   if(rc != 0) {
     rc = snprintf(pathbuf, sizeof(pathbuf), "File not found");
-    return http_resp_send(&pConn->sd, &pConn->httpReq, HTTP_STATUS_NOTFOUND, 
+    return http_resp_send(&pConn->sd, pConn->phttpReq, HTTP_STATUS_NOTFOUND, 
                           (unsigned char *) pathbuf, rc);
   }
 
@@ -951,11 +948,11 @@ int srv_ctrl_loadmedia(CLIENT_CONN_T *pConn, const char *pargfile) {
   if(srv_ctrl_initmediafile(&mediaStream, 1) < 0) {
     CloseMediaFile(&fileStream);
     rc = snprintf(pathbuf, sizeof(pathbuf), "Invalid media file type");
-    return http_resp_send(&pConn->sd, &pConn->httpReq, HTTP_STATUS_NOTFOUND, 
+    return http_resp_send(&pConn->sd, pConn->phttpReq, HTTP_STATUS_NOTFOUND, 
                           (unsigned char *) pathbuf, rc);
   }
 
-  if((parg = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->httpReq.uriPairs, "throttle")) &&
+  if((parg = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->phttpReq->uriPairs, "throttle")) &&
      !strncasecmp(parg, "off", 3)) {
     LOG(X_WARNING("Throttle turned off for '%s'"), pargfile);
     throttle = 0;
@@ -979,7 +976,7 @@ int srv_ctrl_loadimg(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
   const char *contentType = CONTENT_TYPE_TEXTHTML;
 
   sz = strlen(VSX_IMG_URL);
-  while(pConn->httpReq.puri[sz] == '/') {
+  while(pConn->phttpReq->puri[sz] == '/') {
     sz++;
   }
 
@@ -989,7 +986,7 @@ int srv_ctrl_loadimg(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
 
   sz2 = strlen(VSX_IMG_URL);
   path[sizeof(path) - 1] = '\0';
-  strncpy(&path[sz], &pConn->httpReq.puri[sz2], sizeof(path) - sz - 1);
+  strncpy(&path[sz], &pConn->phttpReq->puri[sz2], sizeof(path) - sz - 1);
   mediadb_fixdirdelims(path, DIR_DELIMETER);
 
   if(strstr(path, ".gif")) {
@@ -1014,14 +1011,14 @@ int srv_ctrl_loadtmn(CLIENT_CONN_T *pConn) {
   const char *contentType = CONTENT_TYPE_TEXTHTML;
 
   sz = strlen(VSX_TMN_URL);
-  while(pConn->httpReq.puri[sz] == '/') {
+  while(pConn->phttpReq->puri[sz] == '/') {
     sz++;
   }
 
   sz = strlen(path);
 
   sz2 = strlen(VSX_TMN_URL);
-  mediadb_prepend_dir(pConn->pCfg->pMediaDb->dbDir, &pConn->httpReq.puri[sz2], 
+  mediadb_prepend_dir(pConn->pCfg->pMediaDb->dbDir, &pConn->phttpReq->puri[sz2], 
                       path, sizeof(path));
   mediadb_fixdirdelims(path, DIR_DELIMETER);
 
@@ -1041,17 +1038,17 @@ int srv_ctrl_submitdata(CLIENT_CONN_T *pConn) {
   char path[VSX_MAX_PATH_LEN];
   int rc = 0;
   unsigned char buf[1024];
-  unsigned int idxRead = pConn->httpReq.postData.idxRead;
-  unsigned int lenRead = pConn->httpReq.postData.lenInBuf - pConn->httpReq.postData.idxRead;
-  unsigned int lenTot = pConn->httpReq.postData.contentLen + pConn->httpReq.postData.idxRead;
+  unsigned int idxRead = pConn->phttpReq->postData.idxRead;
+  unsigned int lenRead = pConn->phttpReq->postData.lenInBuf - pConn->phttpReq->postData.idxRead;
+  unsigned int lenTot = pConn->phttpReq->postData.contentLen + pConn->phttpReq->postData.idxRead;
   unsigned int idxBuf = idxRead;
 
-  if(pConn->httpReq.postData.filename[0] == '\0') {
+  if(pConn->phttpReq->postData.filename[0] == '\0') {
     LOG(X_ERROR("No filename supplied in form data"));
     return -1;
   }
   
-  mediadb_prepend_dir(pConn->pCfg->pMediaDb->mediaDir, pConn->httpReq.postData.filename, 
+  mediadb_prepend_dir(pConn->pCfg->pMediaDb->mediaDir, pConn->phttpReq->postData.filename, 
                       path, sizeof(path)); 
 
   if((fp = fileops_Open(path, O_RDWR | O_CREAT)) == FILEOPS_INVALID_FP) {
@@ -1059,7 +1056,7 @@ int srv_ctrl_submitdata(CLIENT_CONN_T *pConn) {
     return -1;
   }
 
-  fprintf(stdout, "post submitdata got %d / %d , tot:%d\n", pConn->httpReq.postData.idxRead, pConn->httpReq.postData.lenInBuf, pConn->httpReq.postData.contentLen);
+  fprintf(stdout, "post submitdata got %d / %d , tot:%d\n", pConn->phttpReq->postData.idxRead, pConn->phttpReq->postData.lenInBuf, pConn->phttpReq->postData.contentLen);
 
   while(idxRead < lenTot) {
 

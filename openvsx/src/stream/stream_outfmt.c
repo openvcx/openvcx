@@ -1371,8 +1371,7 @@ int liveq_start_cb(LIVEQ_CB_CTXT_T *pCtxt) {
 
   }
   pCtxt->running = 2;
-  pthread_attr_init(&ptdAttr);
-  pthread_attr_setdetachstate(&ptdAttr, PTHREAD_CREATE_DETACHED);
+  PHTREAD_INIT_ATTR(&ptdAttr);
 
   if((rc = pthread_create(&ptd,
                     &ptdAttr,

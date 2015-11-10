@@ -2351,9 +2351,7 @@ int stream_rtmp_publish_start(STREAMER_CFG_T *pStreamerCfg, int wait_for_setup) 
     return -1;
   }
 
-  pthread_attr_init(&attrInterleaved);
-  pthread_attr_setdetachstate(&attrInterleaved, PTHREAD_CREATE_DETACHED);
-
+  PHTREAD_INIT_ATTR(&attrInterleaved);
   pthread_mutex_init(&pStreamerCfg->rtmppublish.cond.mtx, NULL);
   pthread_cond_init(&pStreamerCfg->rtmppublish.cond.cond, NULL);
 

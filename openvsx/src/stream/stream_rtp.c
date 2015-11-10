@@ -152,7 +152,7 @@ int stream_rtp_init(STREAM_RTP_MULTI_T *pRtp, const STREAM_RTP_INIT_T *pInit, in
   int rc = 0;
   unsigned int idx;
 
-  if(!pRtp || !pInit) {
+  if(!pRtp || !pRtp->pdests || !pInit) {
     return -1;
   }
 
@@ -588,7 +588,7 @@ STREAM_RTP_DEST_T *stream_rtp_adddest(STREAM_RTP_MULTI_T *pRtp, const STREAM_DES
   int rc = 0;
   TURN_RELAY_SETUP_RESULT_T onResult;
 
-  if(!pRtp || !pDestCfg) {
+  if(!pRtp || !pRtp->pdests || !pDestCfg) {
     return NULL;
   }
 
@@ -1058,7 +1058,7 @@ static int stream_rtp_removedestidx(STREAM_RTP_MULTI_T *pRtp,
   char tmp[128];
   unsigned char buf[256];
 
-  if(pRtp == NULL || idxDest >= pRtp->maxDests) {
+  if(!pRtp || !pRtp->pdests || idxDest >= pRtp->maxDests) {
     return -1;
   } 
 
@@ -1169,7 +1169,7 @@ int stream_rtp_removedest(STREAM_RTP_MULTI_T *pRtp, const STREAM_RTP_DEST_T *pDe
   int rc = -1;
   unsigned int idxDest;
 
-  if(!pRtp || !pDest) {
+  if(!pRtp || !pRtp->pdests || !pDest) {
     return -1;
   }
 
@@ -1380,7 +1380,7 @@ static int stream_rtcp_createbye(STREAM_RTP_MULTI_T *pRtp, unsigned int idxDest,
         +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
   */
 
-  if(idxDest >= pRtp->maxDests || !pRtp->pdests[idxDest].isactive) {
+  if(idxDest >= pRtp->maxDests || !pRtp->pdests || !pRtp->pdests[idxDest].isactive) {
     return -1;
   }
 
@@ -1452,7 +1452,7 @@ int stream_rtcp_createsr(STREAM_RTP_MULTI_T *pRtp, unsigned int idxDest,
          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
   */
 
-  if(idxDest >= pRtp->maxDests || !pRtp->pdests[idxDest].isactive) {
+  if(idxDest >= pRtp->maxDests || !pRtp->pdests || !pRtp->pdests[idxDest].isactive) {
     return -1;
   }
 
@@ -2338,8 +2338,7 @@ static int stream_rtcp_responder_start(STREAM_RTP_MULTI_T *pRtp, int lock) {
   }
   wrap.pRtp = pRtp;
   pRtp->doRrListener = 2;
-  pthread_attr_init(&attrCap);
-  pthread_attr_setdetachstate(&attrCap, PTHREAD_CREATE_DETACHED);
+  PHTREAD_INIT_ATTR(&attrCap);
 
   if(pthread_create(&ptdCap,
                     &attrCap,

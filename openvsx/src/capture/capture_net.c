@@ -1046,8 +1046,7 @@ static int stream_capture(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_PKT_ACTION_DESCR_T *c
     capActions[1].pQueue->pQComplement = capActions[0].pQueue;
   } 
 
-  pthread_attr_init(&attrCap);
-  pthread_attr_setdetachstate(&attrCap, PTHREAD_CREATE_DETACHED);
+  PHTREAD_INIT_ATTR(&attrCap);
 #ifdef XMIT_ASYNC
   if(pCfg->pcommon->caphighprio) {
     LOG(X_DEBUG("Setting capture thread to high priority"));
@@ -1081,8 +1080,7 @@ static int stream_capture(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_PKT_ACTION_DESCR_T *c
 
 #ifdef XMIT_ASYNC
 
-  pthread_attr_init(&attrXmit);
-  pthread_attr_setdetachstate(&attrXmit, PTHREAD_CREATE_DETACHED);
+  PHTREAD_INIT_ATTR(&attrXmit);
 
   if(pCfg->pcommon->xmithighprio) {
     LOG(X_DEBUG("Setting transmitter thread to high priority"));
@@ -1226,8 +1224,7 @@ static int record_async(SOCKET_LIST_T *pSockList,
   ((CAPTURE_FILTER_T *) stream.pFilter)->pCapAction = pCapAction;
 
   // initialize capture thread
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+  PHTREAD_INIT_ATTR(&attr);
   //pthread_attr_setschedpolicy(&attr, SCHED_RR);
   //param.sched_priority = sched_get_priority_max(SCHED_RR);
   //pthread_attr_setschedparam(&attr, &param);

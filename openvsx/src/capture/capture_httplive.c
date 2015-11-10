@@ -409,8 +409,7 @@ pm3ubuf="#EXTM3U\r\n"
             client.nextidx = client.curidx;
             client.insession = 1;
 
-            pthread_attr_init(&attr);
-            pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+            PHTREAD_INIT_ATTR(&attr);
             client.running = 1;
 
             if(pthread_create(&ptd, &attr, (void *) httplive_mediaproc, 

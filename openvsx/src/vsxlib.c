@@ -35,6 +35,7 @@ int g_proc_exit_flags;
 TIME_VAL g_debug_ts;
 int g_debug_flags = 0;
 const char *g_client_ssl_method;
+unsigned int g_thread_stack_size;
 pthread_cond_t *g_proc_exit_cond;
 
 #if defined(VSX_HAVE_SSL)
@@ -1792,7 +1793,7 @@ VSX_RC_T vsxlib_stream(VSXLIB_STREAM_PARAMS_T *pParams) {
     pParams->dash_ts_segments = 1;
   }
 
-  if(pParams->rtmpliveaddr[0] || pParams->rtspliveaddr[0] || 
+  if(pParams->rtmpliveaddr[0] || pParams->rtmptliveaddr[0] || pParams->rtspliveaddr[0] || 
      pParams->tsliveaddr[0] || pParams->flvliveaddr[0] ||  pParams->mkvliveaddr[0] || 
       (pParams->httpliveaddr[0] || do_httplive_segmentor) || 
       //(pParams->dashliveaddr[0] || pParams->dashlivemax > 0) ||
@@ -1826,7 +1827,13 @@ VSX_RC_T vsxlib_stream(VSXLIB_STREAM_PARAMS_T *pParams) {
   } else {
     vsxlib_initlog(pParams->verbosity, pParams->logfile, NULL, pParams->logmaxsz, pParams->logrollmax, log_tag);
   }  
+
   http_log_setfile(pParams->httpaccesslogfile);
+
+  //
+  // Initialize threading limits
+  //
+  vsxlib_init_threads(pParams);
 
   if(inputs[0] && !strcasecmp(FILETYPE_CONFERENCE, inputs[0])) {
     pParams->mixerCfg.conferenceInputDriver = 1;
@@ -1839,6 +1846,7 @@ VSX_RC_T vsxlib_stream(VSXLIB_STREAM_PARAMS_T *pParams) {
     return VSX_RC_ERROR;
   }
 
+  VSX_DEBUG_MEM( LOG(X_DEBUG("MEM - vsxlib_stream alloc storage")); );
   if(!(pS = (STREAM_STORAGE_T *) avc_calloc(1, sizeof(STREAM_STORAGE_T)))) {
     return VSX_RC_ERROR;
   }
@@ -2147,7 +2155,7 @@ VSX_RC_T vsxlib_stream(VSXLIB_STREAM_PARAMS_T *pParams) {
       pParams->extractpes = checkEnablePesExtract((pS->streamerCfg.proto & STREAM_PROTO_RTP),
                        (pParams->strxcode ? 1 : 0),
                        (pParams->rtspliveaddr[0] ? 1 : 0),
-                       (pParams->rtmpliveaddr[0] ? 1 : 0),
+                       ((pParams->rtmpliveaddr[0] || pParams->rtmptliveaddr[0]) ? 1 : 0),
                        ((pParams->flvliveaddr[0] || do_flvrecord) ? 1 : 0),
                        ((pParams->mkvliveaddr[0] || do_mkvrecord) ? 1 : 0),
                        ((pParams->httpliveaddr[0] || do_httplive_segmentor) ? 1 : 0),
@@ -2258,8 +2266,8 @@ VSX_RC_T vsxlib_stream(VSXLIB_STREAM_PARAMS_T *pParams) {
     pS->srvParam.startcfg.cfgShared.enable_symlink = pParams->enable_symlink;
     pS->srvParam.startcfg.cfgShared.disable_root_dirlist = pParams->disable_root_dirlist;
     pS->srvParam.startcfg.cfgShared.pRtspSessions = &pS->rtspSessions;
-    pS->srvParam.startcfg.cfgShared.pListenRtmp = pS->srvParam.startcfg.listenRtmp;
-    pS->srvParam.startcfg.cfgShared.pListenRtsp = pS->srvParam.startcfg.listenRtsp;
+    //pS->srvParam.startcfg.cfgShared.pListenRtmp = pS->srvParam.startcfg.listenRtmp;
+    //pS->srvParam.startcfg.cfgShared.pListenRtsp = pS->srvParam.startcfg.listenRtsp;
     pS->srvParam.startcfg.cfgShared.pListenHttp = pS->srvParam.startcfg.listenHttp;
 
     for(idx = 0; idx < IXCODE_VIDEO_OUT_MAX; idx++) { 
@@ -2377,8 +2385,8 @@ VSX_RC_T vsxlib_stream(VSXLIB_STREAM_PARAMS_T *pParams) {
       pS->srvParamPips[idx].pStreamerCfg = &pS->streamerCfgPips[idx];
       pS->srvParamPips[idx].startcfg.cfgShared.enable_symlink = pS->srvParam.startcfg.cfgShared.enable_symlink;
       pS->srvParamPips[idx].startcfg.cfgShared.pRtspSessions = &pS->rtspSessionsPips[idx];
-      pS->srvParamPips[idx].startcfg.cfgShared.pListenRtmp = pS->srvParamPips[idx].startcfg.listenRtmp;
-      pS->srvParamPips[idx].startcfg.cfgShared.pListenRtsp = pS->srvParamPips[idx].startcfg.listenRtsp;
+      //pS->srvParamPips[idx].startcfg.cfgShared.pListenRtmp = pS->srvParamPips[idx].startcfg.listenRtmp;
+      //pS->srvParamPips[idx].startcfg.cfgShared.pListenRtsp = pS->srvParamPips[idx].startcfg.listenRtsp;
       pS->srvParamPips[idx].startcfg.cfgShared.pListenHttp = pS->srvParamPips[idx].startcfg.listenHttp;
       pS->srvParamPips[idx].startcfg.phomedir = pS->srvParamPips[idx].mediaDb.homeDir = pS->srvParam.cwd;
       pS->srvParamPips[idx].startcfg.cfgShared.pMediaDb = &pS->srvParam.mediaDb;
@@ -2729,6 +2737,7 @@ VSX_RC_T vsxlib_open(VSXLIB_STREAM_PARAMS_T *pParams) {
 
   memset(pParams, 0, sizeof(VSXLIB_STREAM_PARAMS_T));
 
+  VSX_DEBUG_MEM( LOG(X_DEBUG("MEM - vsxlib_open")); );
   if(!(pParams->pPrivate = avc_calloc(1, sizeof(VSXLIB_PRIVDATA_T)))) {
     return VSX_RC_ERROR;
   }  
@@ -2768,7 +2777,7 @@ VSX_RC_T vsxlib_open(VSXLIB_STREAM_PARAMS_T *pParams) {
   pParams->caphighprio = 1;
   pParams->xmithighprio = 1;
   pParams->rtmpfp9 = RTMP_CLIENT_FP9;
-  pParams->rtmpdotunnel = BOOL_ENABLED_DFLT;
+  pParams->rtmpnotunnel = BOOL_DISABLED_DFLT;
   pParams->statusmax = 0;
   pParams->enable_symlink = HTTP_FOLLOW_SYMLINKS_DEFAULT; // Follow symlinks by default
   //pParams->httpmax = VSX_CONNECTIONS_DEFAULT;

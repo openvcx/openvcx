@@ -40,7 +40,6 @@
 
 #include "vsxconfig.h"
 
-#include "srvlimits.h"
 #include "srvconf.h"
 #include "srvauth.h"
 #include "srvhttp.h"

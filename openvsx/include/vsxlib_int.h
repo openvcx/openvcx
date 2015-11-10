@@ -44,7 +44,8 @@
 #else // (LITE_VERSION) 
 
 //
-// May need to set `ulimit -s unlimited` for max connections > 100
+// For VSX_CONNECTIONS_MAX > 100 may need to set smaller stack size using
+// `ulimit -s <stack size>` and/or --stacksize or 'threadStackSize='
 //
 #define VSX_CONNECTIONS_MAX           100
 
@@ -95,8 +96,8 @@ typedef struct SRV_PARAM {
   int                      isinit;
   SRV_START_CFG_T          startcfg;
   POOL_T                   poolHttp;
-  POOL_T                   poolRtmp;
-  POOL_T                   poolRtsp;
+  //POOL_T                   poolRtmp;
+  //POOL_T                   poolRtsp;
   struct STREAM_STORAGE   *pStorageBuf;
   MEDIADB_DESCR_T          mediaDb;
   char                     cwd[VSX_MAX_PATH_LEN];
@@ -164,6 +165,8 @@ int vsxlib_init_dtls(STREAMER_DEST_CFG_T *pdestsCfg, unsigned int numChannels, c
 int vsxlib_init_stunoutput(STREAMER_DEST_CFG_T *pdestsCfg, unsigned int numChannels, const STUN_REQUESTOR_CFG_T *pStunCfg);
 int vsxlib_init_turnoutput(STREAMER_DEST_CFG_T *pdestsCfg, unsigned int numChannels, const TURN_CFG_T *pTurnCfg);
 
+int vsxlib_init_threads(const VSXLIB_STREAM_PARAMS_T *pParams);
+
 void vsxlib_set_sdp_from_capture(STREAMER_CFG_T *pStreamerCfg, const SDP_DESCR_T *pSdp);
 
 int vsxlib_stream_setupcap(const VSXLIB_STREAM_PARAMS_T *pParams, CAPTURE_LOCAL_DESCR_T *pCapCfg, 
@@ -183,8 +186,7 @@ int vsxlib_setupServer(SRV_PARAM_T *pSrv, const VSXLIB_STREAM_PARAMS_T *pParams,
 
 int vsxlib_check_prior_listeners(const SRV_LISTENER_CFG_T *arrCfgs, unsigned int max,
                                  const struct sockaddr *psa);
-int vsxlib_check_other_listeners(const SRV_START_CFG_T *pStartCfg,
-                                 const SRV_LISTENER_CFG_T *arrCfgThis);
+//int vsxlib_check_other_listeners(const SRV_START_CFG_T *pStartCfg, const SRV_LISTENER_CFG_T *arrCfgThis);
 int vsxlib_parse_listener(const char *arrAddr[], unsigned int max, SRV_LISTENER_CFG_T *arrCfgs,
                           enum URL_CAPABILITY urlCap, AUTH_CREDENTIALS_STORE_T *ppAuthStores);
 void vsxlib_reset_streamercfg(STREAMER_CFG_T *pStreamerCfg);

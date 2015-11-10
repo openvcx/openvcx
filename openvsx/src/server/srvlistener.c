@@ -40,6 +40,7 @@ void thread_func_wrapper(void *pArg) {
   THREAD_FUNC_WRAPPER_ARG_T wrap;
   char tmp[128];
   int rc = 0;
+  HTTP_REQ_T httpReq;
 
   memcpy(&wrap, pArg, sizeof(THREAD_FUNC_WRAPPER_ARG_T));
   ((THREAD_FUNC_WRAPPER_ARG_T *)pArg)->flags = 0;
@@ -62,10 +63,16 @@ void thread_func_wrapper(void *pArg) {
   }
 
   if(rc == 0) {
+
+    memset(&httpReq, 0, sizeof(httpReq));
+    wrap.pConn->phttpReq = &httpReq;
+
     //
     // Call the wrapper's thread procedure
     //
     wrap.thread_func(wrap.pConn);
+
+    wrap.pConn->phttpReq = NULL;
   }
 
   //fprintf(stderr, "%d THREAD_FUNC DONE pConn:0x%x inuse:%d\n", pthread_self(), wrap.pConn, wrap.pConn->pool.inuse);
@@ -159,8 +166,7 @@ int srvlisten_loop(SRV_LISTENER_CFG_T *pListenCfg, void *thread_func) {
     LOG(X_DEBUG("Accepted connection on port %d from %s:%d"), htons(INET_PORT(pListenCfg->sa)), 
         FORMAT_NETADDR(sdclient.sa, tmp, sizeof(tmp)), htons(INET_PORT(sdclient.sa)));
 
-    pthread_attr_init(&pConn->attr);
-    pthread_attr_setdetachstate(&pConn->attr, PTHREAD_CREATE_DETACHED);
+    PHTREAD_INIT_ATTR(&pConn->attr);
     memset(&pConn->sd.netsocket, 0, sizeof(pConn->sd.netsocket));
     NETIO_SET(pConn->sd.netsocket, sdclient.netsocket);
     memcpy(&pConn->sd.sa, &sdclient.sa, INET_SIZE(sdclient));
@@ -177,6 +183,7 @@ int srvlisten_loop(SRV_LISTENER_CFG_T *pListenCfg, void *thread_func) {
     }
     //wrapArg.pcond = &cond;
 
+    //size_t szstack; pthread_attr_getstacksize(&pConn->attr, &szstack); LOG(X_DEBUG("SZSTACK: %d"), szstack);
   //fprintf(stderr, "%d CALLING wrap: 0x%x pConn:0x%x\n", pthread_self(), &wrapArg, wrapArg.pConn);
 
     if((rc = pthread_create(&pConn->ptd,

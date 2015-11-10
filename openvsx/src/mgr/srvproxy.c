@@ -507,18 +507,18 @@ static int get_remote_conn(const char *pvirtRsrc,
 
       switch(streamMethod) {
         case STREAM_METHOD_RTMP:
-          port = MGR_GET_PORT_RTMP(proc.startPort);
+          port = MGR_GET_PORT_RTMP(proc.startPort, 0);
           break;
         case STREAM_METHOD_RTSP:
         case STREAM_METHOD_RTSP_INTERLEAVED:
         case STREAM_METHOD_RTSP_HTTP:
-          port = MGR_GET_PORT_RTSP(proc.startPort);
+          port = MGR_GET_PORT_RTSP(proc.startPort, 0);
           break;
         case STREAM_METHOD_MKVLIVE:
         case STREAM_METHOD_FLVLIVE:
         case STREAM_METHOD_TSLIVE:
         default:
-          port = MGR_GET_PORT_HTTP(proc.startPort);
+          port = MGR_GET_PORT_HTTP(proc.startPort, 0);
           break;
       }
       snprintf(proxystr, META_FILE_PROXY_STR_LEN, "127.0.0.1:%d", port);

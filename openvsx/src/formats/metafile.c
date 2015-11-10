@@ -30,7 +30,8 @@
 
 #define METAFILE_KEY_FILE             "file"
 #define METAFILE_KEY_HTTPLINK         "httplink"
-#define METAFILE_KEY_DESCRIPTION      "description"
+#define METAFILE_KEY_TITLE            "title"
+#define METAFILE_KEY_DESCRIPTION      "description"  // deprecated, renamed to 'title'
 #define METAFILE_KEY_DEVICE           "device"
 #define METAFILE_KEY_DIGESTAUTH       "digestauth"
 #define METAFILE_KEY_TOKEN            "token"
@@ -47,7 +48,7 @@
 
 #define PARSE_FLAG_HAVE_FILENAME          0x0001
 #define PARSE_FLAG_HAVE_HTTPLINK          0x0002
-#define PARSE_FLAG_HAVE_DESCRIPTION       0x0004
+#define PARSE_FLAG_HAVE_TITLE             0x0004
 #define PARSE_FLAG_HAVE_DEVNAME           0x0008
 #define PARSE_FLAG_HAVE_DIGESTAUTH        0x0010
 #define PARSE_FLAG_HAVE_TOKEN             0x0020
@@ -88,7 +89,7 @@ typedef struct PARSE_ENTRY_DATA {
   int                 shared;
   int                 flags;
   char                ignore[FILE_LIST_ENTRY_NAME_LEN];
-  char                description[META_FILE_DESCR_LEN];
+  char                title[META_FILE_DESCR_LEN];
 
   const char         *path;
   unsigned int        linenum;
@@ -141,6 +142,7 @@ int metafile_isvalidFile(const char *path) {
         if(is_nl) {
           if(!memcmp(&buf[idx], METAFILE_KEY_FILE, strlen(METAFILE_KEY_FILE)) || 
              !memcmp(&buf[idx], METAFILE_KEY_DEVICE, strlen(METAFILE_KEY_DEVICE)) ||
+             !memcmp(&buf[idx], METAFILE_KEY_TITLE, strlen(METAFILE_KEY_TITLE)) ||
              !memcmp(&buf[idx], METAFILE_KEY_DESCRIPTION, strlen(METAFILE_KEY_DESCRIPTION)) ||
              !memcmp(&buf[idx], METAFILE_KEY_IGNORE, strlen(METAFILE_KEY_IGNORE)) ||
              !memcmp(&buf[idx], METAFILE_KEY_RTMP_PROXY, strlen(METAFILE_KEY_RTMP_PROXY)) ||
@@ -170,9 +172,9 @@ int cbparse_methods_csv(void *pArg, const char *p) {
   int rc = 0;
 
   if((method = devtype_methodfromstr(p)) > STREAM_METHOD_UNKNOWN && method < STREAM_METHOD_MAX) {
-    pEntryData->methodBits |= (1 << method);
+    pEntryData->methodBits = devtype_method_getbits(method);
   }
-  //LOG(X_DEBUG("PARSE_METHODS_CSV: %d, p:'%s', idx: %d"), method, p, pParseCtxt->idx);
+  //LOG(X_DEBUG("PARSE_METHODS_CSV: %d, p:'%s', methodBits: 0x%x"), method, p, pEntryData->methodBits);
 
   return rc;
 }
@@ -281,10 +283,19 @@ int cbparse_entry_metafile(void *pArg, const char *p) {
     store_parse_entry(p, METAFILE_KEY_IGNORE, &pEntryData->flags, PARSE_FLAG_HAVE_IGNORE,  
                pEntryData->ignore, sizeof(pEntryData->ignore));
 
+  } else if(!strncasecmp(p, METAFILE_KEY_TITLE, strlen(METAFILE_KEY_TITLE))) {
+
+    store_parse_entry(p, METAFILE_KEY_TITLE, &pEntryData->flags, PARSE_FLAG_HAVE_TITLE,  
+               pEntryData->title, sizeof(pEntryData->title));
+
+  //
+  // 'description' has been deprecated in favor of 'title'
+  //
   } else if(!strncasecmp(p, METAFILE_KEY_DESCRIPTION, strlen(METAFILE_KEY_DESCRIPTION))) {
 
-    store_parse_entry(p, METAFILE_KEY_DESCRIPTION, &pEntryData->flags, PARSE_FLAG_HAVE_DESCRIPTION,  
-               pEntryData->description, sizeof(pEntryData->description));
+    store_parse_entry(p, METAFILE_KEY_DESCRIPTION, &pEntryData->flags, PARSE_FLAG_HAVE_TITLE,  
+               pEntryData->title, sizeof(pEntryData->title));
+
 
   } else {
 
@@ -660,7 +671,7 @@ static void reset_parsedata_ctxt(PARSE_ENTRY_DATA_T *parseData) {
   parseData->flags = 0;
   parseData->shared = -1; // designates not set
   parseData->ignore[0] = '\0';
-  parseData->description[0] = '\0';
+  parseData->title[0] = '\0';
 
 }
 
@@ -746,7 +757,7 @@ int metafile_findprofs(const char *path, const char *devname,
 int metafile_open(const char *path, 
                   META_FILE_T *pMetaFile, 
                   int readIgnores,
-                  int readDescrs) {
+                  int readTitles) {
  
   int rc = 0;
   FILE_HANDLE fp;
@@ -769,8 +780,8 @@ int metafile_open(const char *path,
     return -1;
   }
 
-  VSX_DEBUG_METAFILE( LOG(X_DEBUG("META - metafile_open: '%s', readIgnores: %d, readDescrs: %d"), 
-                      path, readIgnores, readDescrs));
+  VSX_DEBUG_METAFILE( LOG(X_DEBUG("META - metafile_open: '%s', readIgnores: %d, readTitles: %d"), 
+                      path, readIgnores, readTitles));
 
   pMetaFile->filestr[0] = '\0';
   pMetaFile->linkstr[0] = '\0';
@@ -808,7 +819,7 @@ int metafile_open(const char *path,
       continue;
     }
 
-    if(!(readIgnores || readDescrs)) {
+    if(!(readIgnores || readTitles)) {
       handle_parsed_line(&parseData, pMetaFile, path, &match);
     }
 
@@ -831,16 +842,16 @@ int metafile_open(const char *path,
     }
 
     //
-    // We're only interested in reading the resource description 
+    // We're only interested in reading the resource title name
     //
-    if(readDescrs && parseData.description[0] != '\0' && parseData.filename[0] != '\0') {
+    if(readTitles && parseData.title[0] != '\0' && parseData.filename[0] != '\0') {
 
       if(!(pDesc = (ENTRY_META_DESCRIPTION_T *) avc_calloc(1, sizeof(ENTRY_META_DESCRIPTION_T)))) {
         rc = -1;
         break;
       }
 
-      strncpy(pDesc->description, parseData.description, sizeof(pDesc->description));
+      strncpy(pDesc->title, parseData.title, sizeof(pDesc->title));
       strncpy(pDesc->filename, parseData.filename, sizeof(pDesc->filename));
       if(pDescPrev) {
         pDescPrev->pnext = pDesc;
@@ -855,7 +866,7 @@ int metafile_open(const char *path,
   fileops_Close(fp);
 
   VSX_DEBUG_METAFILE( 
-    LOG(X_DEBUG("META - metafile_open '%s', meta-devicefilter:'%s', meta-profilefilter: '%s' returning rc: %d, "
+    LOG(X_DEBUG("META - metafile_open done '%s', meta-devicefilter:'%s', meta-profilefilter: '%s' returning rc: %d, "
                 "file: '%s', link: '%s', input: '%s', xcode: '%s', digestauth: '%s', methods: '%s', id: '%s'" ), 
                  path, pMetaFile->devicefilterstr, pMetaFile->profilefilterstr, rc, pMetaFile->filestr, 
                  pMetaFile->linkstr, pMetaFile->instr, pMetaFile->xcodestr, pMetaFile->userpass,

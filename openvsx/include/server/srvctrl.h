@@ -54,6 +54,7 @@
 #define VSX_RSRC_URL              "/rsrc"
 #define VSX_HTTP_URL              "/http"
 #define VSX_RTSP_URL              "/rtsp"
+#define VSX_RTSPLIVE_URL          "/rtsplive"
 #define VSX_IMG_URL               "/img"
 #define VSX_TMN_URL               "/tmn"
 #define VSX_PROP_URL              "/prop"

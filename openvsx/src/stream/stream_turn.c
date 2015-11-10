@@ -1786,8 +1786,7 @@ int turn_thread_start(TURN_THREAD_CTXT_T *pThreadCtxt) {
     snprintf(wrap.tid_tag, sizeof(wrap.tid_tag), "%s-turn", s);
   }
 
-  pthread_attr_init(&attrCap);
-  pthread_attr_setdetachstate(&attrCap, PTHREAD_CREATE_DETACHED);
+  PHTREAD_INIT_ATTR(&attrCap);
 
   if(pthread_create(&ptdCap,
                     &attrCap,

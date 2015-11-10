@@ -46,14 +46,13 @@ typedef struct ENTRY_IGNORE {
 
 typedef struct ENTRY_META_DESCRIPTION {
   char                           filename[FILE_LIST_ENTRY_NAME_LEN];
-  char                           description[META_FILE_DESCR_LEN];
+  char                           title[META_FILE_DESCR_LEN];
   struct ENTRY_META_DESCRIPTION *pnext; 
 } ENTRY_META_DESCRIPTION_T;
 
 typedef struct META_FILE {
   char                 devicefilterstr[STREAM_DEV_NAME_MAX];
   char                 profilefilterstr[META_FILE_PROFILESTR_MAX];
-
 
   // local file path
   char                 filestr[VSX_MAX_PATH_LEN];
@@ -89,6 +88,7 @@ typedef struct META_FILE {
   // boolean flag for shared resource using one common child processor
   int                 shared;
 
+  // The following should only be found in a directory wide metafile
   ENTRY_IGNORE_T            *pignoreList;
   ENTRY_META_DESCRIPTION_T  *pDescriptionList;
 
@@ -98,7 +98,7 @@ typedef struct META_FILE {
 
 int metafile_isvalidFile(const char *path);
 int metafile_open(const char *path, META_FILE_T *pMetaFile, int readIgnores,
-                  int readDescr);
+                  int readTitles);
 int metafile_close(META_FILE_T *pMetaFile);
 int metafile_findprofs(const char *path, const char *devname, 
                       char profs[][META_FILE_PROFILESTR_MAX], unsigned int max);

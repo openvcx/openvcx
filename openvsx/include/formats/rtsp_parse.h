@@ -88,4 +88,6 @@ enum RTSP_STATUS {
 };
 
 
+int rtsp_isrtsp(const unsigned char *pData, unsigned int len);
+
 #endif // __RTSP_PARSE_H__

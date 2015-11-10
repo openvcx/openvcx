@@ -198,8 +198,8 @@ int srv_ctrl_status(CLIENT_CONN_T *pConn) {
   char tmp[128];
   char buf[2048];
 
-  LOG(X_DEBUG("Received status command %s%s from %s:%d"), pConn->httpReq.puri,
-      http_req_dump_uri(&pConn->httpReq, buf, sizeof(buf)), FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), 
+  LOG(X_DEBUG("Received status command %s%s from %s:%d"), pConn->phttpReq->puri,
+      http_req_dump_uri(pConn->phttpReq, buf, sizeof(buf)), FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), 
                         htons(INET_PORT(pConn->sd.sa)));
 
   if(pConn->pStreamerCfg0) {
@@ -213,9 +213,9 @@ int srv_ctrl_status(CLIENT_CONN_T *pConn) {
 
   if(pStreamerCfg) {
 
-    if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "turn"))) {
+    if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "turn"))) {
 
-      if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipid"))) {
+      if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipid"))) {
         pip_id = atoi(parg);
 
         if((idx = pip_getIndexById(pStreamerCfg, pip_id, 1)) >= 0 && idx < MAX_PIPS && pStreamerCfg->pStorageBuf) {
@@ -235,7 +235,7 @@ int srv_ctrl_status(CLIENT_CONN_T *pConn) {
         rc = ctrl_status_show_turn(pStreamerCfg, buf, sizeof(buf));
       }
 
-    } else if((parg = conf_find_keyval(pConn->httpReq.uriPairs, "streamstats"))) {
+    } else if((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "streamstats"))) {
 
       rc = ctrl_status_show_streamstats(pStreamerCfg, buf, sizeof(buf));
 
@@ -252,7 +252,7 @@ int srv_ctrl_status(CLIENT_CONN_T *pConn) {
     buf[0] = '\0';
   }
 
-  rc = http_resp_send(&pConn->sd, &pConn->httpReq, statusCode, (unsigned char *) buf, strlen(buf));
+  rc = http_resp_send(&pConn->sd, pConn->phttpReq, statusCode, (unsigned char *) buf, strlen(buf));
 
   return rc;
 }

@@ -257,11 +257,11 @@ static int is_entry_ignored(ENTRY_IGNORE_T *pIgnoreList, const char *filename) {
   return 0;
 }
 
-static char *find_entry_description(ENTRY_META_DESCRIPTION_T *pDescList, 
+static char *find_entry_title(ENTRY_META_DESCRIPTION_T *pDescList, 
                                     const char *filename) {
   while(pDescList) {
     if(!strcasecmp(pDescList->filename, filename)) {
-      return pDescList->description; 
+      return pDescList->title; 
     }
     pDescList = pDescList->pnext;
   }
@@ -322,16 +322,21 @@ DIR_ENTRY_LIST_T *direntry_getentries(const MEDIADB_DESCR_T *pMediaDb,
            direntry->d_name, (direntry->d_type & DT_DIR)) );
 
     if(is_entry_ignored(metaFile.pignoreList, direntry->d_name)) {
+      VSX_DEBUG_MGR( LOG(X_DEBUGV("MGR - direntry_getentries ignoring: '%s'"), direntry->d_name););
       continue;
     }
 
-    if(!(pdispname = find_entry_description(metaFile.pDescriptionList,
-                                     direntry->d_name))) {
+    if(!(pdispname = find_entry_title(metaFile.pDescriptionList, direntry->d_name))) {
       pdispname = direntry->d_name;
     }
 
-    if(searchstr && !is_match_search(pdispname, NULL, searchstr)) {
-      continue;
+    if(searchstr) {
+      if(is_match_search(pdispname, NULL, searchstr)) {
+        VSX_DEBUG_MGR( LOG(X_DEBUGV("MGR - direntry_getentries match pdispname: '%s', searchstr: '%s',"), 
+                                    pdispname, searchstr); );
+      } else {
+        continue;
+      }
     }
 
     memset(&entry, 0, sizeof(entry));

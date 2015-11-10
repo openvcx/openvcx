@@ -97,8 +97,8 @@ int srv_ctrl_config(CLIENT_CONN_T *pConn) {
   char tmp[64];
   //int outidx = 0;
 
-  LOG(X_DEBUG("Received config command %s%s"), pConn->httpReq.puri,
-      http_req_dump_uri(&pConn->httpReq, buf, sizeof(buf)));
+  LOG(X_DEBUG("Received config command %s%s"), pConn->phttpReq->puri,
+      http_req_dump_uri(pConn->phttpReq, buf, sizeof(buf)));
 
   tmp[0] = '\0';
 
@@ -116,7 +116,7 @@ int srv_ctrl_config(CLIENT_CONN_T *pConn) {
   // live vsx instance is still running and then potentially redirect to the
   // static archive link.
   //
-  if(rc >= 0 && (parg = conf_find_keyval(pConn->httpReq.uriPairs, "checklive"))) {
+  if(rc >= 0 && (parg = conf_find_keyval(pConn->phttpReq->uriPairs, "checklive"))) {
     checklive = 1; 
   }
 
@@ -124,8 +124,8 @@ int srv_ctrl_config(CLIENT_CONN_T *pConn) {
   // Get any pip id that this configuration update is for
   //
   if(!checklive && rc >= 0 && 
-      ((parg = conf_find_keyval(pConn->httpReq.uriPairs, "pip")) ||
-       (parg = conf_find_keyval(pConn->httpReq.uriPairs, "pipid")))) {
+      ((parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pip")) ||
+       (parg = conf_find_keyval(pConn->phttpReq->uriPairs, "pipid")))) {
     if(!pStreamerCfg->xcode.vid.overlay.havePip) {
       LOG(X_ERROR("config pipid given but no PIP(s) active"));
       rc = -1;
@@ -148,7 +148,7 @@ int srv_ctrl_config(CLIENT_CONN_T *pConn) {
   //
   // Ouput sendonly state
   //
-  if(!checklive && rc >= 0 && (parg = conf_find_keyval(pConn->httpReq.uriPairs, "sendonly"))) {
+  if(!checklive && rc >= 0 && (parg = conf_find_keyval(pConn->phttpReq->uriPairs, "sendonly"))) {
     idx = atoi(parg);
     if(!pStreamerCfg->xcode.vid.pip.active) {
       LOG(X_ERROR("SDP sendonly=%d (hold) is only supported for PIP %s"), idx, tmp);
@@ -167,11 +167,11 @@ int srv_ctrl_config(CLIENT_CONN_T *pConn) {
   // Update RTP/RTCP output destination
   //
   if(!checklive && rc >= 0) {
-    rtcpPortsStr = conf_find_keyval(pConn->httpReq.uriPairs, "rtcpports");
+    rtcpPortsStr = conf_find_keyval(pConn->phttpReq->uriPairs, "rtcpports");
   }
 
-  if(!checklive && rc >= 0 && ((outputStr = conf_find_keyval(pConn->httpReq.uriPairs, "out")) ||
-                 (outputStr = conf_find_keyval(pConn->httpReq.uriPairs, "output")))) {
+  if(!checklive && rc >= 0 && ((outputStr = conf_find_keyval(pConn->phttpReq->uriPairs, "out")) ||
+                 (outputStr = conf_find_keyval(pConn->phttpReq->uriPairs, "output")))) {
   }
 
   if(outputStr || rtcpPortsStr) {
@@ -181,13 +181,13 @@ int srv_ctrl_config(CLIENT_CONN_T *pConn) {
   //
   // Full encoder reset
   //
-  if(!checklive && rc >= 0 && (parg = conf_find_keyval(pConn->httpReq.uriPairs, "reset"))) {
+  if(!checklive && rc >= 0 && (parg = conf_find_keyval(pConn->phttpReq->uriPairs, "reset"))) {
     if((reset = atoi(parg)) > 0) {
       flags |= STREAM_XCODE_FLAGS_RESET;
     }
   }
 
-  //if(rc >= 0 && (parg = conf_find_keyval(pConn->httpReq.uriPairs, PIP_KEY_XCODE))) {
+  //if(rc >= 0 && (parg = conf_find_keyval(pConn->phttpReq->uriPairs, PIP_KEY_XCODE))) {
   //  if((outidx = atoi(parg)) < 0 || outidx >= IXCODE_VIDEO_OUT_MAX) {
   //    rc = -1;
   //  }
@@ -197,10 +197,10 @@ int srv_ctrl_config(CLIENT_CONN_T *pConn) {
   //TODO: allow 'sendonly' for pip index
 
   if(!checklive) {
-    parg = conf_find_keyval(pConn->httpReq.uriPairs, PIP_KEY_XCODE);
+    parg = conf_find_keyval(pConn->phttpReq->uriPairs, PIP_KEY_XCODE);
     if(rc >= 0 && (flags != 0 || parg)) {
 
-      //LOG(X_DEBUG("xcode update command url: '%s'"), pConn->httpReq.url);
+      //LOG(X_DEBUG("xcode update command url: '%s'"), pConn->phttpReq->url);
       if((rc = xcode_update(pStreamerCfg, parg, flags)) < 0) {
         statusCode = HTTP_STATUS_SERVERERROR;
       }
@@ -209,7 +209,7 @@ int srv_ctrl_config(CLIENT_CONN_T *pConn) {
 
   snprintf(buf, sizeof(buf), "config=%s", rc >= 0 ? "OK" : "ERROR");
 
-  rc = http_resp_send(&pConn->sd, &pConn->httpReq, statusCode, (unsigned char *) buf, strlen(buf));
+  rc = http_resp_send(&pConn->sd, pConn->phttpReq, statusCode, (unsigned char *) buf, strlen(buf));
 
   return rc;
 }

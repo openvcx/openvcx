@@ -227,6 +227,15 @@ case "$1" in
 
     ;;
 
+  startsync)
+
+    shift
+    ARGS=$@
+
+    ${PROGPATH} ${ARGS}
+
+    ;;
+
   #start)
 
     #trap  sighandler_restart SIGTERM SIGINT SIGKILL
@@ -275,7 +284,7 @@ case "$1" in
 
    *)
     echo "${PROG_DESCR} Control"
-    echo "Usage: $0 { start | stop | restart | status } < optional arguments >"
+    echo "Usage: $0 { start | startsync | stop | restart | status } < optional arguments >"
     exit 1
 esac
 

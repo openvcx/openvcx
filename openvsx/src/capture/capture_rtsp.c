@@ -80,8 +80,7 @@ static int start_client_monitor(RTSP_CLIENT_SESSION_T *pSession) {
 
   pSession->runMonitor = STREAMER_STATE_STARTING_THREAD;
   pthread_mutex_init(&pSession->mtx, NULL);
-  pthread_attr_init(&attrMonitor);
-  pthread_attr_setdetachstate(&attrMonitor, PTHREAD_CREATE_DETACHED);
+  PHTREAD_INIT_ATTR(&attrMonitor);
 
   if(pthread_create(&ptdMonitor,
                     &attrMonitor,
@@ -1165,10 +1164,7 @@ int stream_rtsp_announce_start(STREAMER_CFG_T *pStreamerCfg, int wait_for_setup)
     return -1;
   }
 
-
-  pthread_attr_init(&attrInterleaved);
-  pthread_attr_setdetachstate(&attrInterleaved, PTHREAD_CREATE_DETACHED);
-
+  PHTREAD_INIT_ATTR(&attrInterleaved);
   pthread_mutex_init(&pStreamerCfg->rtspannounce.cond.mtx, NULL);
   pthread_cond_init(&pStreamerCfg->rtspannounce.cond.cond, NULL);
 
@@ -1647,8 +1643,7 @@ int capture_rtsp_server_start(CAP_ASYNC_DESCR_T *pCfg, int wait_for_setup) {
     return -1;
   }
 
-  pthread_attr_init(&attrInterleaved);
-  pthread_attr_setdetachstate(&attrInterleaved, PTHREAD_CREATE_DETACHED);
+  PHTREAD_INIT_ATTR(&attrInterleaved);
 
   pthread_mutex_init(&pCfg->pcommon->rtsp.cond.mtx, NULL);
   pthread_cond_init(&pCfg->pcommon->rtsp.cond.cond, NULL);

@@ -75,7 +75,8 @@ static int srv_start(SRV_START_CFG_T *pCfg) {
   unsigned int outidx;
 
   //TODO: enable rtsp, rtmp in server mode
-  pCfg->listenRtmp[0].max = pCfg->listenRtsp[0].max = 0;
+  //pCfg->listenRtmp[0].max = pCfg->listenRtsp[0].max = 0;
+  //pCfg->listenRtsp[0].max = 0;
 
   maxConnectionsTsLive = MAX(pCfg->pParams->tslivemax, 1);
   maxConnectionsDefault = MAX(pCfg->pParams->httpmax, 4);
@@ -207,8 +208,8 @@ static int srv_start(SRV_START_CFG_T *pCfg) {
                         MEDIADB_PREFIXES_MAX);
   mediadb_parseprefixes(pCfg->pignorefileprfx, pCfg->cfgShared.pMediaDb->ignorefileprefixes, 
                         MEDIADB_PREFIXES_MAX);
-  pCfg->cfgShared.pListenRtmp = pCfg->listenRtmp;
-  pCfg->cfgShared.pListenRtsp = pCfg->listenRtsp;
+  //pCfg->cfgShared.pListenRtmp = pCfg->listenRtmp;
+  //pCfg->cfgShared.pListenRtsp = pCfg->listenRtsp;
   pCfg->cfgShared.pListenHttp = pCfg->listenHttp;
   pCfg->cfgShared.pSessionCache = &sessionCache;
   for(outidx = 0; outidx < 1; outidx++) {
@@ -220,8 +221,8 @@ static int srv_start(SRV_START_CFG_T *pCfg) {
     //
     // Start the media database management thread
     //
-    pthread_attr_init(&attrMediaDb);
-    pthread_attr_setdetachstate(&attrMediaDb, PTHREAD_CREATE_DETACHED);
+    PHTREAD_INIT_ATTR(&attrMediaDb);
+
     if(pthread_create(&ptdMediaDb,
                       &attrMediaDb,
                       (void *) mediadb_proc,
@@ -322,8 +323,7 @@ static int srv_start(SRV_START_CFG_T *pCfg) {
     srvCtrl[idx].nextCfg.captureCfg.capActions[0].frvidqslots = VIDFRAMEQ_LEN_DEFAULT;
     srvCtrl[idx].nextCfg.captureCfg.capActions[0].fraudqslots = AUDFRAMEQ_LEN_DEFAULT;
 
-    pthread_attr_init(&attrSrvCtrl[idx]);
-    pthread_attr_setdetachstate(&attrSrvCtrl[idx], PTHREAD_CREATE_DETACHED);
+    PHTREAD_INIT_ATTR(&attrSrvCtrl[idx]);
     pthread_mutex_init(&srvCtrl[idx].mtx, NULL);
 
     srvCtrl[idx].pCfg = &pCfg->cfgShared;
@@ -397,7 +397,7 @@ static int srv_start(SRV_START_CFG_T *pCfg) {
 
 
   if(pCfg->pParams->tslivemax > 0) {
-    if((rc = vsxlib_parse_listener((const char **) pCfg->pParams->tsliveaddr, SRV_LISTENER_MAX_HTTP,
+    if((rc = vsxlib_parse_listener((const char **) pCfg->pParams->tsliveaddr, SRV_LISTENER_MAX,
                             pCfg->listenHttp, URL_CAP_TSLIVE, NULL)) < 0) {
       pool_close(&poolHttp, 0);
       return -1;
@@ -405,7 +405,7 @@ static int srv_start(SRV_START_CFG_T *pCfg) {
   }
 
   if(pCfg->pParams->httplivemax > 0) {
-    if((rc = vsxlib_parse_listener((const char **) pCfg->pParams->httpliveaddr, SRV_LISTENER_MAX_HTTP,
+    if((rc = vsxlib_parse_listener((const char **) pCfg->pParams->httpliveaddr, SRV_LISTENER_MAX,
                             pCfg->listenHttp, URL_CAP_TSHTTPLIVE, NULL)) < 0) {
       pool_close(&poolHttp, 0);
       return -1;
@@ -416,15 +416,15 @@ static int srv_start(SRV_START_CFG_T *pCfg) {
   // Ensure there is at least one /tslive and one /httplive listener
   // if not explicitly specified in the config via 'tslive=' and 'httplive='
   //
-  if(!srv_ctrl_findlistener(pCfg->listenHttp, SRV_LISTENER_MAX_HTTP, URL_CAP_TSLIVE, 0, 0)) {
+  if(!srv_ctrl_findlistener(pCfg->listenHttp, SRV_LISTENER_MAX, URL_CAP_TSLIVE, 0, 0, 0)) {
     pCfg->listenHttp[0].urlCapabilities |= URL_CAP_TSLIVE;
   }
-  if(!srv_ctrl_findlistener(pCfg->listenHttp, SRV_LISTENER_MAX_HTTP, URL_CAP_TSHTTPLIVE, 0, 0)) {
+  if(!srv_ctrl_findlistener(pCfg->listenHttp, SRV_LISTENER_MAX, URL_CAP_TSHTTPLIVE, 0, 0, 0)) {
     pCfg->listenHttp[0].urlCapabilities |= URL_CAP_TSHTTPLIVE;
   }
 
 
-  for(idx = 0; idx < SRV_LISTENER_MAX_HTTP; idx++) {
+  for(idx = 0; idx < SRV_LISTENER_MAX; idx++) {
 
     //fprintf(stderr, "LISTENER[%d] %s %s:%d active:%d cap: 0x%x\n", idx, pCfg->listenHttp[idx].netflags & NETIO_FLAG_SSL_TLS ? "SSL" : "", inet_ntoa(pCfg->listenHttp[idx].sain.sin_addr), ntohs(pCfg->listenHttp[idx].sain.sin_port), pCfg->listenHttp[idx].active, pCfg->listenHttp[idx].urlCapabilities);
 
@@ -439,7 +439,7 @@ static int srv_start(SRV_START_CFG_T *pCfg) {
       if(idx > 0) {
 
         if((rc = vsxlib_ssl_initserver(pCfg->pParams, &pCfg->listenHttp[idx])) < 0 ||
-           (rc = srvlisten_starthttp(&pCfg->listenHttp[idx], 1)) < 0) {
+           (rc = srvlisten_startmediasrv(&pCfg->listenHttp[idx], 1)) < 0) {
           pool_close(&poolHttp, 0);
           return -1;
         }
@@ -451,7 +451,7 @@ static int srv_start(SRV_START_CFG_T *pCfg) {
   // Start the first listener synchronously, thus blocking here
   //
   if((rc = vsxlib_ssl_initserver(pCfg->pParams, &pCfg->listenHttp[0])) < 0 ||
-     (rc = srvlisten_starthttp(&pCfg->listenHttp[0], 0)) < 0) {
+     (rc = srvlisten_startmediasrv(&pCfg->listenHttp[0], 0)) < 0) {
     pool_close(&poolHttp, 0);
     return -1;
   }

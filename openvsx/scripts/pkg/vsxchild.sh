@@ -2,7 +2,7 @@
 #
 # This script is automatically called by vsx-wp to launch a vsx media process
 #
-# vsxchild.sh [ instance id ] [ input path ] [ device profile name ] [ streaming methods ] [ xcode config ] [ deprecated --in=... ] [ token id ]
+# vsxchild.sh [ instance id ] [ input file path ] [ device profile name ] [ streaming methods ] [ xcode config ] [ deprecated --in=... ] [ token id ]
 #
 
 INSTANCEID=$1
@@ -259,6 +259,11 @@ if [ "${TOKENID}" != "" ]; then
 fi
 
 pre_create
+
+if [ `uname` = "Linux" ]; then
+  #set stack size of each process (thread) to a low value such as 256Kb
+  ulimit -s 256
+fi
 
 #date >${LOG_STDOUT}
 echo "Running ./${RUNPATH} --pid=${PID_FILE} ${OPT_VERBOSE} ${OPT_CONF} ${OPT_METHOD} ${OPT_INPUT} ${OPT_TOKEN} ${OPT_EXTRA} ${OPT_XCODE} --log=${LOG_FILE}" 

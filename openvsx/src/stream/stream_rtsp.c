@@ -245,8 +245,8 @@ int rtspsrv_init(STREAM_RTSP_SESSIONS_T *pRtsp) {
   if((s = logutil_tid_lookup(pthread_self(), 0)) && s[0] != '\0') {
     snprintf(startCtxt.tid_tag, sizeof(startCtxt.tid_tag), "%s-rtspmon", s);
   }
-  pthread_attr_init(&attrMonitor);
-  pthread_attr_setdetachstate(&attrMonitor, PTHREAD_CREATE_DETACHED);
+
+  PHTREAD_INIT_ATTR(&attrMonitor);
 
   if(pthread_create(&ptdMonitor,
                     &attrMonitor,

@@ -103,8 +103,7 @@ static int start_listener(SRV_MGR_LISTENER_CFG_T *pMgrListenCfg, THREAD_FUNC thr
 
   if(async) {
 
-    pthread_attr_init(&attr);
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    PHTREAD_INIT_ATTR(&attr);
 
     if(pthread_create(&ptd,
                       &attr,
@@ -124,8 +123,29 @@ static int start_listener(SRV_MGR_LISTENER_CFG_T *pMgrListenCfg, THREAD_FUNC thr
 
 }
 
+static void close_listener(POOL_T *pPool) {
+  SRV_MGR_CONN_T *pConn = NULL;
+
+  // TODO: on signal , create mgr_close which closes all sockets and calls pool_close
+
+  if(pPool->lock) {
+    pthread_mutex_lock(&pPool->mtx);
+  }
+  pConn = (SRV_MGR_CONN_T *) pPool->pInUse;
+  while(pConn) {
+    netio_closesocket(&pConn->conn.sd.netsocket);
+    pConn = (SRV_MGR_CONN_T *) pConn->conn.pool.pNext;
+  }
+  if(pPool->lock) {
+    pthread_mutex_unlock(&pPool->mtx);
+  }
+  if(pPool->pElements) {
+    pool_close(pPool, 1);
+  }
+}
+
 static int init_listener(POOL_T *pPool, 
-                         SRV_MGR_START_CFG_T *pStart, 
+                         const SRV_MGR_START_CFG_T *pStart, 
                          SRV_MGR_LISTENER_CFG_T *pMgrListenerCfg,
                          unsigned int max,
                          SRV_LISTENER_CFG_T *pListenerSrc) {
@@ -143,15 +163,14 @@ static int init_listener(POOL_T *pPool,
   while(pConn) {
     NETIOSOCK_FD(pConn->conn.sd.netsocket) = INVALID_SOCKET;
     pConn->conn.pCfg = &pStart->pCfg->cfgShared;
-    memcpy(&pConn->cfg, pStart, sizeof(pConn->cfg));
+    //memcpy(&pConn->cfg, pStart, sizeof(pConn->cfg));
+    pConn->pMgrCfg = pStart;
     pConn = (SRV_MGR_CONN_T *) pConn->conn.pool.pNext;
   }
  
   for(idx = 0; idx < SRV_LISTENER_MAX; idx++) {
     pMgrListenerCfg[idx].pStart = pStart;
     memcpy(&pMgrListenerCfg[idx].listenCfg, &pListenerSrc[idx], sizeof(pMgrListenerCfg[idx].listenCfg));
-    //memset(&pListenerSrc[idx], 0, sizeof(SRV_LISTENER_CFG_T));
-
     pMgrListenerCfg[idx].listenCfg.max = max;
     pMgrListenerCfg[idx].listenCfg.pConnPool = pPool;
     pMgrListenerCfg[idx].listenCfg.pCfg = pStart->pCfg;
@@ -218,13 +237,12 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
   pthread_t ptdMediaDb;
   pthread_attr_t attrMediaDb;
   LIC_INFO_T lic;
-  SRV_MGR_CONN_T *pConn;
   SRV_MGR_START_CFG_T start;
-  SRV_LISTENER_CFG_T listenerTmp[SRV_LISTENER_MAX_HTTP];
-  SRV_MGR_LISTENER_CFG_T listenerHttp[SRV_LISTENER_MAX_HTTP];
-  SRV_MGR_LISTENER_CFG_T listenerRtmpProxy[SRV_LISTENER_MAX_RTMP];
-  SRV_MGR_LISTENER_CFG_T listenerRtspProxy[SRV_LISTENER_MAX_RTSP];
-  SRV_MGR_LISTENER_CFG_T listenerHttpProxy[SRV_LISTENER_MAX_HTTP];
+  SRV_LISTENER_CFG_T listenerTmp[SRV_LISTENER_MAX];
+  SRV_MGR_LISTENER_CFG_T listenerHttp[SRV_LISTENER_MAX];
+  SRV_MGR_LISTENER_CFG_T listenerRtmpProxy[SRV_LISTENER_MAX];
+  SRV_MGR_LISTENER_CFG_T listenerRtspProxy[SRV_LISTENER_MAX];
+  SRV_MGR_LISTENER_CFG_T listenerHttpProxy[SRV_LISTENER_MAX];
   POOL_T poolHttp;
   POOL_T poolRtmpProxy;
   POOL_T poolRtspProxy;
@@ -233,6 +251,8 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
   TIME_VAL tmstart = 0;
   MGR_NODE_LIST_T lbnodes;
   STREAM_STATS_MONITOR_T monitor;
+  SRV_LISTENER_CFG_T listenRtmp[SRV_LISTENER_MAX];
+  SRV_LISTENER_CFG_T listenRtsp[SRV_LISTENER_MAX];
   unsigned int outidx;
   const char *log_tag = "main";
   int rc = 0;
@@ -255,6 +275,10 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
   memset(&httpAuthStores, 0, sizeof(httpAuthStores));
   memset(&lbnodes, 0, sizeof(lbnodes));
   memset(&monitor, 0, sizeof(monitor));
+  memset(&poolHttp, 0, sizeof(poolHttp));
+  memset(&poolHttpProxy, 0, sizeof(poolHttpProxy));
+  memset(&poolRtmpProxy, 0, sizeof(poolRtmpProxy));
+  memset(&poolRtspProxy, 0, sizeof(poolRtspProxy));
 
 #if defined(VSX_HAVE_SSL)
   //
@@ -308,6 +332,11 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
   http_log_setfile(params.httpaccesslogfile);
 
   LOG(X_INFO("Read configuration from %s"), cfg.pconfpath);
+
+  //
+  // Initialize threading limits
+  //
+  vsxlib_init_threads(&params);
 
   //
   // Check if we're running in load balancer mode
@@ -531,7 +560,7 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
   }
 
   memset(cfg.listenHttp, 0, sizeof(cfg.listenHttp));
-  for(idx = 0; idx < SRV_LISTENER_MAX_HTTP; idx++) {
+  for(idx = 0; idx < SRV_LISTENER_MAX; idx++) {
     memcpy(&listenerTmp[idx], &listenerHttp[idx].listenCfg, sizeof(listenerTmp[idx]));
   }
 
@@ -549,8 +578,8 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
     //
     // Start the media database management thread
     //
-    pthread_attr_init(&attrMediaDb);
-    pthread_attr_setdetachstate(&attrMediaDb, PTHREAD_CREATE_DETACHED);
+    PHTREAD_INIT_ATTR(&attrMediaDb);
+
     if(pthread_create(&ptdMediaDb,
                       &attrMediaDb,
                       (void *) mediadb_proc,
@@ -564,25 +593,25 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
     }
   }
 
-  memset(cfg.listenRtmp, 0, sizeof(cfg.listenRtmp));
+  memset(&listenRtmp, 0, sizeof(listenRtmp));
   if(rc >= 0 && params.rtmplivemax > 0 && params.rtmpliveaddr[0] &&
-     (rc = vsxlib_parse_listener((const char **) params.rtmpliveaddr, SRV_LISTENER_MAX_RTMP,
-                                  cfg.listenRtmp, URL_CAP_RTMPLIVE, NULL)) > 0) {
+     (rc = vsxlib_parse_listener((const char **) params.rtmpliveaddr, SRV_LISTENER_MAX,
+                                  listenRtmp, URL_CAP_RTMPLIVE, NULL)) > 0) {
 
     //
     // Start the RTMP proxy
     //
-    if((rc = check_other_listeners(cfg.listenRtmp, SRV_LISTENER_MAX_RTMP,
+    if((rc = check_other_listeners(listenRtmp, SRV_LISTENER_MAX,
                                    listenerTmp, NULL, NULL)) > 0) {
       LOG(X_WARNING("RTMP server listener %s:%d cannot be shared with another protocol"),
-          FORMAT_NETADDR(cfg.listenRtmp[rc - 1].sa, tmp, sizeof(tmp)), htons(INET_PORT(cfg.listenRtmp[rc - 1].sa)));
+          FORMAT_NETADDR(listenRtmp[rc - 1].sa, tmp, sizeof(tmp)), htons(INET_PORT(listenRtmp[rc - 1].sa)));
 
     } else {
 
       //
       // Create and init each available client connection instance
       //
-      if((rc = init_listener(&poolRtmpProxy, &start, listenerRtmpProxy, params.rtmplivemax, cfg.listenRtmp)) >= 0) {
+      if((rc = init_listener(&poolRtmpProxy, &start, listenerRtmpProxy, params.rtmplivemax, listenRtmp)) >= 0) {
         //
         // Start the RTMP listener(s)
         //
@@ -599,24 +628,24 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
 
   } // end of if(params.rtmplivemax ...
 
-  memset(cfg.listenRtsp, 0, sizeof(cfg.listenRtsp));
+  memset(listenRtsp, 0, sizeof(listenRtsp));
   if(rc >= 0 && params.rtsplivemax > 0 && params.rtspliveaddr[0] &&
-     (rc = vsxlib_parse_listener((const char **) params.rtspliveaddr, SRV_LISTENER_MAX_RTSP,
-                                  cfg.listenRtsp, URL_CAP_RTSPLIVE, NULL)) > 0) {
+     (rc = vsxlib_parse_listener((const char **) params.rtspliveaddr, SRV_LISTENER_MAX,
+                                  listenRtsp, URL_CAP_RTSPLIVE, NULL)) > 0) {
 
     //
     // Start the RTSP proxy
     //
-    if((rc = check_other_listeners(cfg.listenRtsp, SRV_LISTENER_MAX_RTSP,
-                                   listenerTmp, cfg.listenRtmp,  NULL)) > 0) {
+    if((rc = check_other_listeners(listenRtsp, SRV_LISTENER_MAX,
+                                   listenerTmp, listenRtmp,  NULL)) > 0) {
       LOG(X_WARNING("RTSP server listener %s:%d cannot be shared with another protocol"),
-          FORMAT_NETADDR(cfg.listenRtsp[rc - 1].sa, tmp, sizeof(tmp)), htons(INET_PORT(cfg.listenRtsp[rc - 1].sa)));
+          FORMAT_NETADDR(listenRtsp[rc - 1].sa, tmp, sizeof(tmp)), htons(INET_PORT(listenRtsp[rc - 1].sa)));
     } else {
 
       //
       // Create and init each available client connection instance
       //
-      if((rc = init_listener(&poolRtspProxy, &start, listenerRtspProxy, params.rtsplivemax, cfg.listenRtsp)) >= 0) {
+      if((rc = init_listener(&poolRtspProxy, &start, listenerRtspProxy, params.rtsplivemax, listenRtsp)) >= 0) {
 
         //
         // Start the RTSP listener(s)
@@ -635,14 +664,14 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
   } // end of if(params.rtsplivemax > 0...
 
   if(rc >= 0 && params.flvlivemax > 0 && params.flvliveaddr[0] &&
-     (rc = vsxlib_parse_listener((const char **) params.flvliveaddr, SRV_LISTENER_MAX_HTTP,
+     (rc = vsxlib_parse_listener((const char **) params.flvliveaddr, SRV_LISTENER_MAX,
                                   cfg.listenHttp, URL_CAP_FLVLIVE, NULL)) > 0) {
 
     //
     // Start the HTTP / FLV proxy
     //
-    if((rc = check_other_listeners(cfg.listenHttp, SRV_LISTENER_MAX_HTTP,
-                                   listenerTmp, cfg.listenRtmp, cfg.listenRtsp)) > 0) {
+    if((rc = check_other_listeners(cfg.listenHttp, SRV_LISTENER_MAX,
+                                   listenerTmp, listenRtmp, listenRtsp)) > 0) {
       LOG(X_WARNING("HTTP (proxy) server listener %s:%d cannot be shared with another protocol"),
           FORMAT_NETADDR(cfg.listenHttp[rc - 1].sa, tmp, sizeof(tmp)), htons(INET_PORT(cfg.listenHttp[rc - 1].sa)));
     } else {
@@ -668,24 +697,30 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
 
   } // end of if(params.flvlivemax > 0 ... 
 
-
   if(rc >= 0) {
+
+    //
+    // Check if we have any SSL/TLS http listeners
+    //
+    for(idx = 0; idx < sizeof(listenerHttp) / sizeof(listenerHttp[0]); idx++) {
+      if((listenerHttp[idx].listenCfg.netflags & NETIO_FLAG_SSL_TLS)) {
+         start.enable_ssl_childlisteners = 1;
+         break;
+      }
+    }
+
     //
     // Start the HTTP listener(s)
     //
     for(idx = 0; idx < sizeof(listenerHttp) / sizeof(listenerHttp[0]); idx++) {
-      if(idx > 0 && listenerHttp[idx].listenCfg.active) {
+      if(listenerHttp[idx].listenCfg.active) {
 
-        if(idx > 0 && ((rc = vsxlib_ssl_initserver(&params, &listenerHttp[idx].listenCfg)) < 0 ||
+        if(((rc = vsxlib_ssl_initserver(&params, &listenerHttp[idx].listenCfg)) < 0 ||
            (rc = start_listener(&listenerHttp[idx], srvmgr_main_proc, 1) < 0))) {
           break;
         }
       } // end of if(idx...
     } // end of for(idx...
-
-    if((rc = vsxlib_ssl_initserver(&params, &listenerHttp[0].listenCfg)) >= 0) {
-      rc = start_listener(&listenerHttp[0], srvmgr_main_proc, 1);
-    }
 
   }
 
@@ -697,15 +732,10 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
 
   LOG(X_DEBUG("Cleaning up"));
 
-  // TODO: on signal , create mgr_close which closes all sockets and calls pool_close
-  pthread_mutex_lock(&poolHttp.mtx);
-  pConn = (SRV_MGR_CONN_T *) poolHttp.pInUse;
-  while(pConn) {
-    netio_closesocket(&pConn->conn.sd.netsocket);
-    pConn = (SRV_MGR_CONN_T *) pConn->conn.pool.pNext;
-  }
-  pthread_mutex_unlock(&poolHttp.mtx);
-  pool_close(&poolHttp, 1);
+  close_listener(&poolHttp);
+  close_listener(&poolRtmpProxy);
+  close_listener(&poolRtspProxy);
+  close_listener(&poolHttpProxy);
 
   if(start.pLbNodes) {
     procdb_destroy(&pParams->procList);

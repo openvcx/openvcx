@@ -167,13 +167,24 @@ static int rtsp_req_get(const RTSP_REQ_CTXT_T *pRtsp, RTSP_REQ_T *pReq) {
   return rc;
 }
 
-static int rtsp_req_readparse(const RTSP_REQ_CTXT_T *pRtsp, RTSP_REQ_T *pReq, 
+static int rtsp_req_readparse(RTSP_REQ_CTXT_T *pRtsp, RTSP_REQ_T *pReq, 
                               unsigned char *pbuf, unsigned int szbuf) {
   int rc = 0;
   unsigned int readTmtSec = 0;
   unsigned int idxbuf;
 
-  VSX_DEBUG_RTSP( LOG(X_DEBUG("RTSP - request parse start... idx:%d/%d '%c'"), pReq->hdrCtxt.idxbuf, szbuf, pbuf[0] ));
+
+  if(pRtsp->prebufsz > 0 && pRtsp->prebufdata) {
+    if(pRtsp->prebufsz > szbuf) {
+      return -1;
+    }
+    memcpy(pbuf, pRtsp->prebufdata, pRtsp->prebufsz);
+    pReq->hdrCtxt.idxbuf = pRtsp->prebufsz;
+    pRtsp->prebufsz = 0;
+  }
+
+  VSX_DEBUG_RTSP( LOG(X_DEBUG("RTSP - request parse start... idx:%d/%d '%c%c%c%c'"), 
+                      pReq->hdrCtxt.idxbuf, szbuf, pbuf[0], pbuf[1], pbuf[2], pbuf[3] ));
 
   if(pRtsp->pSession && pRtsp->pSession->expireSec > 0) {
     readTmtSec = pRtsp->pSession->expireSec + 3;
@@ -191,15 +202,10 @@ static int rtsp_req_readparse(const RTSP_REQ_CTXT_T *pRtsp, RTSP_REQ_T *pReq,
     idxbuf = pReq->hdrCtxt.idxbuf;
     memset(&pReq->hdrCtxt, 0, sizeof(pReq->hdrCtxt));
     pReq->hdrCtxt.pnetsock = &pRtsp->pSd->netsocket;
-    //pReq->hdrCtxt.pbuf = pReq->buf;
-    //pReq->hdrCtxt.szbuf = sizeof(pReq->buf);
     pReq->hdrCtxt.pbuf = (char *) pbuf;
     pReq->hdrCtxt.szbuf = szbuf;
     pReq->hdrCtxt.tmtms = readTmtSec * 1000;
     pReq->hdrCtxt.idxbuf = idxbuf;
-    //if(idxbuf == 0) {
-      //((unsigned char *)pReq->hdrCtxt.pbuf)[0] = '\0';
-    //}
 
     if((rc = http_req_readpostparse(&pReq->hdrCtxt, &pReq->hr, 0)) < 0) {
       return rc;

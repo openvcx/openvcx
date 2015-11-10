@@ -938,9 +938,18 @@ typedef struct VSXLIB_STREAM_PARAMS {
   /**
    *
    * RTMP server listening address and port string
+   * RTMP tunneled connections are implicitly allowed on the same
+   * RTMP server listener unless rtmpnotunnel is set to 1
    *
    */
   const char *rtmpliveaddr[VIDEO_OUT_MAX];
+
+  /**
+   *
+   * RTMP tunneling only  server listening address and port string
+   *
+   */
+  const char *rtmptliveaddr[VIDEO_OUT_MAX];
 
   /**
    *
@@ -996,10 +1005,10 @@ typedef struct VSXLIB_STREAM_PARAMS {
 
   /**
    *
-   * Boolean controlling RTMP server tunneling mode
+   * Boolean disabling RTMP server tunneling mode over RTMP server listener
    *
    */
-  int rtmpdotunnel;
+  int rtmpnotunnel;
 
   /**
    *
@@ -1650,6 +1659,14 @@ typedef struct VSXLIB_STREAM_PARAMS {
    *
    */
   int outq_prealloc;
+
+  
+  /**
+   *
+   * Thread stack size
+   *
+   */
+  unsigned int thread_stack_size;
 
 
   /**

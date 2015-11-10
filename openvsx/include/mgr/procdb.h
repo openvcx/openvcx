@@ -35,7 +35,7 @@
 
 
 #define PORT_RANGE_START              50000
-#define PORT_COUNT                    1000
+#define PORT_COUNT                    5000
 
 
 enum SYS_PROC_FLAG {
@@ -97,11 +97,11 @@ SYS_PROC_T *procdb_findInstanceId(SYS_PROCLIST_T *pProcs, const char *instanceId
 //int procdb_delete(SYS_PROCLIST_T *pProcs, const char *name, const char *id, int lock);
 SYS_PROC_T *procdb_setup(SYS_PROCLIST_T *pProcs, const char *virtPath, const char *id, 
                          const MEDIA_DESCRIPTION_T *pMediaDescr, const char *pXcodeStr, 
-                         const char *pInstanceId, const char *pTokenId, int lock);
+                         const char *pInstanceId, const char *pTokenId, int lock, int ssl);
 int procdb_start(SYS_PROCLIST_T *pProcs, SYS_PROC_T *pProc, const char *filePath,
                  const STREAM_DEVICE_T *pDev, const char *launchpath, 
                  const char *xcodestr, const char *incapturestr, 
-                 const char *userpass, int methodBits, int ssl);
+                 const char *userpass, int methodBits, int ssl, int nossl);
 int procdb_create(SYS_PROCLIST_T *pProcs);
 void procdb_destroy(SYS_PROCLIST_T *pProcs);
 unsigned int procdb_getMbbps(const MEDIA_DESCRIPTION_T *pMediaDescr);

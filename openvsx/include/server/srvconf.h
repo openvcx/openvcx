@@ -33,6 +33,11 @@
 
 #endif // WIN32
 
+//
+// Maximum unique (http|https://address:port) listeners
+//
+#define SRV_LISTENER_MAX          8 
+
 
 #define SRV_CONF_KEY_AVCTHUMB              "thumb"
 #define SRV_CONF_KEY_AVCTHUMBLOG           "thumbLog"
@@ -61,6 +66,7 @@
 
 #define SRV_CONF_KEY_FRAME_THIN            "FrameThin"
 #define SRV_CONF_KEY_OUTQ_PREALLOC         "preallocBuffers"
+#define SRV_CONF_KEY_THREAD_STACKSIZE      "threadStackSize"
 #define SRV_CONF_KEY_FLVLIVE               "FLVLive"
 #define SRV_CONF_KEY_FLVLIVEMAX            "FLVLiveMax"
 #define SRV_CONF_KEY_FRAUDQSLOTS           "audioFrameQueueSlots"
@@ -109,6 +115,7 @@
 #define SRV_CONF_KEY_M2TPKTQSLOTS          "MPEG2TSCaptureQueueSlots"
 #define SRV_CONF_KEY_PROPFILE              "userCfg"
 #define SRV_CONF_KEY_RTMPLIVE              "RTMPLive"
+#define SRV_CONF_KEY_RTMPTLIVE             "RTMPTLive"
 #define SRV_CONF_KEY_RTMPLIVEMAX           "RTMPLiveMax"
 #define SRV_CONF_KEY_RTMPQSLOTS            "RTMPQueueSlots"
 #define SRV_CONF_KEY_RTMPQSZSLOT           "RTMPQueueSlotSize"

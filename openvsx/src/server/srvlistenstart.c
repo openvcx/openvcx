@@ -26,18 +26,23 @@
 
 #if defined(VSX_HAVE_STREAMER)
 
-static void srvlisten_http_proc(void *pArg) {
+static void srvlisten_media_proc(void *pArg) {
 
   SRV_LISTENER_CFG_T *pListenCfg = (SRV_LISTENER_CFG_T *) pArg;
   NETIO_SOCK_T netsocksrv;
   struct sockaddr_storage sa;
-  CLIENT_CONN_T *pConn;
+  CLIENT_CONN_T *pConnTmp;
   char tmp[128];
+  char bufses[32];
   const int backlog = NET_BACKLOG_DEFAULT;
   unsigned int tsMax = 0;
   unsigned int flvMax = 0;
   unsigned int mkvMax = 0;
+  unsigned int rtmpMax = 0;
+  unsigned int rtspMax = 0;
   int haveAuth = 0;
+  int haveRtmpAuth = 0;
+  int haveRtspAuth = 0;
   int haveToken = 0;
   int rc = 0;
 
@@ -45,10 +50,14 @@ static void srvlisten_http_proc(void *pArg) {
 
   if((pListenCfg->urlCapabilities & (URL_CAP_TSLIVE | URL_CAP_TSHTTPLIVE | URL_CAP_FLVLIVE |
                                      URL_CAP_MKVLIVE | URL_CAP_LIVE | URL_CAP_STATUS | URL_CAP_MOOFLIVE |
-                                     URL_CAP_PIP | URL_CAP_CONFIG | URL_CAP_BROADCAST)) == 0) {
-    LOG(X_WARNING("http listener exiting because no capabilities enabled on %s:%d"),
+                                     URL_CAP_PIP | URL_CAP_CONFIG | URL_CAP_BROADCAST |
+                                     URL_CAP_RTMPLIVE | URL_CAP_RTMPTLIVE | URL_CAP_RTSPLIVE)) == 0) {
+
+    LOG(X_WARNING("Server listener exiting because no capabilities enabled on %s:%d"),
          FORMAT_NETADDR(pListenCfg->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pListenCfg->sa)));
     logutil_tid_remove(pthread_self());
+    return;
+  } else if(!(pConnTmp = (CLIENT_CONN_T *) pListenCfg->pConnPool->pElements)) {
     return;
   }
 
@@ -72,11 +81,49 @@ static void srvlisten_http_proc(void *pArg) {
     haveToken = 1;
   }
 
-  pConn = (CLIENT_CONN_T *) pListenCfg->pConnPool->pElements;
-  if(pConn) {
-    tsMax = pConn->pStreamerCfg0->liveQs[0].max;
-    flvMax = pConn->pStreamerCfg0->action.liveFmts.out[STREAMER_OUTFMT_IDX_FLV].max;
-    mkvMax = pConn->pStreamerCfg0->action.liveFmts.out[STREAMER_OUTFMT_IDX_MKV].max;
+  tsMax = pConnTmp->pStreamerCfg0->liveQs[0].max;
+  flvMax = pConnTmp->pStreamerCfg0->action.liveFmts.out[STREAMER_OUTFMT_IDX_FLV].max;
+  mkvMax = pConnTmp->pStreamerCfg0->action.liveFmts.out[STREAMER_OUTFMT_IDX_MKV].max;
+  rtmpMax = pConnTmp->pStreamerCfg0->action.liveFmts.out[STREAMER_OUTFMT_IDX_RTMP].max;
+  rtspMax = pConnTmp->pStreamerCfg0->pRtspSessions->max;
+
+  if(HAVE_URL_CAP_RTMP(pListenCfg->urlCapabilities)) {
+
+    if(IS_AUTH_CREDENTIALS_SET(&pConnTmp->pStreamerCfg0->creds[STREAMER_AUTH_IDX_RTMP].stores[pListenCfg->idxCfg])) {
+      //
+      // RTMP server streaming credentials not implemented 
+      //
+      //haveRtmpAuth = 1;
+    }
+
+    LOG(X_INFO("rtmp %s%s available at "URL_RTMP_FMT_STR"%s max:%d"),
+           ((pListenCfg->netflags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : ""),
+           ((pListenCfg->urlCapabilities & URL_CAP_RTMPTLIVE) && !(pListenCfg->urlCapabilities & URL_CAP_RTMPLIVE) ?
+            "(tunneled only) " : ((pListenCfg->urlCapabilities & URL_CAP_RTMPTLIVE) ? "(tunneled) " : "")),
+           URL_PROTO_FMT2_ARGS(
+               (pListenCfg->netflags & NETIO_FLAG_SSL_TLS),
+                 FORMAT_NETADDR(sa, tmp, sizeof(tmp))), ntohs(INET_PORT(sa)),
+           (haveRtmpAuth ? " (Using auth)" : ""), rtmpMax);
+  }
+
+  if(pListenCfg->urlCapabilities & URL_CAP_RTSPLIVE) {
+
+    if(IS_AUTH_CREDENTIALS_SET(&pConnTmp->pStreamerCfg0->creds[STREAMER_AUTH_IDX_RTSP].stores[pListenCfg->idxCfg])) {
+      haveRtspAuth = 1;
+    }
+
+    if(pListenCfg->pCfg->prtspsessiontimeout && *pListenCfg->pCfg->prtspsessiontimeout != 0) {
+      snprintf(bufses, sizeof(bufses), ", timeout:%u sec", *pListenCfg->pCfg->prtspsessiontimeout);
+    } else {
+      bufses[0] = '\0';
+    }
+
+    LOG(X_INFO("rtsp %s available at "URL_RTSP_FMT_STR"%s max:%d%s"),
+             ((pListenCfg->netflags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : ""),
+             URL_PROTO_FMT2_ARGS(
+                 (pListenCfg->netflags & NETIO_FLAG_SSL_TLS),
+                   FORMAT_NETADDR(sa, tmp, sizeof(tmp))), ntohs(INET_PORT(sa)),
+             (haveRtspAuth ? " (Using auth)" : ""), rtspMax, bufses);
   }
 
   if((pListenCfg->urlCapabilities & URL_CAP_ROOTHTML)) {
@@ -174,15 +221,28 @@ static void srvlisten_http_proc(void *pArg) {
   return;
 }
 
-static void srv_rtmp_proc(void *pfuncarg) {
-  CLIENT_CONN_T *pConn = (CLIENT_CONN_T *) pfuncarg;
+int srv_rtmp_proc(CLIENT_CONN_T *pConn, const unsigned char *prebuf, unsigned int prebufsz, int istunneled) {
+  int rc = 0;
   STREAMER_CFG_T *pStreamerCfg = NULL;
   STREAMER_OUTFMT_T *pLiveFmt = NULL;
   STREAM_STATS_T *pstats = NULL;
   RTMP_CTXT_T rtmpCtxt;
   unsigned int numQFull = 0;
-  char tmp[128];
+  char tmps[2][128];
   OUTFMT_CFG_T *pOutFmt = NULL;
+
+  if(!pConn) {
+    return -1;
+  }
+
+  if(!HAVE_URL_CAP_RTMP(pConn->pListenCfg->urlCapabilities)) {
+    LOG(X_ERROR("Listener %s:%d not enabled for rtmp%s%s stream to %s:%d"), 
+          FORMAT_NETADDR(pConn->pListenCfg->sa, tmps[1], sizeof(tmps[1])), ntohs(INET_PORT(pConn->pListenCfg->sa)),
+          istunneled > 0 ? "t" : "",      
+          (pConn->sd.netsocket.flags & NETIO_FLAG_SSL_TLS) ? "s" : "", 
+          FORMAT_NETADDR(pConn->sd.sa, tmps[0], sizeof(tmps[0])), ntohs(INET_PORT(pConn->sd.sa)));
+    return -1;
+  }
 
   pStreamerCfg = GET_STREAMER_FROM_CONN(pConn);
 
@@ -219,6 +279,8 @@ static void srv_rtmp_proc(void *pfuncarg) {
       rtmpCtxt.pStreamMethod = &pstats->method;
     }
     rtmpCtxt.pOutFmt = pOutFmt;
+    rtmpCtxt.prebufdata = (unsigned char *) prebuf;
+    rtmpCtxt.prebufsz = prebufsz;
 
     if(!(pConn->pListenCfg->urlCapabilities & URL_CAP_RTMPLIVE)) {
       rtmpCtxt.donotunnel = 1;
@@ -232,15 +294,17 @@ static void srv_rtmp_proc(void *pfuncarg) {
     //
     outfmt_pause(pOutFmt, 0);
 
-    LOG(X_INFO("Starting rtmp%s stream[%d] %d/%d to %s:%d"), 
+    LOG(X_INFO("Starting rtmp%s%s stream[%d] %d/%d to %s:%d"), 
+          istunneled > 0 ? "t" : "",      
           (pConn->sd.netsocket.flags & NETIO_FLAG_SSL_TLS) ? "s" : "", pOutFmt->cbCtxt.idx, numQFull + 1, 
-          pLiveFmt->max, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
+          pLiveFmt->max, FORMAT_NETADDR(pConn->sd.sa, tmps[0], sizeof(tmps[0])), ntohs(INET_PORT(pConn->sd.sa)));
 
     rtmp_handle_conn(&rtmpCtxt);
 
-    LOG(X_INFO("Ending rtmp%s stream[%d] to %s:%d"), 
+    LOG(X_INFO("Ending rtmp%s%s stream[%d] to %s:%d"), 
+         istunneled > 0 ? "t" : "",      
          (pConn->sd.netsocket.flags & NETIO_FLAG_SSL_TLS) ? "s" : "", pOutFmt->cbCtxt.idx, 
-         FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
+         FORMAT_NETADDR(pConn->sd.sa, tmps[0], sizeof(tmps[0])), ntohs(INET_PORT(pConn->sd.sa)));
 
     //
     // Remove the livefmt cb
@@ -260,116 +324,35 @@ static void srv_rtmp_proc(void *pfuncarg) {
 
     LOG(X_WARNING("No rtmp resource available (max:%d) for %s:%d"), 
         (pLiveFmt ? pLiveFmt->max : 0),
-        FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
+        FORMAT_NETADDR(pConn->sd.sa, tmps[0], sizeof(tmps[0])), ntohs(INET_PORT(pConn->sd.sa)));
 
+    rc = -1;
   }
 
   netio_closesocket(&pConn->sd.netsocket);
 
-  LOG(X_DEBUG("RTMP connection thread ended %s:%d"), FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), 
+  LOG(X_DEBUG("RTMP connection thread ended %s:%d"), FORMAT_NETADDR(pConn->sd.sa, tmps[0], sizeof(tmps[0])), 
                                                      ntohs(INET_PORT(pConn->sd.sa)));
-
-}
-
-
-static void srvlisten_rtmplive_proc(void *pArg) {
-
-  SRV_LISTENER_CFG_T *pListenCfg = (SRV_LISTENER_CFG_T *) pArg;
-  CLIENT_CONN_T *pConn = NULL;
-  NETIO_SOCK_T netsocksrv;
-  int haveRtmpAuth = 0;
-  struct sockaddr_storage  sa;
-  int rc = 0;
-  const int backlog = NET_BACKLOG_DEFAULT;
-  char tmp[128];
-
-  logutil_tid_add(pthread_self(), pListenCfg->tid_tag);
-
-  memset(&netsocksrv, 0, sizeof(netsocksrv));
-  memcpy(&sa, &pListenCfg->sa, sizeof(sa));
-  netsocksrv.flags = pListenCfg->netflags;
-
-  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, backlog)) == INVALID_SOCKET) {
-    logutil_tid_remove(pthread_self());
-    return;
-  }
-
-  if((pConn = (CLIENT_CONN_T *) pListenCfg->pConnPool->pElements)) {
-    if(IS_AUTH_CREDENTIALS_SET(&pConn->pStreamerCfg0->creds[STREAMER_AUTH_IDX_RTMP].stores[pListenCfg->idxCfg])) {
-      //
-      // RTMP server streaming credentials not implemented 
-      //
-      //haveRtmpAuth = 1;
-    }
-  }
-
-  pthread_mutex_lock(&pListenCfg->mtx);
-  pListenCfg->pnetsockSrv = &netsocksrv; 
-  pthread_mutex_unlock(&pListenCfg->mtx);
-
-  LOG(X_INFO("rtmp %s%sserver available at "URL_RTMP_FMT_STR"%s max:%d"), 
-           ((pListenCfg->netflags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : ""), 
-           ((pListenCfg->urlCapabilities == URL_CAP_RTMPTLIVE) ? "(tunneled only) " : 
-            ((pListenCfg->urlCapabilities & URL_CAP_RTMPTLIVE) ? "(tunneled) " : "")),
-           URL_PROTO_FMT2_ARGS(
-               (pListenCfg->netflags & NETIO_FLAG_SSL_TLS),
-                 FORMAT_NETADDR(sa, tmp, sizeof(tmp))), ntohs(INET_PORT(sa)), 
-           (haveRtmpAuth ? " (Using auth)" : ""), pListenCfg->max);
-
-  //
-  // Service any client connections on the live listening port
-  //
-  rc = srvlisten_loop(pListenCfg, srv_rtmp_proc);
-
-  pthread_mutex_lock(&pListenCfg->mtx);
-  pListenCfg->pnetsockSrv = NULL; 
-  netio_closesocket(&netsocksrv);
-  pthread_mutex_unlock(&pListenCfg->mtx);
-
-  LOG(X_WARNING("rtmp listener thread exiting with code: %d"), rc);
-
-  logutil_tid_remove(pthread_self());
-
-  return;
-}
-
-int srvlisten_startrtmplive(SRV_LISTENER_CFG_T *pListenCfg) {
-  pthread_t ptdRtmpLive;
-  pthread_attr_t attrRtmpLive;
-  const char *s;
-  int rc = 0;
-
-  if(!pListenCfg || !pListenCfg->pConnPool || !pListenCfg->pCfg || pListenCfg->max <= 0) {
-    return -1;
-  }
-
-  if((pListenCfg->netflags & NETIO_FLAG_SSL_TLS) && !netio_ssl_enabled(1)) {
-    LOG(X_ERROR("SSL not enabled"));
-    return -1;
-  }
-
-  if((s = logutil_tid_lookup(pthread_self(), 0)) && s[0] != '\0') {
-    snprintf(pListenCfg->tid_tag, sizeof(pListenCfg->tid_tag), "%s-rtmp", s);
-  }
-  pthread_attr_init(&attrRtmpLive);
-  pthread_attr_setdetachstate(&attrRtmpLive, PTHREAD_CREATE_DETACHED);
-
-  if(pthread_create(&ptdRtmpLive,
-                    &attrRtmpLive,
-                  (void *) srvlisten_rtmplive_proc,
-                  (void *) pListenCfg) != 0) {
-
-    LOG(X_ERROR("Unable to create rtmp listener thread"));
-    return -1;
-  }
 
   return rc;
 }
 
-static void srv_rtsp_proc(void *pfuncarg) {
-  CLIENT_CONN_T *pConn = (CLIENT_CONN_T *) pfuncarg;
+int srv_rtsp_proc(CLIENT_CONN_T *pConn, const unsigned char *prebuf, unsigned int prebufsz) {
+  int rc = 0;
   RTSP_REQ_CTXT_T rtspCtxt;
-  char tmp[128];
+  char tmps[2][128];
+
+  if(!pConn) {
+    return -1;
+  }
+
+  if(!(pConn->pListenCfg->urlCapabilities & URL_CAP_RTSPLIVE)) {
+    LOG(X_ERROR("Listener %s:%d not enabled for rtsp%s stream to %s:%d"),
+          FORMAT_NETADDR(pConn->pListenCfg->sa, tmps[1], sizeof(tmps[1])), ntohs(INET_PORT(pConn->pListenCfg->sa)),
+          (pConn->sd.netsocket.flags & NETIO_FLAG_SSL_TLS) ? "s" : "",
+          FORMAT_NETADDR(pConn->sd.sa, tmps[0], sizeof(tmps[0])), ntohs(INET_PORT(pConn->sd.sa)));
+    return -1;
+  }
 
   memset(&rtspCtxt, 0, sizeof(rtspCtxt));
   rtspCtxt.pSd = &pConn->sd;
@@ -381,116 +364,21 @@ static void srv_rtsp_proc(void *pfuncarg) {
     rtspCtxt.pStreamerCfg = (STREAMER_CFG_T *) pConn->pStreamerCfg1;
   }
 
+  rtspCtxt.prebufdata = (unsigned char *) prebuf;
+  rtspCtxt.prebufsz = prebufsz;
+
   if(rtspCtxt.pStreamerCfg && ((STREAMER_CFG_T *)rtspCtxt.pStreamerCfg)->pRtspSessions) {
     rtsp_handle_conn(&rtspCtxt);
   }
 
   netio_closesocket(&pConn->sd.netsocket);
 
-  LOG(X_DEBUG("RTSP connection thread ended %s:%d"), FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)),
+  LOG(X_DEBUG("RTSP connection thread ended %s:%d"), FORMAT_NETADDR(pConn->sd.sa, tmps[0], sizeof(tmps[0])),
                                                      ntohs(INET_PORT(pConn->sd.sa)));
-}
-
-static void srvlisten_rtsplive_proc(void *pArg) {
-
-  SRV_LISTENER_CFG_T *pListenCfg = (SRV_LISTENER_CFG_T *) pArg;
-  CLIENT_CONN_T *pConn = NULL;
-  NETIO_SOCK_T netsocksrv;
-  struct sockaddr_storage  sa;
-  int haveRtspAuth = 0;
-  char tmp[128];
-  char bufses[32];
-  const int backlog = NET_BACKLOG_DEFAULT;
-  int rc = 0;
-
-  logutil_tid_add(pthread_self(), pListenCfg->tid_tag);
-
-  memset(&sa, 0, sizeof(sa));
-  memset(&netsocksrv, 0, sizeof(netsocksrv));
-  memcpy(&sa, &pListenCfg->sa, sizeof(sa));
-  netsocksrv.flags = pListenCfg->netflags;
-
-  if((NETIOSOCK_FD(netsocksrv) = net_listen((const struct sockaddr *) &sa, backlog)) == INVALID_SOCKET) {
-    logutil_tid_remove(pthread_self());
-    return;
-  }
-
-  if((pConn = (CLIENT_CONN_T *) pListenCfg->pConnPool->pElements)) {
-    if(IS_AUTH_CREDENTIALS_SET(&pConn->pStreamerCfg0->creds[STREAMER_AUTH_IDX_RTSP].stores[pListenCfg->idxCfg])) {
-      haveRtspAuth = 1;
-    }
-  }
-
-  pthread_mutex_lock(&pListenCfg->mtx);
-  pListenCfg->pnetsockSrv = &netsocksrv;
-  pthread_mutex_unlock(&pListenCfg->mtx);
-
-  if(pListenCfg->pCfg->prtspsessiontimeout && *pListenCfg->pCfg->prtspsessiontimeout != 0) {
-    snprintf(bufses, sizeof(bufses), ", timeout:%u sec", *pListenCfg->pCfg->prtspsessiontimeout);
-  } else {
-    bufses[0] = '\0';
-  }
-
-  LOG(X_INFO("rtsp %sserver available at "URL_RTSP_FMT_STR"%s max:%d%s"),
-           ((pListenCfg->netflags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : ""),
-           URL_PROTO_FMT2_ARGS(
-               (pListenCfg->netflags & NETIO_FLAG_SSL_TLS),
-                 FORMAT_NETADDR(sa, tmp, sizeof(tmp))), ntohs(INET_PORT(sa)), 
-           (haveRtspAuth ? " (Using auth)" : ""), pListenCfg->max, bufses);
-
-  //
-  // Service any client connections on the rtsp listening port
-  //
-  rc = srvlisten_loop(pListenCfg, srv_rtsp_proc);
-
-  pthread_mutex_lock(&pListenCfg->mtx);
-  pListenCfg->pnetsockSrv = NULL; 
-  netio_closesocket(&netsocksrv);
-  pthread_mutex_unlock(&pListenCfg->mtx);
-
-  LOG(X_DEBUG("rtsp listener thread exiting with code: %d"), rc);
-
-  logutil_tid_remove(pthread_self());
-
-  return;
-}
-
-int srvlisten_startrtsplive(SRV_LISTENER_CFG_T *pListenCfg) {
-  pthread_t ptdRtspLive;
-  pthread_attr_t attrRtspLive;
-  const char *s;
-  int rc = 0;
-
-  if(!pListenCfg || !pListenCfg->pConnPool || pListenCfg->max <= 0 || 
-     !pListenCfg->pCfg || !pListenCfg->pCfg->cfgShared.pRtspSessions || 
-     pListenCfg->pCfg->cfgShared.pRtspSessions->max <= 0) {
-    return -1;
-  }
-
-  if((pListenCfg->netflags & NETIO_FLAG_SSL_TLS) && !netio_ssl_enabled(1)) {
-    LOG(X_ERROR("SSL not enabled"));
-    return -1;
-  }
-
-  if((s = logutil_tid_lookup(pthread_self(), 0)) && s[0] != '\0') {
-    snprintf(pListenCfg->tid_tag, sizeof(pListenCfg->tid_tag), "%s-rtsp", s);
-  }
-  pthread_attr_init(&attrRtspLive);
-  pthread_attr_setdetachstate(&attrRtspLive, PTHREAD_CREATE_DETACHED);
-
-  if(pthread_create(&ptdRtspLive,
-                    &attrRtspLive,
-                  (void *) srvlisten_rtsplive_proc,
-                  (void *) pListenCfg) != 0) {
-
-    LOG(X_ERROR("Unable to create rtsp listener thread"));
-    return -1;
-  }
-
   return rc;
 }
 
-int srvlisten_starthttp(SRV_LISTENER_CFG_T *pListenCfg, int async) {
+int srvlisten_startmediasrv(SRV_LISTENER_CFG_T *pListenCfg, int async) {
   pthread_t ptdTsLive;
   pthread_attr_t attrTsLive;
   const char *s;
@@ -508,13 +396,14 @@ int srvlisten_starthttp(SRV_LISTENER_CFG_T *pListenCfg, int async) {
   if(async) {
 
     if((s = logutil_tid_lookup(pthread_self(), 0)) && s[0] != '\0') {
-      snprintf(pListenCfg->tid_tag, sizeof(pListenCfg->tid_tag), "%s-http", s);
+      snprintf(pListenCfg->tid_tag, sizeof(pListenCfg->tid_tag), "%s-media", s);
     }
-    pthread_attr_init(&attrTsLive);
-    pthread_attr_setdetachstate(&attrTsLive, PTHREAD_CREATE_DETACHED);
+
+    PHTREAD_INIT_ATTR(&attrTsLive);
+
     if(pthread_create(&ptdTsLive,
                       &attrTsLive,
-                    (void *) srvlisten_http_proc,
+                    (void *) srvlisten_media_proc,
                     (void *) pListenCfg) != 0) {
 
       LOG(X_ERROR("Unable to create live listener thread"));
@@ -522,7 +411,7 @@ int srvlisten_starthttp(SRV_LISTENER_CFG_T *pListenCfg, int async) {
     }
 
   } else {
-    srvlisten_http_proc(pListenCfg);
+    srvlisten_media_proc(pListenCfg);
     rc = 0;
   }
 

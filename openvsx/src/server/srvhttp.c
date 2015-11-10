@@ -911,11 +911,11 @@ int http_resp_sendfile(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus,
 
   if(!srv_ctrl_islegal_fpath(path)) {
 
-    LOG(X_ERROR("Illegal file path '%s' referenced by URL '%s'"), path, pConn->httpReq.url);
+    LOG(X_ERROR("Illegal file path '%s' referenced by URL '%s'"), path, pConn->phttpReq->url);
     if(pHttpStatus) {
       *pHttpStatus = HTTP_STATUS_NOTFOUND;
     } else {
-      http_resp_error(&pConn->sd, &pConn->httpReq, HTTP_STATUS_NOTFOUND, 1, NULL, NULL);
+      http_resp_error(&pConn->sd, pConn->phttpReq, HTTP_STATUS_NOTFOUND, 1, NULL, NULL);
     }
     return -1;
 
@@ -925,13 +925,13 @@ int http_resp_sendfile(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus,
     if(pHttpStatus) {
       *pHttpStatus = HTTP_STATUS_FORBIDDEN;
     } else {
-      http_resp_error(&pConn->sd, &pConn->httpReq, HTTP_STATUS_FORBIDDEN, 1, NULL, NULL);
+      http_resp_error(&pConn->sd, pConn->phttpReq, HTTP_STATUS_FORBIDDEN, 1, NULL, NULL);
     }
     return -1;
 
   }
 
-  rc = resp_sendfile(&pConn->sd, &pConn->httpReq, path, contentType, etag);
+  rc = resp_sendfile(&pConn->sd, pConn->phttpReq, path, contentType, etag);
 
   return rc;
 }

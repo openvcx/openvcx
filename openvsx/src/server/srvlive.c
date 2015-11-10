@@ -56,11 +56,11 @@ static int http_check_pass(const CLIENT_CONN_T *pConn) {
   int rc = 0;
 
   if(pConn->pCfg->livepwd &&
-     (!(parg = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->httpReq.uriPairs, "pass")) ||
+     (!(parg = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->phttpReq->uriPairs, "pass")) ||
        strcmp(pConn->pCfg->livepwd, parg))) {
 
     LOG(X_WARNING("Invalid password for :%d%s from %s:%d (%d char given)"),
-         ntohs(INET_PORT(pConn->pListenCfg->sa)), pConn->httpReq.url,
+         ntohs(INET_PORT(pConn->pListenCfg->sa)), pConn->phttpReq->url,
          FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)),
          parg ? strlen(parg) : 0);
 
@@ -226,7 +226,7 @@ static int get_output_idx(const CLIENT_CONN_T *pConn,
   //
   // Obtain the requested xcode output outidx from the HTTP URI such as '/rtmp/2'
   //
-  if((ioutidx = outfmt_getoutidx(pConn->httpReq.puri, NULL)) < 0 ||
+  if((ioutidx = outfmt_getoutidx(pConn->phttpReq->puri, NULL)) < 0 ||
      ioutidx >= IXCODE_VIDEO_OUT_MAX) {
     ioutidx = 0;
   } else if(ioutidx > 0) {
@@ -239,7 +239,7 @@ static int get_output_idx(const CLIENT_CONN_T *pConn,
         sprintf(stroutidx, "/%d", ioutidx + 1);
       }
       LOG(X_DEBUG("Set %s index file output format index to[%d] url:'%s', for %s:%d"), url, ioutidx,
-        pConn->httpReq.puri, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
+        pConn->phttpReq->puri, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
     }
   }
   *poutidx = ioutidx;
@@ -409,9 +409,71 @@ static int get_token_uriparam(char *tokenstr, unsigned int sztokenstr, const CLI
   int rc = 0;
 
   rc = srv_write_authtoken(tokenstr, sztokenstr, pConn->pListenCfg->pAuthTokenId, 
-                conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->httpReq.uriPairs, VSX_URI_TOKEN_QUERY_PARAM), 1);
+                conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->phttpReq->uriPairs, VSX_URI_TOKEN_QUERY_PARAM), 1);
   return rc;
 }
+
+const SRV_LISTENER_CFG_T *srv_ctrl_findlistener(const SRV_LISTENER_CFG_T *arrCfgs,
+                                                unsigned int maxCfgs, enum URL_CAPABILITY urlCap,
+                                                NETIO_FLAG_T netflags, NETIO_FLAG_T netflagsMask,
+                                                int preferredPort) {
+  unsigned int idx;
+  const SRV_LISTENER_CFG_T *pListener = NULL;
+
+  if(arrCfgs) {
+
+    for(idx = 0; idx < maxCfgs; idx++) {
+
+      VSX_DEBUG_LIVE( 
+        LOG(X_DEBUGV("LIVE - srv_ctrl_findlistener search idx[%d]/%d: 0x%x, active: %d, mask: 0x%x (match: 0x%x), urlCap: 0x%x & urlCap: 0x%x, port: %d == %d"), 
+            idx, maxCfgs, &arrCfgs[idx], arrCfgs[idx].active, netflagsMask, (arrCfgs[idx].netflags & netflagsMask), arrCfgs[idx].urlCapabilities, urlCap, htons(INET_PORT(arrCfgs[idx].sa)), preferredPort); );
+
+      //
+      // Find by matching by URL_CAP
+      //
+      if(arrCfgs[idx].active && (arrCfgs[idx].urlCapabilities & urlCap)) {
+
+        //
+        // Find by matching by netflags such as NETIO_FLAG_SSL_TLS
+        //
+        if(netflagsMask == 0 || (arrCfgs[idx].netflags & netflagsMask) == netflags) {
+
+          if( preferredPort == 0 || preferredPort == htons(INET_PORT(arrCfgs[idx].sa))) {
+            VSX_DEBUG_LIVE( LOG(X_DEBUGV("LIVE - srv_ctrl_findlistener %smatch"), pListener ? "better " : "" ); );
+            pListener = &arrCfgs[idx];
+            if(preferredPort == 0) { 
+              break;
+            }
+          }
+
+        }
+
+      }
+    }
+
+  }
+
+  return pListener;
+}
+
+static const SRV_LISTENER_CFG_T *findlistener(CLIENT_CONN_T *pConn,
+                                              enum URL_CAPABILITY urlCap,
+                                              int preferredPort) {
+  const SRV_LISTENER_CFG_T *pListener = NULL;
+
+  //
+  // Try to find an SSL/TLS listener first
+  //
+  if(!(pListener = srv_ctrl_findlistener(pConn->pCfg->pListenHttp, SRV_LISTENER_MAX, 
+                                  urlCap, pConn->pListenCfg->netflags, NETIO_FLAG_SSL_TLS, preferredPort))) {
+
+        pListener = srv_ctrl_findlistener(pConn->pCfg->pListenHttp, SRV_LISTENER_MAX, 
+                                  urlCap, 0, 0, preferredPort);
+  }
+
+  return pListener;
+}
+
 
 static int resp_index_file(CLIENT_CONN_T *pConn, 
                            const char *pargfile, 
@@ -432,10 +494,9 @@ static int resp_index_file(CLIENT_CONN_T *pConn,
   int *p_action = NULL;
   const char *fileExt = NULL;
   CB_UPDATE_PROTO_INDEXFILE cbUpdateProtoIndexFile = NULL;
-  const SRV_LISTENER_CFG_T *pListenSearch = pConn->pCfg->pListenHttp;
-  unsigned int maxListener = SRV_LISTENER_MAX_HTTP;
   unsigned char buf[PREPROCESS_FILE_LEN_MAX];
   STREAMER_CFG_T *pStreamerCfg = NULL;
+  int preferredPort = 0;
 
   pStreamerCfg = GET_STREAMER_FROM_CONN(pConn);
 
@@ -466,34 +527,55 @@ static int resp_index_file(CLIENT_CONN_T *pConn,
       p_action = pStreamerCfg ? &pStreamerCfg->action.do_rtmplive : NULL;
       fileExt = NULL;
       cbUpdateProtoIndexFile = update_rtmp_indexfile;
-      maxListener = SRV_LISTENER_MAX_RTMP;
-      pListenSearch = pConn->pCfg->pListenRtmp;
 
-      //
-      // Prefer RTMP over RTMPT
-      //
-      if(!pListenCfg && (urlCap & (URL_CAP_RTMPLIVE | URL_CAP_RTMPTLIVE))) {
+      if(urlCap == URL_CAP_RTMPTLIVE) {
 
-        if(!(pListenCfg = srv_ctrl_findlistener(pListenSearch, maxListener, URL_CAP_RTMPLIVE,
-                                     pConn->pListenCfg->netflags, NETIO_FLAG_SSL_TLS))) {
-           pListenCfg = srv_ctrl_findlistener(pListenSearch, maxListener, URL_CAP_RTMPLIVE, 0, 0);
+        preferredPort = pListenCfg ? htons(INET_PORT(pListenCfg->sa)) : htons(INET_PORT(pConn->pListenCfg->sa));
+        VSX_DEBUG_LIVE( LOG(X_DEBUG("LIVE - RTMP try URL_CAP_RTMPTLIVE on http port, then rtmp port")); );
+
+        //
+        // /rtmpt Try to find tunnel listener on HTTP port of this live handler
+        //
+        if(!(pListenCfg = findlistener(pConn, urlCap, preferredPort))) {
+          // Try to find tunnel listener on default RTMP port
+          pListenCfg = findlistener(pConn, urlCap, RTMP_PORT_DEFAULT);
         }
+      } else {
+
+        VSX_DEBUG_LIVE( LOG(X_DEBUG("LIVE - RTMP try URL_CAP_RTMPLIVE on http port, then rtmp port")); );
+
+        if(!(pListenCfg = findlistener(pConn, URL_CAP_RTMPLIVE, preferredPort))) {
+          pListenCfg = findlistener(pConn, URL_CAP_RTMPLIVE, RTMP_PORT_DEFAULT);
+        }
+
         if(!pListenCfg) {
-          urlCap = URL_CAP_RTMPTLIVE;
+          VSX_DEBUG_LIVE( LOG(X_DEBUG("LIVE - RTMP try urlCap: 0x%x on http port, then rtmp port"), urlCap); );
+          if(!(pListenCfg = findlistener(pConn, urlCap, htons(INET_PORT(pConn->pListenCfg->sa))))) {
+            pListenCfg = findlistener(pConn, urlCap, RTMP_PORT_DEFAULT);
+          }
         }
-  
+
       }
+
+      //if(!pListenCfg) {
+      //  urlCap = URL_CAP_RTMPTLIVE;
+      //}
+
+        VSX_DEBUG_LIVE(LOG(X_DEBUG("LIVE - resp_index_file RTMP urlCap: 0x%x, preferredPort: %d, pListenCfg: 0x%x, rtmp: 0x%x, rtmpt: 0x%x"), urlCap, preferredPort, pListenCfg, URL_CAP_RTMPLIVE, URL_CAP_RTMPTLIVE); );
 
       break;
 
     case URL_CAP_RTSPLIVE:
       protoUrl = VSX_RTSP_URL;
-      protoLiveUrl = VSX_LIVE_URL;
+      //protoLiveUrl = VSX_LIVE_URL;
+      protoLiveUrl = VSX_RTSPLIVE_URL;
       p_action = pStreamerCfg ? &pStreamerCfg->action.do_rtsplive : NULL;
       fileExt = NULL;
       cbUpdateProtoIndexFile = update_rtsp_indexfile;
-      maxListener = SRV_LISTENER_MAX_RTSP;
-      pListenSearch = pConn->pCfg->pListenRtsp;
+
+      preferredPort = RTSP_PORT_DEFAULT;
+      pListenCfg = findlistener(pConn, URL_CAP_RTSPLIVE, preferredPort);
+
       break;
 
     default:
@@ -503,10 +585,8 @@ static int resp_index_file(CLIENT_CONN_T *pConn,
   //
   // Find the correct listener for the live data source
   //
-  if(!pListenCfg &&
-    !(pListenCfg = srv_ctrl_findlistener(pListenSearch, maxListener, urlCap,
-                                     pConn->pListenCfg->netflags, NETIO_FLAG_SSL_TLS))) {
-    pListenCfg = srv_ctrl_findlistener(pListenSearch, maxListener, urlCap, 0, 0);
+  if(!pListenCfg) {
+    pListenCfg = findlistener(pConn, urlCap, 0);
   }
 
   //
@@ -549,7 +629,7 @@ static int resp_index_file(CLIENT_CONN_T *pConn,
 
       // Workaround flashplayer (flv/rtmp) bug where '&' is not handled in query string for key with no value
       snprintf(tmp, sizeof(tmp), "/live%s?%s%s%d", fileExt ? fileExt : "", tokenstr, 
-              tokenstr[0] != '\0' ? ((IS_URL_CAP_RTMP(urlCap) || urlCap == URL_CAP_FLVLIVE) ? "," : "&") : "",
+              tokenstr[0] != '\0' ? ((HAVE_URL_CAP_RTMP(urlCap) || urlCap == URL_CAP_FLVLIVE) ? "," : "&") : "",
               (int) (random() % RAND_MAX));
     }
 
@@ -560,10 +640,10 @@ static int resp_index_file(CLIENT_CONN_T *pConn,
       snprintf(rsrcUrl, sizeof(rsrcUrl), "%s", tmp);
     } else {
 
-      if(urlCap == URL_CAP_RTMPTLIVE) {
+      if((urlCap & URL_CAP_RTMPTLIVE) && !(urlCap & URL_CAP_RTMPLIVE)) {
         snprintf(rsrcUrl, sizeof(rsrcUrl), URL_RTMPT_FMT_STR"%s%s%s",
                URL_HTTP_FMT_ARGS(pListenCfg), protoLiveUrl, stroutidx, tmp);
-      } else if(IS_URL_CAP_RTMP(urlCap)) {
+      } else if(HAVE_URL_CAP_RTMP(urlCap)) {
         snprintf(rsrcUrl, sizeof(rsrcUrl), URL_RTMP_FMT_STR"%s%s%s",
                URL_HTTP_FMT_ARGS(pListenCfg), protoLiveUrl, stroutidx, tmp);
       } else if(urlCap == URL_CAP_RTSPLIVE) {
@@ -582,9 +662,9 @@ static int resp_index_file(CLIENT_CONN_T *pConn,
 
   if(rc >= 0 && (rc = cbUpdateProtoIndexFile(pConn, pStreamerCfg, rsrcUrl,  outidx, (char *) buf,
                                  sizeof(buf))) > 0) {
-    rc = http_resp_send(&pConn->sd, &pConn->httpReq, HTTP_STATUS_OK, buf, rc);
+    rc = http_resp_send(&pConn->sd, pConn->phttpReq, HTTP_STATUS_OK, buf, rc);
   } else {
-    http_resp_error(&pConn->sd, &pConn->httpReq, HTTP_STATUS_SERVERERROR, 0, strerror, NULL);
+    http_resp_error(&pConn->sd, pConn->phttpReq, HTTP_STATUS_SERVERERROR, 0, strerror, NULL);
     rc = -1;
   }
 
@@ -627,7 +707,7 @@ int srv_ctrl_flvlive(CLIENT_CONN_T *pConn) {
   //
   // Obtain the requested xcode output outidx specified in the URI such as '/flv/2'
   //
-  if((outidx = outfmt_getoutidx(pConn->httpReq.puri, NULL)) < 0 || outidx >= IXCODE_VIDEO_OUT_MAX) {
+  if((outidx = outfmt_getoutidx(pConn->phttpReq->puri, NULL)) < 0 || outidx >= IXCODE_VIDEO_OUT_MAX) {
     outidx = 0;
   } else if(outidx > 0) {
     if(pStreamerCfg && !pStreamerCfg->xcode.vid.out[outidx].active) {
@@ -635,7 +715,7 @@ int srv_ctrl_flvlive(CLIENT_CONN_T *pConn) {
       pLiveFmt = NULL;
     } else {
       LOG(X_DEBUG("Set "VSX_FLVLIVE_URL" output format index to[%d] url:'%s', for %s:%d"), outidx,
-        pConn->httpReq.puri, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
+        pConn->phttpReq->puri, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
     }
   }
 
@@ -658,7 +738,7 @@ int srv_ctrl_flvlive(CLIENT_CONN_T *pConn) {
 
     memset(&flvCtxt, 0, sizeof(flvCtxt));
     flvCtxt.pSd = &pConn->sd;
-    flvCtxt.pReq = &pConn->httpReq;
+    flvCtxt.pReq = pConn->phttpReq;
     flvCtxt.avBufferDelaySec = pLiveFmt->bufferDelaySec;
     flvCtxt.pnovid = &pStreamerCfg->novid;
     flvCtxt.pnoaud = &pStreamerCfg->noaud;
@@ -793,7 +873,7 @@ int srv_ctrl_mkvlive(CLIENT_CONN_T *pConn) {
   //
   // Obtain the requested xcode output outidx specified in the URI such as '/mkv/2'
   //
-  if((outidx = outfmt_getoutidx(pConn->httpReq.puri, NULL)) < 0 || outidx >= IXCODE_VIDEO_OUT_MAX) {
+  if((outidx = outfmt_getoutidx(pConn->phttpReq->puri, NULL)) < 0 || outidx >= IXCODE_VIDEO_OUT_MAX) {
     outidx = 0;
   } else if(outidx > 0) {
     if(pStreamerCfg && !pStreamerCfg->xcode.vid.out[outidx].active) {
@@ -801,7 +881,7 @@ int srv_ctrl_mkvlive(CLIENT_CONN_T *pConn) {
       pLiveFmt = NULL;
     } else {
       LOG(X_DEBUG("Set "VSX_MKVLIVE_URL" output format index to[%d] url:'%s', for %s:%d"), outidx,
-        pConn->httpReq.puri, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
+        pConn->phttpReq->puri, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
     }
   }
 
@@ -824,7 +904,7 @@ int srv_ctrl_mkvlive(CLIENT_CONN_T *pConn) {
 
     memset(&mkvCtxt, 0, sizeof(mkvCtxt));
     mkvCtxt.pSd = &pConn->sd;
-    mkvCtxt.pReq = &pConn->httpReq;
+    mkvCtxt.pReq = pConn->phttpReq;
     mkvCtxt.avBufferDelaySec = pLiveFmt->bufferDelaySec;
     mkvCtxt.pnovid = &pStreamerCfg->novid;
     mkvCtxt.pnoaud = &pStreamerCfg->noaud;
@@ -917,7 +997,7 @@ int srv_ctrl_mkvlive(CLIENT_CONN_T *pConn) {
         (pLiveFmt ? pLiveFmt->max : 0),
         FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
 
-    rc = http_resp_send(&pConn->sd, &pConn->httpReq, HTTP_STATUS_SERVERERROR,
+    rc = http_resp_send(&pConn->sd, pConn->phttpReq, HTTP_STATUS_SERVERERROR,
       (unsigned char *) HTTP_STATUS_STR_SERVERERROR, strlen(HTTP_STATUS_STR_SERVERERROR));
 
     rc = -1;
@@ -970,7 +1050,7 @@ int srv_ctrl_tslive(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
   //
   // Obtain the requested xcode output outidx specified in the URI such as '/tslive/2'
   //
-  if((outidx = outfmt_getoutidx(pConn->httpReq.puri, NULL)) < 0 ||
+  if((outidx = outfmt_getoutidx(pConn->phttpReq->puri, NULL)) < 0 ||
      outidx >= IXCODE_VIDEO_OUT_MAX) {
     outidx = 0;
   } else if(outidx > 0) {
@@ -979,7 +1059,7 @@ int srv_ctrl_tslive(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
        return -1;
     } else {
       LOG(X_DEBUG("Set "VSX_TSLIVE_URL" output format index to[%d] url:'%s', for %s:%d"), outidx,
-        pConn->httpReq.puri, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
+        pConn->phttpReq->puri, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
     }
   }
   
@@ -1008,7 +1088,7 @@ int srv_ctrl_tslive(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
     queueSz = pLiveQ->qCfg.maxPkts;
   }
 
-  if(rc == 0 && (parg = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->httpReq.uriPairs, "queue"))) {
+  if(rc == 0 && (parg = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->phttpReq->uriPairs, "queue"))) {
     if((queueSz = atoi(parg)) > pLiveQ->qCfg.growMaxPkts) {
       queueSz = pLiveQ->qCfg.growMaxPkts;
     }
@@ -1094,7 +1174,7 @@ int srv_ctrl_tslive(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
   //
   if(rc != 0) {
     if(presp) {
-      http_resp_send(&pConn->sd, &pConn->httpReq, *pHttpStatus, presp, lenresp);
+      http_resp_send(&pConn->sd, pConn->phttpReq, *pHttpStatus, presp, lenresp);
       *pHttpStatus = HTTP_STATUS_OK;
     }
     if(pQueue) {
@@ -1124,7 +1204,7 @@ int srv_ctrl_tslive(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus) {
   }
 
   *pHttpStatus = HTTP_STATUS_OK;
-  rc = http_resp_sendtslive(&pConn->sd, &pConn->httpReq, pQueue, CONTENT_TYPE_MP2TS);
+  rc = http_resp_sendtslive(&pConn->sd, pConn->phttpReq, pQueue, CONTENT_TYPE_MP2TS);
 
   LOG(X_INFO("Ending tslive stream[%d] to %s:%d"), liveQIdx,
            FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
@@ -1170,7 +1250,7 @@ static int get_requested_outidx(const CLIENT_CONN_T *pConn, STREAMER_CFG_T *pStr
   const char *pend;
   char tmp[128];
 
-  *ppuri = pConn->httpReq.puri;
+  *ppuri = pConn->phttpReq->puri;
   pend = *ppuri;
 
   //
@@ -1199,7 +1279,7 @@ static int get_requested_outidx(const CLIENT_CONN_T *pConn, STREAMER_CFG_T *pStr
         rc = -1;
       } else {
         LOG(X_DEBUG("Set output format index to[%d] url:'%s', for %s:%d"), *poutidx,
-            pConn->httpReq.puri, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
+            pConn->phttpReq->puri, FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)));
       }
     }
   }
@@ -1342,7 +1422,7 @@ int srv_ctrl_mooflive(CLIENT_CONN_T *pConn,
 
   VSX_DEBUG_LIVE(LOG(X_DEBUG("LIVE - srv_ctrl_mooflive uri: '%s', virt-file: '%s', on-disk: '%s', "
                   "prefix: '%s', outidx: %d, pargrsrc: '%s', pargpath: '%s'"),
-                   pConn->httpReq.puri, virtFilePath, filePath, uriPrefix, outidx, pargrsrc, pargpath));
+                   pConn->phttpReq->puri, virtFilePath, filePath, uriPrefix, outidx, pargrsrc, pargpath));
 
   //
   // Return rsrc/dash_embed.html file
@@ -1360,10 +1440,8 @@ int srv_ctrl_mooflive(CLIENT_CONN_T *pConn,
     //
     // Find the correct listener for the flvlive FLV data source
     //
-    if(!(pListenHttp = srv_ctrl_findlistener(pConn->pCfg->pListenHttp, SRV_LISTENER_MAX_HTTP, URL_CAP_MOOFLIVE,
-                                     pConn->pListenCfg->netflags, NETIO_FLAG_SSL_TLS))) {
-      pListenHttp = srv_ctrl_findlistener(pConn->pCfg->pListenHttp, SRV_LISTENER_MAX_HTTP, 
-                                               URL_CAP_MOOFLIVE, 0, 0);
+    if(!pListenHttp) {
+      pListenHttp = findlistener(pConn, URL_CAP_MOOFLIVE, 0);
       //
       // pListenHttp may be null when called from mgr context
       //
@@ -1397,7 +1475,7 @@ int srv_ctrl_mooflive(CLIENT_CONN_T *pConn,
       VSX_DEBUG_LIVE(LOG(X_DEBUG("LIVE - srv_ctrl_mooflive sending substituted index file with media: '%s'"
                                    ", hostpath: '%s', virtFilePath: '%s'"), url, hostpath, virtFilePath));
 
-      rc = http_resp_send(&pConn->sd, &pConn->httpReq, HTTP_STATUS_OK, buf, rc);
+      rc = http_resp_send(&pConn->sd, pConn->phttpReq, HTTP_STATUS_OK, buf, rc);
     } else {
       *pHttpStatus = HTTP_STATUS_SERVERERROR;
       rc = -1; 
@@ -1453,7 +1531,7 @@ int srv_ctrl_mooflive(CLIENT_CONN_T *pConn,
     return -1;
   }
 
-  //fprintf(stderr, "HTTP DASH REQUEST /dash uri:'%s' ('%s'), pargpath:'%s', pargsrc:'%s' rc:%d prfx:'%s' fp:'%s', path:'%s',outdir:'%s', outdir_ts:'%s'\n", pConn->httpReq.puri, puri, pargpath, pargrsrc, rc, uriPrefix, filePath, path, pConn->pCfg->pMoofCtxts[outidx]->dashInitCtxt.outdir, pConn->pCfg->pMoofCtxts[outidx]->dashInitCtxt.outdir_ts);
+  //fprintf(stderr, "HTTP DASH REQUEST /dash uri:'%s' ('%s'), pargpath:'%s', pargsrc:'%s' rc:%d prfx:'%s' fp:'%s', path:'%s',outdir:'%s', outdir_ts:'%s'\n", pConn->phttpReq->puri, puri, pargpath, pargrsrc, rc, uriPrefix, filePath, path, pConn->pCfg->pMoofCtxts[outidx]->dashInitCtxt.outdir, pConn->pCfg->pMoofCtxts[outidx]->dashInitCtxt.outdir_ts);
 
   if(rc >= 0) {
 
@@ -1513,14 +1591,15 @@ int srv_ctrl_rtmp(CLIENT_CONN_T *pConn,
 
   pStreamerCfg = GET_STREAMER_FROM_CONN(pConn);
 
-  VSX_DEBUG_LIVE(LOG(X_DEBUG("LIVE - srv_ctrl_rtmp file: '%s', is_remoteargfile: %d, outidx: %d, method: %s"), 
-                             pargfile, is_remoteargfile, outidx, devtype_methodstr(streamMethod)));
+  VSX_DEBUG_LIVE( LOG(X_DEBUG("LIVE - srv_ctrl_rtmp file: '%s', is_remoteargfile: %d, outidx: %d, method: %s, "
+                              "pListen: 0x%x, urlCap: 0x%x"), pargfile, is_remoteargfile, outidx, 
+               devtype_methodstr(streamMethod), pListenRtmp, pListenRtmp ? pListenRtmp->urlCapabilities : -1););
 
   //
   // Return the rsrc/rtmp_embed.html file with all substitions
   //
   return resp_index_file(pConn, pargfile, is_remoteargfile, pListenRtmp, 
-           streamMethod == STREAM_METHOD_RTMPT ? URL_CAP_RTMPTLIVE :  (URL_CAP_RTMPLIVE | URL_CAP_RTMPTLIVE));
+           streamMethod == STREAM_METHOD_RTMPT ? URL_CAP_RTMPTLIVE : (URL_CAP_RTMPLIVE | URL_CAP_RTMPTLIVE));
 }
 
 int srv_ctrl_rtsp(CLIENT_CONN_T *pConn, 
@@ -1540,28 +1619,6 @@ int srv_ctrl_rtsp(CLIENT_CONN_T *pConn,
   return resp_index_file(pConn, pargfile, is_remoteargfile, pListenRtsp, URL_CAP_RTSPLIVE);
 
   return rc;
-}
-
-const SRV_LISTENER_CFG_T *srv_ctrl_findlistener(const SRV_LISTENER_CFG_T *arrCfgs,
-                                                unsigned int maxCfgs, enum URL_CAPABILITY urlCap,
-                                                NETIO_FLAG_T netflags, NETIO_FLAG_T netflagsMask) {
-  unsigned int idx;
-LOG(X_DEBUG(" RTMP 0x%x RTMPT 0x%x"), URL_CAP_RTMPLIVE, URL_CAP_RTMPTLIVE);
-  if(arrCfgs) {
-
-    for(idx = 0; idx < maxCfgs; idx++) {
-      VSX_DEBUG_LIVE( LOG(X_DEBUGV("LIVE - srv_ctrl_findlistener search idx[%d]/%d active: %d, urlCap: 0x%x & urlCap: 0x%x"), idx, maxCfgs, arrCfgs[idx].active, arrCfgs[idx].urlCapabilities, urlCap); );
-      if(arrCfgs[idx].active && (arrCfgs[idx].urlCapabilities & urlCap)) {
-        if(netflagsMask == 0 || (arrCfgs[idx].netflags & netflagsMask) == netflags) {
-          return  &arrCfgs[idx];
-        }
-
-      }
-    }
-
-  }
-
-  return NULL;
 }
 
 int srv_ctrl_httplive(CLIENT_CONN_T *pConn, 
@@ -1623,7 +1680,7 @@ int srv_ctrl_httplive(CLIENT_CONN_T *pConn,
 
   VSX_DEBUG_LIVE(LOG(X_DEBUG("LIVE - srv_ctrl_httplive uri: '%s', virt-file: '%s', on-disk: '%s', "
         "prefix: '%s', haveoutidx: %d, outidx: %d, pargrsrc: '%s', pargpath: '%s'"), 
-         pConn->httpReq.puri, virtFilePath, filePath, uriPrefix, haveoutidx, outidx, pargrsrc, pargpath));
+         pConn->phttpReq->puri, virtFilePath, filePath, uriPrefix, haveoutidx, outidx, pargrsrc, pargpath));
 
   //
   // Return rsrc/httplive_embed.html file
@@ -1671,10 +1728,8 @@ int srv_ctrl_httplive(CLIENT_CONN_T *pConn,
       // Find the correct listener for the data source
       // and construct the hostname url for the .m3u8 master playlist
       //
-      if(!(pListenHttp = srv_ctrl_findlistener(pConn->pCfg->pListenHttp, SRV_LISTENER_MAX_HTTP, 
-                                  URL_CAP_TSHTTPLIVE, pConn->pListenCfg->netflags, NETIO_FLAG_SSL_TLS))) {
-        pListenHttp = srv_ctrl_findlistener(pConn->pCfg->pListenHttp, SRV_LISTENER_MAX_HTTP, 
-                                  URL_CAP_TSHTTPLIVE, 0, 0);
+      if(!pListenHttp) {
+        pListenHttp = findlistener(pConn, URL_CAP_TSHTTPLIVE, 0);
         //
         // pListenHttp may be null when called from mgr context
         //
@@ -1706,7 +1761,7 @@ int srv_ctrl_httplive(CLIENT_CONN_T *pConn,
                ", hostpath: '%s', virtFilePath: '%s' ( ext: '%s', count: %d) "), 
                url, hostpath, virtFilePath, pend, pConn->pCfg->pHttpLiveDatas[0]->count));
 
-        rc = http_resp_send(&pConn->sd, &pConn->httpReq, HTTP_STATUS_OK, buf, rc);
+        rc = http_resp_send(&pConn->sd, pConn->phttpReq, HTTP_STATUS_OK, buf, rc);
 
       } else {
         //
@@ -1716,7 +1771,7 @@ int srv_ctrl_httplive(CLIENT_CONN_T *pConn,
 
           VSX_DEBUG_LIVE(LOG(X_DEBUG("LIVE - srv_ctrl_httplive sending auto-generated index file")));
 
-          rc = http_resp_send(&pConn->sd, &pConn->httpReq, HTTP_STATUS_OK, presp, lenresp); 
+          rc = http_resp_send(&pConn->sd, pConn->phttpReq, HTTP_STATUS_OK, presp, lenresp); 
 
         } else {
           LOG(X_WARNING("%s - HTTPLive not available"), HTTP_STATUS_STR_NOTFOUND);
@@ -1817,7 +1872,7 @@ static int srv_ctrl_rsrc(CLIENT_CONN_T *pConn,
 
     if(mediadb_prepend_dir2(pConn->pCfg->pMediaDb->homeDir,
            VSX_RSRC_HTML_PATH, pargfile, (char *) path, sizeof(path)) < 0) {
-      rc = http_resp_send(&pConn->sd, &pConn->httpReq, HTTP_STATUS_NOTFOUND,
+      rc = http_resp_send(&pConn->sd, pConn->phttpReq, HTTP_STATUS_NOTFOUND,
          (unsigned char *) HTTP_STATUS_STR_NOTFOUND, strlen(HTTP_STATUS_STR_NOTFOUND));
 
     } else {
@@ -1897,6 +1952,9 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
   int check_token = 1;
   STREAM_METHOD_T streamMethod = STREAM_METHOD_UNKNOWN;
 
+  VSX_DEBUG_LIVE(LOG(X_DEBUG("LIVE - srv_ctrl_live uri: '%s', urlCap: 0x%x"), 
+                             pConn->phttpReq->puri, pConn->pListenCfg->urlCapabilities);); 
+
   //rsrcurl[0] = '\0';
 
   //
@@ -1907,7 +1965,7 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
     return rc;
   }
 
-  if(!strncasecmp(pConn->httpReq.puri, VSX_RTSP_URL, strlen(VSX_RTSP_URL))) {
+  if(!strncasecmp(pConn->phttpReq->puri, VSX_RTSP_URL, strlen(VSX_RTSP_URL))) {
 
     streamMethod = STREAM_METHOD_RTSP;
     sz = strlen(VSX_RTSP_URL);
@@ -1915,7 +1973,7 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
       accessUri = VSX_RTSP_URL;
     }
 
-  } else if(!strncasecmp(pConn->httpReq.puri, VSX_RTMPT_URL, strlen(VSX_RTMPT_URL))) {
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_RTMPT_URL, strlen(VSX_RTMPT_URL))) {
 
     streamMethod = STREAM_METHOD_RTMPT;
     sz = strlen(VSX_RTMPT_URL);
@@ -1923,7 +1981,7 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
       accessUri = VSX_RTMPT_URL;
     }
 
-  } else if(!strncasecmp(pConn->httpReq.puri, VSX_RTMP_URL, strlen(VSX_RTMP_URL))) {
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_RTMP_URL, strlen(VSX_RTMP_URL))) {
 
     streamMethod = STREAM_METHOD_RTMP;
     sz = strlen(VSX_RTMP_URL);
@@ -1931,7 +1989,7 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
       accessUri = VSX_RTMP_URL;
     }
 
-  } else if(!strncasecmp(pConn->httpReq.puri, VSX_FLV_URL, strlen(VSX_FLV_URL))) {
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_FLV_URL, strlen(VSX_FLV_URL))) {
 
     streamMethod = STREAM_METHOD_FLVLIVE;
     sz = strlen(VSX_FLV_URL);
@@ -1939,7 +1997,7 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
       accessUri = VSX_FLV_URL;
     }
 
-  } else if(!strncasecmp(pConn->httpReq.puri, VSX_MKV_URL, strlen(VSX_MKV_URL))) {
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_MKV_URL, strlen(VSX_MKV_URL))) {
 
     streamMethod = STREAM_METHOD_MKVLIVE;
     sz = strlen(VSX_MKV_URL);
@@ -1947,7 +2005,7 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
       accessUri = VSX_MKV_URL;
     }
 
-  } else if(!strncasecmp(pConn->httpReq.puri, VSX_WEBM_URL, strlen(VSX_WEBM_URL))) {
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_WEBM_URL, strlen(VSX_WEBM_URL))) {
 
     streamMethod = STREAM_METHOD_MKVLIVE;
     sz = strlen(VSX_WEBM_URL);
@@ -1955,7 +2013,7 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
       accessUri = VSX_WEBM_URL;
     }
 
-  } else if(!strncasecmp(pConn->httpReq.puri, VSX_HTTPLIVE_URL, strlen(VSX_HTTPLIVE_URL))) {
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_HTTPLIVE_URL, strlen(VSX_HTTPLIVE_URL))) {
 
     streamMethod = STREAM_METHOD_HTTPLIVE;
     sz = strlen(VSX_HTTPLIVE_URL);
@@ -1963,7 +2021,7 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
       accessUri = VSX_HTTPLIVE_URL;
     }
 
-  } else if(!strncasecmp(pConn->httpReq.puri, VSX_DASH_URL, strlen(VSX_DASH_URL))) {
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_DASH_URL, strlen(VSX_DASH_URL))) {
 
     streamMethod = STREAM_METHOD_DASH;
     sz = strlen(VSX_DASH_URL);
@@ -1971,7 +2029,7 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
       accessUri = VSX_DASH_URL;
     }
 
-  } else if(!strncasecmp(pConn->httpReq.puri, VSX_RSRC_URL, strlen(VSX_RSRC_URL))) {
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_RSRC_URL, strlen(VSX_RSRC_URL))) {
 
     streamMethod = STREAM_METHOD_NONE;
     sz = strlen(VSX_RSRC_URL);
@@ -1989,14 +2047,17 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
 
   }
 
-  if(check_token && srv_check_authtoken(pConn->pListenCfg, &pConn->httpReq, 
+  VSX_DEBUG_LIVE(LOG(X_DEBUG("LIVE - srv_ctrl_live uri: '%s', urlCap: 0x%x, accessUri: '%s', streamMethod: %s"), 
+      pConn->phttpReq->puri, pConn->pListenCfg->urlCapabilities, accessUri, devtype_methodstr(streamMethod));); 
+
+  if(check_token && srv_check_authtoken(pConn->pListenCfg, pConn->phttpReq, 
                                         streamMethod == STREAM_METHOD_FLVLIVE ? 1 : 0) != 0) {
     *pHttpStatus = HTTP_STATUS_FORBIDDEN;
     return -1;
   }
 
-  if(sz <= strlen(pConn->httpReq.puri)) { 
-    pargfile = &pConn->httpReq.puri[sz];
+  if(sz <= strlen(pConn->phttpReq->puri)) { 
+    pargfile = &pConn->phttpReq->puri[sz];
 
     while(*pargfile == '/') {
       pargfile++;
@@ -2028,17 +2089,17 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
     rc = -1;
   }
 
-  //fprintf(stderr, "URL...'%s' '%s' have_outidx:%d\n", pConn->httpReq.puri, pargfile ? pargfile : "<NULL>", have_outidx);
+  //fprintf(stderr, "URL...'%s' '%s' have_outidx:%d\n", pConn->phttpReq->puri, pargfile ? pargfile : "<NULL>", have_outidx);
 
   if(pConn->pCfg->livepwd &&
-   (!(parg = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->httpReq.uriPairs, "pass")) ||
+   (!(parg = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->phttpReq->uriPairs, "pass")) ||
      strcmp(pConn->pCfg->livepwd, parg))) {
 
     LOG(X_WARNING("live invalid password from %s:%d (%d char given)"),
        FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)),
        parg ? strlen(parg) : 0);
 
-    rc = http_resp_error(&pConn->sd, &pConn->httpReq, HTTP_STATUS_FORBIDDEN, 0, NULL, NULL);
+    rc = http_resp_error(&pConn->sd, pConn->phttpReq, HTTP_STATUS_FORBIDDEN, 0, NULL, NULL);
     return -1;
   }
 
@@ -2047,14 +2108,14 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
   // User-Agent and lookup the device type to get the streaming method
   //
   if(streamMethod == STREAM_METHOD_UNKNOWN &&
-     (parg = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->httpReq.reqPairs,
+     (parg = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->phttpReq->reqPairs,
                                     HTTP_HDR_USER_AGENT))) {
 
     //parg = "Mozilla/5.0 (compatible; MSIE 9.0; Windows Phone OS 7.5; Trident/5.0; IEMobile/9.0; SAMSUNG; SGH-i937)";
 
     if(!(pdevtype = devtype_finddevice(parg, 1))) {
       LOG(X_ERROR("No device type found for "HTTP_HDR_USER_AGENT": '%s'"), parg);
-      rc = http_resp_error(&pConn->sd, &pConn->httpReq, HTTP_STATUS_SERVERERROR,
+      rc = http_resp_error(&pConn->sd, pConn->phttpReq, HTTP_STATUS_SERVERERROR,
                              0, NULL, NULL);
       return -1;
     }
@@ -2124,16 +2185,8 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
       rc = -1;
       break;
 
-    case STREAM_METHOD_RTMPT:
-
-      if((pConn->pListenCfg->urlCapabilities & URL_CAP_RTMPTLIVE)) {
-        rc = srv_ctrl_rtmp(pConn, pargfile, 0, NULL, NULL, 0, streamMethod);
-      } else {
-        *pHttpStatus = HTTP_STATUS_FORBIDDEN;
-      }
-      break;
-
     case STREAM_METHOD_RTMP:
+    case STREAM_METHOD_RTMPT:
 
       //
       // URL /rtmp is intentionally ambiguous to enable RTMP or RTMPT
@@ -2151,3 +2204,58 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
   return rc;
 }
 
+SRV_REQ_PEEK_TYPE_T srv_ctrl_peek(CLIENT_CONN_T *pConn, HTTP_PARSE_CTXT_T *pHdrCtxt) {
+
+  SRV_REQ_PEEK_TYPE_T rc = SRV_REQ_PEEK_TYPE_UNKNOWN;
+  char tmps[2][128];
+  int is_rtmpt = 0;
+
+  if(!pConn || !pHdrCtxt || !pHdrCtxt->pbuf) {
+    return SRV_REQ_PEEK_TYPE_INVALID;
+  }
+
+  VSX_DEBUG_HTTP( LOG(X_DEBUGV("HTTP - srv_cmd_proc calling netio_recvnb_exact %d ..."), SRV_REQ_PEEK_SIZE); );
+
+  //
+  // Read the first 16 bytes to see if the connection is HTTP, RTMP or RTMPT
+  //
+  if(SRV_REQ_PEEK_SIZE > 0) {
+
+    if((rc = netio_recvnb_exact(&pConn->sd.netsocket, (unsigned char *) pHdrCtxt->pbuf,
+                                SRV_REQ_PEEK_SIZE, HTTP_REQUEST_TIMEOUT_SEC * 1000)) != SRV_REQ_PEEK_SIZE) {
+      if(rc < 0 && NETIOSOCK_FD(pConn->sd.netsocket) != INVALID_SOCKET) {
+        rc = http_resp_error(&pConn->sd, pConn->phttpReq, HTTP_STATUS_BADREQUEST, 1, NULL, NULL);
+      }
+      return SRV_REQ_PEEK_TYPE_INVALID;
+    }
+
+    VSX_DEBUG_HTTP(
+        LOG(X_DEBUG("HTTP - srv_cmd_proc recv (peek): %d"), SRV_REQ_PEEK_SIZE);
+        LOGHEXT_DEBUG(pHdrCtxt->pbuf, SRV_REQ_PEEK_SIZE); );
+
+    //
+    // Check if the connection is for RTMP or RTMPT
+    //
+    if((is_rtmpt = rtmpt_istunneled((unsigned char *) pHdrCtxt->pbuf, SRV_REQ_PEEK_SIZE)) ||
+        pHdrCtxt->pbuf[0] == RTMP_HANDSHAKE_HDR) {
+      return is_rtmpt ? SRV_REQ_PEEK_TYPE_RTMPT : SRV_REQ_PEEK_TYPE_RTMP;
+    } else if(rtsp_isrtsp((unsigned char *) pHdrCtxt->pbuf, SRV_REQ_PEEK_SIZE)) {
+      return SRV_REQ_PEEK_TYPE_RTSP;
+    } else if((pConn->pListenCfg->urlCapabilities & ~(URL_CAP_RTMPLIVE | URL_CAP_RTMPTLIVE |
+                                                      URL_CAP_RTSPLIVE)) == 0) {
+
+      LOG(X_ERROR("Listener %s:%d not enabled for http%s method to %s:%d"),
+          FORMAT_NETADDR(pConn->pListenCfg->sa, tmps[1], sizeof(tmps[1])), ntohs(INET_PORT(pConn->pListenCfg->sa)),
+          (pConn->sd.netsocket.flags & NETIO_FLAG_SSL_TLS) ? "s" : "",
+          FORMAT_NETADDR(pConn->sd.sa, tmps[0], sizeof(tmps[0])), ntohs(INET_PORT(pConn->sd.sa)));
+      LOGHEXT_DEBUG(pHdrCtxt->pbuf, SRV_REQ_PEEK_SIZE);
+      return SRV_REQ_PEEK_TYPE_INVALID;
+    }
+
+  }
+
+  HTTP_PARSE_CTXT_RESET(*pHdrCtxt);
+  pHdrCtxt->idxbuf = SRV_REQ_PEEK_SIZE;
+
+  return SRV_REQ_PEEK_TYPE_HTTP;
+}

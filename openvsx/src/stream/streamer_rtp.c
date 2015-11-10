@@ -483,6 +483,7 @@ static int rtpmultiset_init(STREAM_RTP_MULTI_T *pRtpMultis, unsigned int num,
     for(idx = 0; idx < maxRtp; idx++) {
       
       if(idx == 0) {
+        VSX_DEBUG_MEM( LOG(X_DEBUG("MEM - rtpmultiset_init pdests idxMulti:[%d]/%d, maxRtp: [%d]/%d..."), idxMulti, num, idx, maxRtp); ); 
         if(!(pRtpMultis[idxMulti].pdests = (STREAM_RTP_DEST_T *) avc_calloc(maxRtp, sizeof(STREAM_RTP_DEST_T)))) {
           return -1;
         }
@@ -1205,6 +1206,10 @@ static void link_rtp_dest_list(STREAM_RTP_MULTI_T rtpMultisRtp[IXCODE_VIDEO_OUT_
 
   for(outidx = 0; outidx < IXCODE_VIDEO_OUT_MAX; outidx++) {
 
+    if(!rtpMultisRtp[outidx][0].pdests) {
+      break;
+    }
+
     //
     // Create a linked list of all the RTP output structs
     // This list will be used by the RTCP RR receiver to find the appropriate
@@ -1235,7 +1240,7 @@ static int check_duplicate_rtcp(STREAM_RTP_MULTI_T rtpMultisRtp[IXCODE_VIDEO_OUT
     for(idx = 0; idx < 2; idx++) {
       for(idxDest = 0; idxDest < rtpMultisRtp[outidx][idx].maxDests; idxDest++) {
 
-        if(!rtpMultisRtp[outidx][idx].pdests[idxDest].isactive ||
+        if(!rtpMultisRtp[outidx][idx].pdests || !rtpMultisRtp[outidx][idx].pdests[idxDest].isactive ||
           INET_PORT(rtpMultisRtp[outidx][idx].pdests[idxDest].saDstsRtcp) == 0) {
           continue;
         }
@@ -1562,12 +1567,18 @@ static int stream_av(CODEC_PAIR_T *pCodecs, STREAMER_CFG_T *pCfg) {
 
   for(outidx = 0; outidx < IXCODE_VIDEO_OUT_MAX; outidx++) {
 
+    // Don't initialize xcode output specific if not encoding multiple outputs
+    if(outidx > 0 && !pCfg->xcode.vid.out[outidx].active) {
+      break;
+    }
+
     //fprintf(stderr, "OUTIDX:%d\n", outidx);
 
     if(rtpmultiset_init(&pCfg->rtpMultisMp2ts[outidx], 1, 0, *pCfg->pmaxRtp) < 0 || 
        rtpmultiset_init(&pCfg->rtpMultisRtp[outidx][0], 2, pCfg->status.favoffsetrtcp, *pCfg->pmaxRtp) < 0) {
       return stream_av_onexit(pCfg, pCodecs, -1);
     }
+
     pCfg->rtpMultisMp2ts[outidx].outidx = outidx;
     pCfg->rtpMultisMp2ts[outidx].pStreamerCfg = pCfg;
     pCfg->rtpMultisMp2ts[outidx].outidx = outidx;
@@ -2796,7 +2807,7 @@ static int stream_av(CODEC_PAIR_T *pCodecs, STREAMER_CFG_T *pCfg) {
 
     for(outidx = 0; outidx < IXCODE_VIDEO_OUT_MAX; outidx++) {
       for(idxDest = 0; idxDest < pCfg->numDests; idxDest++) {
-        if(streamsOutMp2ts[outidx].pRtpMulti &&
+        if(streamsOutMp2ts[outidx].pRtpMulti && streamsOutMp2ts[outidx].pRtpMulti->pdests && 
            streamsOutMp2ts[outidx].pRtpMulti->pdests[idxDest].isactive) {
 
           LOG(X_INFO("%s"), output_descr_stream(str, sizeof(str), 
@@ -2843,7 +2854,7 @@ static int stream_av(CODEC_PAIR_T *pCodecs, STREAMER_CFG_T *pCfg) {
     for(outidx = 0; outidx < IXCODE_VIDEO_OUT_MAX; outidx++) {
       for(idxDest = 0; idxDest < pCfg->numDests; idxDest++) {
         for(idx = 0; idx < pStreamAv->numProg; idx++) { 
-          if(streamsOutRtp[outidx][idx].pRtpMulti &&
+          if(streamsOutRtp[outidx][idx].pRtpMulti && streamsOutRtp[outidx][idx].pRtpMulti->pdests && 
             streamsOutRtp[outidx][idx].pRtpMulti->pdests[idxDest].isactive) {
 
 /*

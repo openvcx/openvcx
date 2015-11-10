@@ -30,12 +30,15 @@
 
 #define PROCUTIL_PID_DIR               "tmp/"
 
+//#define PROCDB_DEBUG   1
+
 static int get_pid(SYS_PROC_T *pProc) {
   char path[VSX_MAX_PATH_LEN];
   snprintf(path, sizeof(path), "%s%s.pid", PROCUTIL_PID_DIR, pProc->instanceId);
   return procutil_readpid(path);
 }
 
+#if defined(PROCDB_DEBUG)
 static void procdb_dump(SYS_PROCLIST_T *pProcs, int lock) {
   SYS_PROC_T *p;
   if(lock) {
@@ -51,6 +54,7 @@ static void procdb_dump(SYS_PROCLIST_T *pProcs, int lock) {
     pthread_mutex_unlock(&pProcs->mtx);
   }
 }
+#endif // PROCDB_DEBUG
 
 typedef struct PROC_STATUS_RESP_DATA {
   float bps;
@@ -160,7 +164,9 @@ static void procdb_monitor_proc(void *pArg) {
 
   while(pProcs->runMonitor) {
 
-    //procdb_dump(pProcs, 1);
+#if defined(PROCDB_DEBUG)
+    procdb_dump(pProcs, 1);
+#endif // PROCDB_DEBUG
 
     gettimeofday(&tvnow, NULL);
     pProcPrev = NULL;
@@ -276,8 +282,7 @@ int procdb_create(SYS_PROCLIST_T *pProcs) {
 
   pthread_mutex_init(&pProcs->mtx, NULL);
   pProcs->runMonitor = 1;
-  pthread_attr_init(&attrMonitor);
-  pthread_attr_setdetachstate(&attrMonitor, PTHREAD_CREATE_DETACHED);
+  PHTREAD_INIT_ATTR(&attrMonitor);
 
   if(pProcs->minStartPort == 0) {
     pProcs->minStartPort = PORT_RANGE_START;
@@ -502,7 +507,8 @@ SYS_PROC_T *procdb_setup(SYS_PROCLIST_T *pProcs,
                          const char *pXcodeStr, 
                          const char *pInstanceId,
                          const char *pTokenId,
-                         int lock) {
+                         int lock,
+                         int ssl) {
 
   SYS_PROC_T *pProc = NULL;
 
@@ -552,7 +558,7 @@ SYS_PROC_T *procdb_setup(SYS_PROCLIST_T *pProcs,
   //
   // for the time being, each process uses 4 unique tcp ports (http media, rtmp, rtsp, localhost only http status)
   //
-  pProcs->priorStartPort += MGR_PORT_ALLOC_COUNT;
+  pProcs->priorStartPort += MGR_PORT_ALLOC_COUNT(ssl);
 
   //
   // Add to list
@@ -615,16 +621,17 @@ static int write_listener(int *p_lastPort,
 }
 
 static char *get_methods_str(int methodBits, 
-                             int ssl,
-                             char *buf, 
-                             unsigned int szbuf, 
-                             int startPort, 
-                             const char *userpass) {
+                           int ssl,
+                           char *buf, 
+                           unsigned int *pidxbuf,
+                           unsigned int szbuf, 
+                           int startPort, 
+                           const char *userpass,
+                           int do_status) {
   unsigned int idxMethod;
-  unsigned int idxbuf = 0;
   int lastHttpPort = -1;
   int lastPort = -1;
-  int rc;
+  int rc = 0;
 
   if(userpass && userpass[0] == '\0') {
     userpass = NULL;
@@ -640,8 +647,6 @@ static char *get_methods_str(int methodBits,
                  (1 << STREAM_METHOD_RTMPT);
   }
 
-  buf[0] = '\0';
-
 #define HTTP_PROTO_STR "http"
 #define RTMP_PROTO_STR "rtmp"
 #define RTMPT_PROTO_STR "rtmpt"
@@ -651,56 +656,56 @@ static char *get_methods_str(int methodBits,
 
     switch(methodBits & (1 << idxMethod)) {
       case (1 << STREAM_METHOD_DASH):
-        if((rc = write_listener(&lastPort, MGR_GET_PORT_HTTP(startPort), ssl, "dash", HTTP_PROTO_STR,
-                        userpass, NULL, idxbuf > 0 ? 1 : 0, &buf[idxbuf], szbuf - idxbuf)) > 0) {
-          idxbuf += rc;
+        if((rc = write_listener(&lastPort, MGR_GET_PORT_HTTP(startPort, ssl), ssl, "dash", HTTP_PROTO_STR,
+                        userpass, NULL, *pidxbuf > 0 ? 1 : 0, &buf[*pidxbuf], szbuf - *pidxbuf)) > 0) {
+          *pidxbuf += rc;
         }
         lastHttpPort = lastPort;
         break;
       case (1 << STREAM_METHOD_HTTPLIVE):
-        if((rc = write_listener(&lastPort, MGR_GET_PORT_HTTP(startPort), ssl, "httplive", HTTP_PROTO_STR, 
-                        userpass, NULL, idxbuf > 0 ? 1 : 0, &buf[idxbuf], szbuf - idxbuf)) > 0) {
-          idxbuf += rc;
+        if((rc = write_listener(&lastPort, MGR_GET_PORT_HTTP(startPort, ssl), ssl, "httplive", HTTP_PROTO_STR, 
+                        userpass, NULL, *pidxbuf > 0 ? 1 : 0, &buf[*pidxbuf], szbuf - *pidxbuf)) > 0) {
+          *pidxbuf += rc;
         }
         lastHttpPort = lastPort;
         break;
       case (1 << STREAM_METHOD_FLVLIVE):
-        if((rc = write_listener(&lastPort, MGR_GET_PORT_HTTP(startPort), ssl, "flvlive", HTTP_PROTO_STR, 
-                        userpass, NULL, idxbuf > 0 ? 1 : 0, &buf[idxbuf], szbuf - idxbuf)) > 0) {
-          idxbuf += rc;
+        if((rc = write_listener(&lastPort, MGR_GET_PORT_HTTP(startPort, ssl), ssl, "flvlive", HTTP_PROTO_STR, 
+                        userpass, NULL, *pidxbuf > 0 ? 1 : 0, &buf[*pidxbuf], szbuf - *pidxbuf)) > 0) {
+          *pidxbuf += rc;
         }
         lastHttpPort = lastPort;
         break;
       case (1 << STREAM_METHOD_MKVLIVE):
-        if((rc = write_listener(&lastPort, MGR_GET_PORT_HTTP(startPort), ssl, "mkvlive", HTTP_PROTO_STR, 
-                        userpass, NULL, idxbuf > 0 ? 1 : 0, &buf[idxbuf], szbuf - idxbuf)) > 0) {
-          idxbuf += rc;
+        if((rc = write_listener(&lastPort, MGR_GET_PORT_HTTP(startPort, ssl), ssl, "mkvlive", HTTP_PROTO_STR, 
+                        userpass, NULL, *pidxbuf > 0 ? 1 : 0, &buf[*pidxbuf], szbuf - *pidxbuf)) > 0) {
+          *pidxbuf += rc;
         }
         lastHttpPort = lastPort;
         break;
       case (1 << STREAM_METHOD_TSLIVE):
-        if((rc = write_listener(&lastPort, MGR_GET_PORT_HTTP(startPort), ssl, "tslive", HTTP_PROTO_STR, 
-                        userpass, NULL, idxbuf > 0 ? 1 : 0, &buf[idxbuf], szbuf - idxbuf)) > 0) {
-          idxbuf += rc;
+        if((rc = write_listener(&lastPort, MGR_GET_PORT_HTTP(startPort, ssl), ssl, "tslive", HTTP_PROTO_STR, 
+                        userpass, NULL, *pidxbuf > 0 ? 1 : 0, &buf[*pidxbuf], szbuf - *pidxbuf)) > 0) {
+          *pidxbuf += rc;
         }
         lastHttpPort = lastPort;
         break;
       case (1 << STREAM_METHOD_RTMP):
-        if((rc = write_listener(&lastPort, MGR_GET_PORT_RTMP(startPort), ssl, "rtmp", RTMP_PROTO_STR, 
-                            userpass, NULL, idxbuf > 0 ? 1 : 0, &buf[idxbuf], szbuf - idxbuf)) > 0) {
-          idxbuf += rc;
+        if((rc = write_listener(NULL, MGR_GET_PORT_RTMP(startPort, ssl), ssl, "rtmp", RTMP_PROTO_STR, 
+                            userpass, NULL, *pidxbuf > 0 ? 1 : 0, &buf[*pidxbuf], szbuf - *pidxbuf)) > 0) {
+          *pidxbuf += rc;
         }
         break;
       case (1 << STREAM_METHOD_RTMPT):
-        if((rc = write_listener(&lastPort, MGR_GET_PORT_RTMP(startPort), ssl, "rtmp", RTMPT_PROTO_STR, 
-                            userpass, NULL, idxbuf > 0 ? 1 : 0, &buf[idxbuf], szbuf - idxbuf)) > 0) {
-          idxbuf += rc;
+        if((rc = write_listener(NULL, MGR_GET_PORT_RTMP(startPort, ssl), ssl, "rtmp", RTMPT_PROTO_STR, 
+                            userpass, NULL, *pidxbuf > 0 ? 1 : 0, &buf[*pidxbuf], szbuf - *pidxbuf)) > 0) {
+          *pidxbuf += rc;
         }
         break;
       case (1 << STREAM_METHOD_RTSP):
-        if((rc = write_listener(&lastPort, MGR_GET_PORT_RTSP(startPort), ssl, "rtsp", RTSP_PROTO_STR, 
-                            userpass, NULL, idxbuf > 0 ? 1 : 0, &buf[idxbuf], szbuf - idxbuf)) > 0) {
-          idxbuf += rc;
+        if((rc = write_listener(NULL, MGR_GET_PORT_RTSP(startPort, ssl), ssl, "rtsp", RTSP_PROTO_STR, 
+                            userpass, NULL, *pidxbuf > 0 ? 1 : 0, &buf[*pidxbuf], szbuf - *pidxbuf)) > 0) {
+          *pidxbuf += rc;
         }
         break;
 
@@ -711,23 +716,23 @@ static char *get_methods_str(int methodBits,
 
   } // end of for(idxMethod...
 
-  if(idxbuf > 0) {
+  if(*pidxbuf > 0) {
     //
     // If we are using a streaming output method then include the '/live' URL which also allows for loading
     // various rsrc/*.js and img/ files required by rsrc/xxx_embed.html files
     //
-    if((rc = write_listener(&lastHttpPort, MGR_GET_PORT_HTTP(startPort), ssl, "live", HTTP_PROTO_STR, 
-                        userpass, NULL, idxbuf > 0 ? 1 : 0, &buf[idxbuf], szbuf - idxbuf)) > 0) {
-      idxbuf += rc;
+    if((rc = write_listener(&lastHttpPort, MGR_GET_PORT_HTTP(startPort, ssl), ssl, "live", HTTP_PROTO_STR, 
+                        userpass, NULL, *pidxbuf > 0 ? 1 : 0, &buf[*pidxbuf], szbuf - *pidxbuf)) > 0) {
+      *pidxbuf += rc;
     }
   }
 
   //
   // Include a /status URL listener bound to localhost without any credentials
   //
-  if((rc = write_listener(NULL, MGR_GET_PORT_STATUS(startPort), 0, "status", HTTP_PROTO_STR, 
-                      NULL, "127.0.0.1", idxbuf > 0 ? 1 : 0, &buf[idxbuf], szbuf - idxbuf)) > 0) {
-    idxbuf += rc;
+  if(do_status && (rc = write_listener(NULL, MGR_GET_PORT_STATUS(startPort), 0, "status", HTTP_PROTO_STR, 
+                      NULL, "127.0.0.1", *pidxbuf > 0 ? 1 : 0, &buf[*pidxbuf], szbuf - *pidxbuf)) > 0) {
+    *pidxbuf += rc;
   }
 
   return buf;
@@ -742,18 +747,28 @@ int procdb_start(SYS_PROCLIST_T *pProcs,
                  const char *incapturestr, 
                  const char *userpass, 
                  int methodBits,
-                 int ssl) {
+                 int ssl,
+                 int nossl) {
   int rc = -1;
   int pid;
   struct timeval tv0, tv1;
-  char methodsbuf[1024];
+  char methodsbuf[2048];
+  unsigned int idxbuf = 0;
   char cmd[512];
 
-  if(!pProcs || !pProc || !filePath || !pDev || !launchpath) {
+  if(!pProcs || !pProc || !filePath || !pDev || !launchpath || (!ssl && !nossl)) {
     return -1;
   }
 
-  get_methods_str(methodBits, ssl, methodsbuf, sizeof(methodsbuf), pProc->startPort, userpass);
+  methodsbuf[0] = '\0';
+  if(nossl) {
+    get_methods_str(methodBits, 0, methodsbuf, &idxbuf, sizeof(methodsbuf), 
+                    pProc->startPort, userpass, 1);
+  }
+  if(ssl) {
+    get_methods_str(methodBits, 1, methodsbuf, &idxbuf, sizeof(methodsbuf), 
+                    pProc->startPort, userpass, nossl ? 0 : 1);
+  }
 
   snprintf(cmd, sizeof(cmd), " %s %s \"%s\" %s \"%s\" \"%s\" \"%s\" \"%s\" &",
           launchpath, pProc->instanceId, filePath, 

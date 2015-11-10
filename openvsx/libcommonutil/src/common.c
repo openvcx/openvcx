@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "commonutil.h"
+#include "vsx_dbg.h"
 
 
 int avc_isnumeric(const char *s) {
@@ -52,6 +53,8 @@ void *avc_calloc(size_t count, size_t size) {
     LOG(X_CRITICAL("Failed to calloc %d x %d"), count, size);
   }
 
+  VSX_DEBUG_MEM( LOG(X_DEBUG("MEM - avc_calloc %d x %d = %d at 0x%x"), count, size, count * size, p); );
+
   return p;
 }
 
@@ -63,11 +66,14 @@ void *avc_realloc(void *porig, size_t size) {
     return NULL;
   }
 
+  VSX_DEBUG_MEM( LOG(X_DEBUG("MEM - avc_realloc 0x%x, %d at 0x%x"), porig, size, p); );
+
   return p;
 }
 
 void avc_free(void **pp) {
   if(pp && *pp) {
+    VSX_DEBUG_MEM( LOG(X_DEBUG("MEM - avc_free at 0x%x"), *pp); );
     free(*pp);
     *pp = NULL;
   }

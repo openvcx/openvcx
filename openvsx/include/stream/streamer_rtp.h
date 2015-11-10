@@ -36,7 +36,7 @@
 #include "stream/stream_net_av.h"
 #include "stream/stream_pktz_frbuf.h"
 #include "stream/stream_piplayout.h"
-#include "server/srvlimits.h"
+#include "server/srvconf.h"
 #include "server/srvauth.h"
 
 

@@ -290,7 +290,7 @@ int http_resp_sendmediafile(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus,
     if(pHttpStatus) {
       *pHttpStatus = HTTP_STATUS_NOTFOUND;
     } else {
-      http_resp_error(&pConn->sd, &pConn->httpReq, HTTP_STATUS_NOTFOUND, 1, NULL, NULL);
+      http_resp_error(&pConn->sd, pConn->phttpReq, HTTP_STATUS_NOTFOUND, 1, NULL, NULL);
     }
     return -1;
   }
@@ -298,11 +298,11 @@ int http_resp_sendmediafile(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus,
   if(!srv_ctrl_islegal_fpath(pMedia->pFileStream->filename)) {
 
     LOG(X_ERROR("Illegal file path '%s' referenced by URL '%s'"), pMedia->pFileStream->filename, 
-        pConn->httpReq.url);
+        pConn->phttpReq->url);
     if(pHttpStatus) {
       *pHttpStatus = HTTP_STATUS_NOTFOUND;
     } else {
-      http_resp_error(&pConn->sd, &pConn->httpReq, HTTP_STATUS_NOTFOUND, 1, NULL, NULL);
+      http_resp_error(&pConn->sd, pConn->phttpReq, HTTP_STATUS_NOTFOUND, 1, NULL, NULL);
     }
     return -1;
 
@@ -313,13 +313,13 @@ int http_resp_sendmediafile(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus,
     if(pHttpStatus) {
       *pHttpStatus = HTTP_STATUS_FORBIDDEN;
     } else {
-      http_resp_error(&pConn->sd, &pConn->httpReq, HTTP_STATUS_FORBIDDEN, 1, NULL, NULL);
+      http_resp_error(&pConn->sd, pConn->phttpReq, HTTP_STATUS_FORBIDDEN, 1, NULL, NULL);
     }
     return -1;
 
   }
 
-  rc = resp_sendmediafile(&pConn->sd, &pConn->httpReq, pMedia, pConn->pStats, throttleMultiplier, prebufSec);
+  rc = resp_sendmediafile(&pConn->sd, pConn->phttpReq, pMedia, pConn->pStats, throttleMultiplier, prebufSec);
 
   return rc;
 }
@@ -541,11 +541,11 @@ int http_check_pass(const CLIENT_CONN_T *pConn) {
   int rc = 0;
 
   if(pConn->pCfg->livepwd &&
-     (!(parg = conf_find_keyval((const KEYVAL_PAIR_T *) &pConn->httpReq.uriPairs, "pass")) ||
+     (!(parg = conf_find_keyval((const KEYVAL_PAIR_T *) pConn->phttpReq.uriPairs, "pass")) ||
        strcmp(pConn->pCfg->livepwd, parg))) {
 
     LOG(X_WARNING("Invalid password for :%d%s from %s:%d (%d char given)"),
-         ntohs(pConn->pListenCfg->sain.sin_port), pConn->httpReq.url,
+         ntohs(pConn->pListenCfg->sain.sin_port), pConn->phttpReq->url,
          inet_ntoa(pConn->sd.sain.sin_addr), ntohs(pConn->sd.sain.sin_port),
          parg ? strlen(parg) : 0);
 

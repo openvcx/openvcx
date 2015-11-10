@@ -72,6 +72,7 @@ void devtype_dump(STREAM_DEVICE_T *pdev) {
 
 const STREAM_DEVICE_T *devtype_finddevice(const char *userAgent, int matchany) {
   const STREAM_DEVICE_T *pdev = NULL;
+  const STREAM_DEVICE_T *pmatch = NULL;
 
   if(!g_devtypes) {
     //devtype_init();
@@ -82,6 +83,9 @@ const STREAM_DEVICE_T *devtype_finddevice(const char *userAgent, int matchany) {
   pdev = g_devtypes;
   while(pdev) {
 
+    //VSX_DEBUG_LIVE( LOG(X_DEBUGV("devtype_finddevice User-Agent: '%s', matchany: %d, strmatch: '%s', '%s'"), 
+    //                             userAgent, matchany, pdev->strmatch, pdev->strmatch2); );
+
     //
     // if matchany is set, any default empty match can be made (last fall-thru device)
     // match & match2 is an 'and' based match
@@ -91,17 +95,20 @@ const STREAM_DEVICE_T *devtype_finddevice(const char *userAgent, int matchany) {
       if(pdev->strmatch[0] == '\0' || (userAgent && strcasestr(userAgent, pdev->strmatch))) {
         if(pdev->strmatch2[0] == '\0' || 
           (userAgent && strcasestr(userAgent, pdev->strmatch2))) {
-          return pdev;
+          pmatch = pdev;
+          break;
         }
       }
     }
     pdev = pdev->pnext;
   }
 
-  if(matchany) {
+  if(!pmatch && matchany) {
     return pdev;
   } else {
-    return NULL;
+    VSX_DEBUG_LIVE(LOG(X_DEBUG("LIVE - devtype_finddevice returning %s for User-Agent: '%s'"), 
+                   pmatch->name, userAgent); );
+    return pmatch;
   }  
 }
 
@@ -171,6 +178,8 @@ const char *devtype_methodstr(enum STREAM_METHOD method) {
       return STREAM_METHOD_UDP_RTP_STR;
     case STREAM_METHOD_UDP:
       return STREAM_METHOD_UDP_STR;
+    case STREAM_METHOD_ANYLIVE:
+      return STREAM_METHOD_ANYLIVE_STR;
     default:
       return ""; 
   }
@@ -223,6 +232,9 @@ STREAM_METHOD_T devtype_methodfromstr(const char *str) {
   } else if(!strncasecmp(str, STREAM_METHOD_UDP_STR, 
                   strlen(STREAM_METHOD_UDP_STR) + 1)) {
     return STREAM_METHOD_UDP;
+  } else if(!strncasecmp(str, STREAM_METHOD_ANYLIVE_STR, 
+                  strlen(STREAM_METHOD_ANYLIVE_STR) + 1)) {
+    return STREAM_METHOD_ANYLIVE;
   } else {
     return STREAM_METHOD_UNKNOWN;
   }
@@ -248,6 +260,27 @@ char *devtype_dump_methods(int methodBits,  char *buf, unsigned int szbuf) {
   }
 
   return buf;
+}
+
+int devtype_method_getbits(STREAM_METHOD_T method) {
+  int methodBits = 0;
+
+  methodBits |= (1 << method);
+
+  if(method == STREAM_METHOD_ANYLIVE) {
+    methodBits |= (1 << STREAM_METHOD_HTTPLIVE);
+    methodBits |= (1 << STREAM_METHOD_DASH);
+    methodBits |= (1 << STREAM_METHOD_TSLIVE);
+    methodBits |= (1 << STREAM_METHOD_FLVLIVE);
+    methodBits |= (1 << STREAM_METHOD_MKVLIVE);
+    methodBits |= (1 << STREAM_METHOD_RTSP);
+    methodBits |= (1 << STREAM_METHOD_RTSP_INTERLEAVED);
+    methodBits |= (1 << STREAM_METHOD_RTSP_HTTP);
+    methodBits |= (1 << STREAM_METHOD_RTMP);
+    methodBits |= (1 << STREAM_METHOD_RTMPT);
+  }
+
+  return methodBits;
 }
 
 /*

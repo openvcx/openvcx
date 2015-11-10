@@ -104,9 +104,7 @@ enum URL_CAPABILITY {
   URL_CAP_CONFIG       =  1 << 21 
 };
 
-#define IS_URL_CAP_RTMP(c) ((c) == URL_CAP_RTMPLIVE || \
-                            (c) == URL_CAP_RTMPTLIVE || \
-                            (c) == (URL_CAP_RTMPLIVE | URL_CAP_RTMPTLIVE))
+#define HAVE_URL_CAP_RTMP(c) (((c) & URL_CAP_RTMPLIVE) | ((c) & URL_CAP_RTMPTLIVE))
 
 typedef struct SRV_CFG {
   const char                      *livepwd;      // live / httplive password
@@ -118,8 +116,6 @@ typedef struct SRV_CFG {
   HTTPLIVE_DATA_T                 *pHttpLiveDatas[IXCODE_VIDEO_OUT_MAX];
   MOOFSRV_CTXT_T                  *pMoofCtxts[IXCODE_VIDEO_OUT_MAX];
   STREAM_RTSP_SESSIONS_T          *pRtspSessions;
-  const struct SRV_LISTENER_CFG   *pListenRtmp;
-  const struct SRV_LISTENER_CFG   *pListenRtsp;
   const struct SRV_LISTENER_CFG   *pListenHttp;
   float                            throttlerate;
   float                            throttleprebuf;
@@ -176,7 +172,7 @@ typedef struct CLIENT_CONN {
   //char nonce[AUTH_NONCE_MAXLEN];
   //char opaque[AUTH_OPAQUE_MAXLEN];
   
-  HTTP_REQ_T                      httpReq;
+  HTTP_REQ_T                     *phttpReq;
   struct STREAM_STATS            *pStats;
   struct SRV_LISTENER_CFG        *pListenCfg;
   SRV_CFG_T                      *pCfg;
@@ -197,9 +193,6 @@ typedef struct SRV_CTRL_PROC_DATA {
 void srv_cmd_proc(void *parg);
 void srv_ctrl_proc(void *parg);
 void srv_lock_conn_mutexes(CLIENT_CONN_T *pConn, int lock);
-
-
-
 
 
 

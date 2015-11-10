@@ -43,7 +43,8 @@ typedef struct RTSP_REQ_CTXT {
   RTSP_CLIENT_SESSION_T   *pClientSession; // If set, denotes server capture mode
 
   SRTP_CTXT_KEY_TYPE_T     srtpKts[STREAMER_PAIR_SZ];
-
+  unsigned char           *prebufdata;
+  unsigned int             prebufsz;
 } RTSP_REQ_CTXT_T;
 
 typedef struct RTSP_REQ {

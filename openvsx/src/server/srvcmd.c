@@ -1502,7 +1502,7 @@ int srv_ctrl_oncommand(CLIENT_CONN_T *pConn, enum HTTP_STATUS *pHttpStatus,
   char tmp[128];
   int havehandler = 0;
   const char *pcmd = NULL;
-  const KEYVAL_PAIR_T *pKeyvals = (const KEYVAL_PAIR_T *) &pConn->httpReq.uriPairs;
+  const KEYVAL_PAIR_T *pKeyvals = (const KEYVAL_PAIR_T *) &pConn->phttpReq->uriPairs;
 
   if(!pout || !plenout) {
     return -1;
@@ -1530,7 +1530,7 @@ int srv_ctrl_oncommand(CLIENT_CONN_T *pConn, enum HTTP_STATUS *pHttpStatus,
 
   if(!havehandler) {
     LOG(X_WARNING("Received unknown request from %s:%u '%s'"), 
-          FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)), pConn->httpReq.puri);
+          FORMAT_NETADDR(pConn->sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->sd.sa)), pConn->phttpReq->puri);
     *plenout = snprintf((char *) pout, *plenout, "No command argument found");
   }
 

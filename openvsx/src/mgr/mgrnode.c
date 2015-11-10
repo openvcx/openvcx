@@ -172,7 +172,7 @@ static void mgrnodes_monitor_proc(void *pArg) {
 
 }
 const char *mgrnode_getlb(MGR_NODE_LIST_T *pNodes) {
-  int rc = 0;
+  //int rc = 0;
   MGR_NODE_T *pNode = NULL;
   MGR_NODE_T *pNode0 = NULL;
 
@@ -228,8 +228,8 @@ static int mgrnode_monitor_start(MGR_NODE_LIST_T *pNodes) {
   snprintf(pNodes->tid_tag, sizeof(pNodes->tid_tag), "nodes-monitor");
   pNodes->running = STREAMER_STATE_FINISHED;
 
-  pthread_attr_init(&attrTsLive);
-  pthread_attr_setdetachstate(&attrTsLive, PTHREAD_CREATE_DETACHED);
+  PHTREAD_INIT_ATTR(&attrTsLive);
+
   if(pthread_create(&ptdTsLive,
                     &attrTsLive,
                     (void *) mgrnodes_monitor_proc,

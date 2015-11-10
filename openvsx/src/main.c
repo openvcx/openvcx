@@ -567,7 +567,7 @@ static void usage_stream(int argc, const const char *argv[]) {
       "   --rtmpnosig   Disable RTMP Handshake signature (when using --stream=rtmp[s]://[remote-address]/)\n"
       "   --rtmppageurl=[ RTMP Page URL String ] (when using --stream=rtmp[s]://[[remote-address]/\n"
       "   --rtmpswfurl=[ RTMP SWF URL String ] (when using --stream=rtmp[s]://[remote-address]/)\n"
-      "   --rtmpt[ 0 | 1 ]   Explicitly enable or disable RTMP Tunneling server\n"
+      "   --nortmpt    Explicitly disable RTMP Tunneling for any listener using '--rtmp='`\n"
       "\n   Parameters affecting RTSP stream output\n\n"
       "   --rtsp=[ address:port ] RTSP broadcast server listener\n"
       "                 (default=%s)\n"
@@ -939,6 +939,7 @@ enum CMD_OPT {
   CMD_OPT_HTTPMAX,
   CMD_OPT_HTTPLIVEMAX,
   CMD_OPT_RTMPLIVEADDRPORT,
+  CMD_OPT_RTMPTLIVEADDRPORT,
   CMD_OPT_RTMPLIVEMAX,
   CMD_OPT_FLVLIVEADDRPORT,
   CMD_OPT_FLVLIVEMAX,
@@ -1007,7 +1008,7 @@ enum CMD_OPT {
   CMD_OPT_RTMP_NOSIG,
   CMD_OPT_RTMP_PAGEURL,
   CMD_OPT_RTMP_SWFURL,
-  CMD_OPT_RTMP_DORTMPT,
+  CMD_OPT_RTMP_NORTMPT,
   CMD_OPT_STATUSMAX,
   CMD_OPT_STATUSPORT,
   CMD_OPT_CONFIGMAX,
@@ -1051,6 +1052,7 @@ enum CMD_OPT {
   CMD_OPT_TURNPOLICY,
   CMD_OPT_TOKENID,
   CMD_OPT_OUTQ_PREALLOC,
+  CMD_OPT_THREAD_STACKSIZE,
   CMD_OPT_DEBUG,
   CMD_OPT_DEBUG_CODEC,
   CMD_OPT_DEBUG_AUTH,
@@ -1112,6 +1114,7 @@ int main(int argc, char *argv[]) {
   unsigned int idxConfig = 0;
   unsigned int idxPip = 0;
   unsigned int idxRtmplive = 0;
+  unsigned int idxRtmptlive = 0;
   unsigned int idxRtsplive = 0;
   enum ACTION_TYPE action = ACTION_TYPE_NONE;
   int logoutputflags = 0;
@@ -1326,11 +1329,12 @@ int main(int argc, char *argv[]) {
                  { "firaccept",   optional_argument,       NULL, CMD_OPT_FIR_ACCEPT },
 
                  { "rtmp",        optional_argument,       NULL, CMD_OPT_RTMPLIVEADDRPORT },
+                 { "rtmpt",       optional_argument,       NULL, CMD_OPT_RTMPTLIVEADDRPORT },
                  { "rtmpmax",     required_argument,       NULL, CMD_OPT_RTMPLIVEMAX },
                  { "rtmpnosig",   no_argument,             NULL, CMD_OPT_RTMP_NOSIG },
                  { "rtmppageurl", required_argument,       NULL, CMD_OPT_RTMP_PAGEURL },
                  { "rtmpswfurl",  required_argument,       NULL, CMD_OPT_RTMP_SWFURL },
-                 { "rtmpt",       optional_argument,       NULL, CMD_OPT_RTMP_DORTMPT },
+                 { "nortmpt",     optional_argument,       NULL, CMD_OPT_RTMP_NORTMPT },
                  { "rtsp",        optional_argument,       NULL, CMD_OPT_RTSPLIVEADDRPORT },
                  { "rtspmax",     required_argument,       NULL, CMD_OPT_RTSPLIVEMAX },
                  { "rtsp-interleaved", optional_argument,  NULL, CMD_OPT_RTSPINTERLEAVED },
@@ -1394,6 +1398,7 @@ int main(int argc, char *argv[]) {
                  { "test",        optional_argument,       NULL, CMD_OPT_TEST },
                  { "token",       required_argument,       NULL, CMD_OPT_TOKENID },
                  { "prealloc",    optional_argument,       NULL, CMD_OPT_OUTQ_PREALLOC },
+                 { "stacksize",   required_argument,       NULL, CMD_OPT_THREAD_STACKSIZE},
                  { "tslive",      optional_argument,       NULL, CMD_OPT_TSLIVEPORT },
                  { "tslivemax",   required_argument,       NULL, CMD_OPT_TSLIVEMAX },
                  { "transport",   required_argument,       NULL, CMD_OPT_TRANSPORT },
@@ -2285,6 +2290,17 @@ int main(int argc, char *argv[]) {
         idxRtmplive++;
         have_arg_stream = 1;
         break;
+      case CMD_OPT_RTMPTLIVEADDRPORT:
+        if(idxRtmptlive < sizeof(streamParams.rtmptliveaddr) / sizeof(streamParams.rtmptliveaddr[0])) {
+          if(optarg) {
+            streamParams.rtmptliveaddr[idxRtmptlive] = optarg;
+          } else {
+            streamParams.rtmptliveaddr[idxRtmptlive] = RTMP_LISTEN_PORT_STR;
+          }
+        }
+        idxRtmptlive++;
+        have_arg_stream = 1;
+        break;
       case CMD_OPT_RTMPLIVEMAX:
         streamParams.rtmplivemax = atoi(optarg);
         break;
@@ -2325,8 +2341,8 @@ int main(int argc, char *argv[]) {
       case CMD_OPT_RTMP_SWFURL:
         streamParams.rtmpswfurl = optarg;
         break;
-      case CMD_OPT_RTMP_DORTMPT:
-        streamParams.rtmpdotunnel = (!optarg || atoi(optarg)) != 0 ? BOOL_ENABLED_OVERRIDE : BOOL_DISABLED_OVERRIDE;
+      case CMD_OPT_RTMP_NORTMPT:
+        streamParams.rtmpnotunnel = (!optarg || atoi(optarg)) != 0 ? BOOL_ENABLED_OVERRIDE : BOOL_DISABLED_OVERRIDE;
         break;
       case CMD_OPT_SDPOUT:
         streamParams.sdpoutpath = optarg;
@@ -2507,6 +2523,9 @@ int main(int argc, char *argv[]) {
         break;
       case CMD_OPT_OUTQ_PREALLOC:
         streamParams.outq_prealloc = (optarg && atoi(optarg) <= 0) ? BOOL_DISABLED_OVERRIDE : BOOL_ENABLED_OVERRIDE;
+        break;
+      case CMD_OPT_THREAD_STACKSIZE:
+        g_thread_stack_size = streamParams.thread_stack_size = (unsigned int) strutil_read_numeric(optarg, 0, 0, 0);
         break;
       case CMD_OPT_TSLIVEPORT:
         if(idxTslive < sizeof(streamParams.tsliveaddr) / sizeof(streamParams.tsliveaddr[0])) {
