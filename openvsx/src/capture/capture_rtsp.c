@@ -1548,9 +1548,9 @@ static void cap_rtsp_srv_proc(void *pfuncarg) {
 
 static int capture_rtsp_server(CAP_ASYNC_DESCR_T *pCfg) {
   int rc = 0;
+  unsigned int idx;
   POOL_T pool;
   SRV_LISTENER_CFG_T listenCfg;
-  //char buf[SAFE_INET_NTOA_LEN_MAX];
   CLIENT_CONN_T *pConn;
   NETIO_SOCK_T *pnetsock = NULL;
   const struct sockaddr *psaSrv = NULL;
@@ -1586,8 +1586,12 @@ static int capture_rtsp_server(CAP_ASYNC_DESCR_T *pCfg) {
     return -1;
   }
 
-  if(IS_CAPTURE_FILTER_TRANSPORT_SSL(pCfg->pcommon->filt.filters[0].transType)) {
-    pnetsock->flags |= NETIO_FLAG_SSL_TLS;
+  for(idx = 0; idx < 2; idx++) {
+    if(IS_CAPTURE_FILTER_TRANSPORT_SSL(pCfg->pcommon->filt.filters[idx].transType)) {
+      pnetsock->flags |= NETIO_FLAG_SSL_TLS;
+    } else {
+      pnetsock->flags |= NETIO_FLAG_PLAINTEXT;
+    }
   }
 
   if(pCfg->pStreamerCfg && pCfg->pStreamerCfg->pRtspSessions->psessionTmtSec &&
@@ -1600,14 +1604,13 @@ static int capture_rtsp_server(CAP_ASYNC_DESCR_T *pCfg) {
   memset(&listenCfg, 0, sizeof(listenCfg));
   memcpy(&listenCfg.sa, psaSrv, INET_SIZE(*psaSrv));
   listenCfg.pnetsockSrv = pnetsock;
+  listenCfg.netflags = pnetsock->flags;
   listenCfg.pConnPool = &pool;
   listenCfg.urlCapabilities = URL_CAP_RTSPLIVE;
   listenCfg.pAuthStore = &pCfg->pcommon->creds[0];
 
-  LOG(X_INFO("RTSP %scapture listener available at "URL_RTSP_FMT_STR"%s%s"),
-           ((pnetsock->flags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : ""),
-            URL_PROTO_FMT2_ARGS((pnetsock->flags & NETIO_FLAG_SSL_TLS), 
-           FORMAT_NETADDR(*psaSrv, tmp, sizeof(tmp))), ntohs(PINET_PORT(psaSrv)), 
+  LOG(X_INFO("RTSP capture listener available at "URL_RTSP_FMT_STR"%s%s"),
+            URL_HTTP_FMT_ARGS2(&listenCfg, FORMAT_NETADDR(*psaSrv, tmp, sizeof(tmp))), 
            (IS_AUTH_CREDENTIALS_SET(listenCfg.pAuthStore) ? " (Using auth)" : ""), bufses);
 
   //

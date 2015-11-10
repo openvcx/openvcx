@@ -1320,6 +1320,7 @@ int vsxlib_stream_setupcap(const VSXLIB_STREAM_PARAMS_T *pParams, CAPTURE_LOCAL_
   int warn_remb_min = 0;
   char tmp[128];
   CAPTURE_FILTER_TRANSPORT_T inTransType = CAPTURE_FILTER_TRANSPORT_UNKNOWN;
+  CAPTURE_FILTER_TRANSPORT_T inTransType2 = CAPTURE_FILTER_TRANSPORT_UNKNOWN;
   CAPTURE_FILTERS_T *pFilt = NULL; 
   AUTH_CREDENTIALS_STORE_T *pAuthStore = NULL;
 
@@ -1341,6 +1342,9 @@ int vsxlib_stream_setupcap(const VSXLIB_STREAM_PARAMS_T *pParams, CAPTURE_LOCAL_
   strfilters[0] = pParams->strfilters[0];
   strfilters[1] = pParams->strfilters[1];
   inTransType = capture_parseTransportStr(&pCapCfg->common.localAddrs[0]);
+  if(pCapCfg->common.localAddrs[1]) {
+    inTransType2 = capture_parseTransportStr(&pCapCfg->common.localAddrs[1]);
+  }
 
   //
   // Retrieve any user:pass@<address> authorization credentials from URL
@@ -1360,6 +1364,13 @@ int vsxlib_stream_setupcap(const VSXLIB_STREAM_PARAMS_T *pParams, CAPTURE_LOCAL_
   }
 
   if(IS_CAPTURE_FILTER_TRANSPORT_RTSP(inTransType)) {
+
+    if(inTransType2 == CAPTURE_FILTER_TRANSPORT_UNKNOWN) {
+      inTransType2 = inTransType;
+    } else if(!IS_CAPTURE_FILTER_TRANSPORT_RTSP(inTransType2)) {
+      LOG(X_DEBUG("Cannot mix RTSP and non-RTSP transports in same capture"));
+      return -1;
+    }
 
     // Defaut to 2 (vid, aud) input filters
     pFilt->numFilters = 2;
@@ -1403,6 +1414,14 @@ int vsxlib_stream_setupcap(const VSXLIB_STREAM_PARAMS_T *pParams, CAPTURE_LOCAL_
     pFilt->filters[0].mediaType = CAPTURE_FILTER_PROTOCOL_DASH;
 
   } else if(IS_CAPTURE_FILTER_TRANSPORT_RTMP(inTransType)) {
+
+    if(inTransType2 == CAPTURE_FILTER_TRANSPORT_UNKNOWN) {
+      inTransType2 = inTransType;
+    } else if(!IS_CAPTURE_FILTER_TRANSPORT_RTMP(inTransType2)) {
+      LOG(X_DEBUG("Cannot mix RTMP and non-RTMP transports in same capture"));
+      return -1;
+    }
+
     // Defaut to 2 (vid, aud) input filters
     pFilt->numFilters = 2;
     pFilt->filters[0].mediaType = MEDIA_FILE_TYPE_H264b;
@@ -1610,7 +1629,8 @@ int vsxlib_stream_setupcap(const VSXLIB_STREAM_PARAMS_T *pParams, CAPTURE_LOCAL_
     }
 
     if(pFilt->filters[idx].transType == CAPTURE_FILTER_TRANSPORT_UNKNOWN) {
-      pFilt->filters[idx].transType = inTransType;
+      pFilt->filters[idx].transType = ((idx == 0 || inTransType2 == CAPTURE_FILTER_TRANSPORT_UNKNOWN) ? 
+                                                            inTransType : inTransType2);
     }
 
   } // end of for
@@ -1707,6 +1727,8 @@ int vsxlib_parse_listener(const char *arrAddr[], unsigned int maxListenerCfgs, S
       break;
     }
 
+    //LOG(X_DEBUG("PARSE_LISTENER [%d]/%d, '%s' 0x%x"), idxArr, maxListenerCfgs, strListen, arrCfgs);
+
     netflags = 0;
 
     //
@@ -1749,21 +1771,27 @@ int vsxlib_parse_listener(const char *arrAddr[], unsigned int maxListenerCfgs, S
 
     if(IS_CAPTURE_FILTER_TRANSPORT_SSL(transType)) {
       netflags |= NETIO_FLAG_SSL_TLS;
+    } else {
+      netflags |= NETIO_FLAG_PLAINTEXT;
     }
-    
+
     if((rc = vsxlib_check_prior_listeners(arrCfgs, maxListenerCfgs, 
                                           (const struct sockaddr *) &sockList.salist[0])) > 0) {
-      if(arrCfgs[rc - 1].netflags != netflags) {
-        LOG(X_ERROR("Cannot mix SSL and non-SSL listener for %s"), arrAddr[idxArr]);
-        return -1;
-      } else {
-        if((arrCfgs[rc - 1].urlCapabilities & urlCap)) {
-          LOG(X_WARNING("Duplicate listener specified with %s"), arrAddr[idxArr]);
-        }
-        //LOG(X_DEBUG("REUSING idxArr[%d] with new urlCap: 0x%x |= 0x%x"), idxArr, arrCfgs[rc - 1].urlCapabilities, urlCap);
+      //if(arrCfgs[rc - 1].netflags != netflags) {
+      //  LOG(X_ERROR("Cannot mix SSL and non-SSL listener for %s"), arrAddr[idxArr]);
+      //  return -1;
+      //} else {
+
+        //if((arrCfgs[rc - 1].urlCapabilities & urlCap) &&
+        //   (arrCfgs[rc - 1].netflags & netflags)) {
+        //  LOG(X_WARNING("Duplicate listener specified with %s"), arrAddr[idxArr]);
+        //}
+
+        //LOG(X_DEBUG("REUSING idxArr[%d]-> cfgs[%d] '%s' with new urlCap: 0x%x |= 0x%x, flags 0x%x != 0x%x"), idxArr, rc-1, arrAddr[idxArr], arrCfgs[rc - 1].urlCapabilities, urlCap, arrCfgs[rc - 1].netflags, netflags);
         arrCfgs[rc - 1].urlCapabilities |= urlCap;
+        arrCfgs[rc - 1].netflags |= netflags;
         continue;
-      }
+      //}
     }
 
     //
@@ -1779,10 +1807,10 @@ int vsxlib_parse_listener(const char *arrAddr[], unsigned int maxListenerCfgs, S
       break;
     }
 
-    //fprintf(stderr, "ADDING idxArr[%d] 0x%x idxCfg[%d], port: %d, urlCap: 0x%x, pAuthStore: 0x%x\n", idxArr, arrAddr[idxArr], idxCfgs, htons(arrCfgs[idxCfgs].sain.sin_port), urlCap, ppAuthStores ? ppAuthStores : NULL);
+    //LOG(X_DEBUG("ADDING idxArr[%d] '%s' -> cfgs[%d], port: %d, urlCap: 0x%x | 0x%x, netflags: 0x%x | 0x%x, pAuthStore: 0x%x"), idxArr, arrAddr[idxArr], idxCfgs, htons(INET_PORT(sockList.salist[0])), arrCfgs[idxCfgs].urlCapabilities, urlCap, arrCfgs[idxCfgs].netflags, netflags, ppAuthStores ? ppAuthStores : NULL);
 
     memcpy(&arrCfgs[idxCfgs].sa, &sockList.salist[0], sizeof(arrCfgs[idxCfgs].sa));
-    arrCfgs[idxCfgs].netflags = netflags;
+    arrCfgs[idxCfgs].netflags |= netflags;
     arrCfgs[idxCfgs].urlCapabilities |= urlCap;
     arrCfgs[idxCfgs].idxCfg = idxCfgs;
     if(ppAuthStores && IS_AUTH_CREDENTIALS_SET(&authStore)) {

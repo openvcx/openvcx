@@ -38,7 +38,10 @@
 #define URL_RTMPT_FMT_STR                  "rtmpt%s://%s:%d"
 #define URL_HTTP_FMT_STR                   "http%s://%s:%d"
 
-#define URL_HTTP_FMT_PROTO_HOST(sockflags, location) ((sockflags) & NETIO_FLAG_SSL_TLS) ? "s" : "", (location)
+#define URL_HTTP_FMT_PROTO_HOST(sockflags, location) (((sockflags) & NETIO_FLAG_PLAINTEXT) && \
+                                                      ((sockflags) & NETIO_FLAG_SSL_TLS)) \
+                                                      ? "[s]" : ((sockflags) & NETIO_FLAG_SSL_TLS) \
+                                                      ? "s" : "", (location)
 #define URL_HTTP_FMT_ARGS2(p, location)              URL_HTTP_FMT_PROTO_HOST( (p)->netflags, (location)), \
                                                      ntohs(INET_PORT((p)->sa))
 #define URL_HTTP_FMT_ARGS(p)                         URL_HTTP_FMT_ARGS2(p, net_getlocalhostname())   

@@ -62,5 +62,10 @@ if [ -d ${VSX_HOME}/lib ]; then
 
 fi
 
+if [ `uname` = "Linux" ]; then
+  #set stack size of each process (thread) to a low value such as 256Kb
+  ulimit -s 256
+fi
+
 #echo ./${VSXBIN} "$@"
 ./${VSXBIN} "$@"

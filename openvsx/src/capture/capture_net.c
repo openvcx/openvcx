@@ -191,6 +191,7 @@ static void capture_setstate(CAP_ASYNC_DESCR_T *pCapCfg, int runningState, int l
 
 static void capture_pktqueue_rdproc(void *parg) {
   CAP_ASYNC_DESCR_T *pCap = (CAP_ASYNC_DESCR_T *) parg;
+  unsigned int idx;
   int rc = 0;
 
   logutil_tid_add(pthread_self(), pCap->tid_tag);
@@ -211,16 +212,26 @@ static void capture_pktqueue_rdproc(void *parg) {
       pCap->pSockList->netsockets[0].flags |= NETIO_FLAG_SSL_TLS; 
     }
 
-    if(pCap->pStreamerCfg) {
-      pCap->pStreamerCfg->sharedCtxt.state = STREAMER_SHARED_STATE_UNKNOWN;
-    }
+    if(pCap->pcommon->addrsExt[0] == NULL || pCap->pcommon->addrsExt[0] == '\0') {
+      LOG(X_ERROR("HTTP server capture mode not implemented"));
+      rc = -1; 
+    } else {
 
-    rc = capture_httpget(pCap);
+      if(pCap->pStreamerCfg) {
+        pCap->pStreamerCfg->sharedCtxt.state = STREAMER_SHARED_STATE_UNKNOWN;
+      }
+
+      rc = capture_httpget(pCap);
+    }
 
   } else if(IS_CAPTURE_FILTER_TRANSPORT_RTMP(pCap->pcommon->filt.filters[0].transType)) {
 
-    if(IS_CAPTURE_FILTER_TRANSPORT_SSL(pCap->pcommon->filt.filters[0].transType)) {
-      pCap->pSockList->netsockets[0].flags |= NETIO_FLAG_SSL_TLS; 
+    for(idx = 0; idx < 2; idx++) {
+      if(IS_CAPTURE_FILTER_TRANSPORT_SSL(pCap->pcommon->filt.filters[idx].transType)) {
+        pCap->pSockList->netsockets[0].flags |= NETIO_FLAG_SSL_TLS; 
+      } else {
+        pCap->pSockList->netsockets[0].flags |= NETIO_FLAG_PLAINTEXT; 
+      }
     }
 
     if(pCap->pStreamerCfg) {
@@ -236,10 +247,12 @@ static void capture_pktqueue_rdproc(void *parg) {
     }
 
   } else if(pCap->pcommon->filt.filters[0].transType == CAPTURE_FILTER_TRANSPORT_DEV) {
+
     if(pCap->pStreamerCfg) {
       pCap->pStreamerCfg->sharedCtxt.state = STREAMER_SHARED_STATE_UNKNOWN;
     }
     rc = capture_devStart(pCap);
+
   } else { 
 
     //
@@ -437,7 +450,6 @@ static int xmitout(XMIT_ASYNC_DESCR_T *pXmit) {
     LOG(X_DEBUGV("Done Waiting for shared socket creation"));
 
   }
-
 
   switch(pXmit->xmitType) {
 
@@ -641,7 +653,6 @@ static void init_cap_async(CAP_ASYNC_DESCR_T *pCapAsync, const CAPTURE_DESCR_COM
 
 }
 
-//static int stream_capture(SOCKET_LIST_T *pSockList, CAPTURE_LOCAL_DESCR_T *pLocalCfg, STREAMER_CFG_T *pStreamerCfg) {
 static int stream_capture(CAP_ASYNC_DESCR_T *pCfg, CAPTURE_PKT_ACTION_DESCR_T *capActions) {
   int rc = 0;
   pthread_t ptdCap;
@@ -1377,7 +1388,8 @@ int capture_net_async(CAPTURE_LOCAL_DESCR_T *pLocalCfg,
       // The global SSL server context is usually initialized when calling vsxlib_setupServer but that
       // may not have been the case if we're just running an SSL RTSP capture 
       //
-      if(IS_CAPTURE_FILTER_TRANSPORT_SSL(pLocalCfg->common.filt.filters[0].transType) &&
+      if((IS_CAPTURE_FILTER_TRANSPORT_SSL(pLocalCfg->common.filt.filters[0].transType) ||
+          IS_CAPTURE_FILTER_TRANSPORT_SSL(pLocalCfg->common.filt.filters[1].transType)) &&
         !netio_ssl_enabled(1)) {
         memset(&tmpListenCfg, 0, sizeof(tmpListenCfg));
         tmpListenCfg.netflags |= NETIO_FLAG_SSL_TLS;

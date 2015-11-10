@@ -82,7 +82,7 @@ SOCKET net_opensocket(int socktype, unsigned int rcvbufsz, int sndbufsz, const s
   }
 
   if(psa) {
-
+    //LOG(X_DEBUG("NET_OPENSOCKET... family: %d, is_multicast: %d"), psa->sa_family, (socktype == SOCK_DGRAM && INET_IS_MULTICAST(psa)));
     //
     // Handle IGMP multicast group subscription
     //
@@ -91,7 +91,7 @@ SOCKET net_opensocket(int socktype, unsigned int rcvbufsz, int sndbufsz, const s
         closesocket(sock);
         LOG(X_ERROR("Failed to create socket family: %d %s:%d"), sa_family, 
                     FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), htons(PINET_PORT(psa)));
-        LOGHEX_DEBUG(psa, sizeof(struct sockaddr_storage));
+        LOGHEX_DEBUGV(psa, sizeof(struct sockaddr_storage));
         return INVALID_SOCKET;
       }
     }
@@ -225,9 +225,8 @@ int net_bindlistener(SOCKET sock, struct sockaddr_in *psain)  {
 }
 #endif // 0
 
-
 int net_recvnb(SOCKET sock, unsigned char *buf, unsigned int len, 
-                      unsigned int mstmt) {
+                      unsigned int mstmt, int peek) {
   struct timeval tv;
   fd_set fdsetRd;
   int rc;
@@ -241,6 +240,10 @@ int net_recvnb(SOCKET sock, unsigned char *buf, unsigned int len,
     return -1;
   }
 
+  if(peek) {
+    sockflags |= MSG_PEEK;
+  }
+
   tv.tv_sec = (mstmt / 1000);
   tv.tv_usec = (mstmt % 1000) * 1000;
 
@@ -250,13 +253,13 @@ int net_recvnb(SOCKET sock, unsigned char *buf, unsigned int len,
   if((rc = select(sock + 1, &fdsetRd, NULL, NULL, &tv)) > 0) {
 
     if((rc = recv(sock, (void *) buf, len, sockflags)) < 0) {
-      LOG(X_ERROR("recv nonblock %d returned %d "ERRNO_FMT_STR), 
-          len, rc, ERRNO_FMT_ARGS);
+      LOG(X_ERROR("recv nonblock %d, sockflags: 0x%x returned %d "ERRNO_FMT_STR), 
+          len, sockflags, rc, ERRNO_FMT_ARGS);
     } else if(rc == 0) {
       LOG(X_WARNING("recv nonblock %d - connection has been closed."), len);
       rc = -1;
     } else {
-      VSX_DEBUG_NET( LOG(X_DEBUG("NET - net_recvnb got %d/%d bytes, fd: %d"), rc, len, sock) );
+      VSX_DEBUG_NET( LOG(X_DEBUG("NET - net_recvnb %s %d/%d bytes, fd: %d"), peek ? "peeked" : "got", rc, len, sock) );
     }
 
   } else if(rc == 0) {
@@ -375,7 +378,7 @@ int net_connect(SOCKET sock, const struct sockaddr *psa) {
 
 
 int net_recvnb_exact(SOCKET sock, unsigned char *buf, unsigned int len, 
-                            unsigned int mstmt) {
+                            unsigned int mstmt, int peek) {
   unsigned int idx = 0;
   int rc;
   unsigned int ms;
@@ -385,7 +388,7 @@ int net_recvnb_exact(SOCKET sock, unsigned char *buf, unsigned int len,
  
   do {
 
-    if((rc = net_recvnb(sock, &buf[idx], len - idx, MIN(mstmt, 1000))) < 0) {
+    if((rc = net_recvnb(sock, &buf[idx], len - idx, MIN(mstmt, 1000), peek)) < 0) {
       return rc;
     } else if(rc > 0) {
       idx += rc;
@@ -453,6 +456,11 @@ int net_recv_exact(SOCKET sock, const struct sockaddr *psa,
   } while(idx < len);
 
   return idx;
+}
+
+int net_peeknb(SOCKET sock, unsigned char *buf, unsigned int len, unsigned int mstmt) {
+  VSX_DEBUG_NET( LOG(X_DEBUG("NET - net_peeknb len: %d, mstmt: %u ms calling net_recvnb..."), len, mstmt); );
+  return net_recvnb(sock, buf, len, mstmt, 1);
 }
 
 

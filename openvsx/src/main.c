@@ -254,6 +254,10 @@ static void usage_capture(int argc, const const char *argv[]) {
       "         --capture=\"http[s]://[username:password@][remote-address]:[port]/httplive/out.m3u8\"\n"
       "         --capture=\"http[s]://[username:password@][remote-address]:[port]/tslive\"\n"
       "\n"
+      "       To enable an SSL/TLS and non-SSL/TLS capture server on the same port:\n"
+      "         --capture=\"rtmp://1935\" --capture=\"rtmps://1935\"\n"
+      "         --capture=\"rtsp://1554\" --capture=\"rtsps://1554\"\n"
+      "\n"
       "     To record the capture use stream output types such as:\n"
       "         '--out=[output.m2t]', '--flvrecord=[output.flv]', '--mkvrecord=[output.webm]'\n"
       "\n"
@@ -1457,7 +1461,7 @@ int main(int argc, char *argv[]) {
       case 'c':
         action |= (ACTION_TYPE_CAPTURE & ACTION_TYPE_CAPSTREAM_MASK);
         if(optarg) {
-          if(idxInputs < 2) {
+          if(idxInputs < sizeof(streamParams.inputs) / sizeof(streamParams.inputs[0])) {
             streamParams.inputs[idxInputs++] = optarg;
           }
         }
@@ -1722,7 +1726,7 @@ int main(int argc, char *argv[]) {
       case CMD_OPT_INPUT:
         have_arg_input = 1;
       case CMD_OPT_LISTEN:
-        if(idxInputs < 2) {
+          if(idxInputs < sizeof(streamParams.inputs) / sizeof(streamParams.inputs[0])) {
           streamParams.inputs[idxInputs] = optarg;
           idxInputs++;
         }

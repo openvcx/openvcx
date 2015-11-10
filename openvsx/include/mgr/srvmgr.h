@@ -62,10 +62,10 @@
 //
 // Always increment by 3 (http,status,ssl)
 //
-#define MGR_PORT_ALLOC_COUNT(ssl)         (3)
-#define MGR_GET_PORT_HTTP(port, ssl)      ((port) + ((ssl) ? 2 : 0))
-#define MGR_GET_PORT_RTMP(port, ssl)      ((port) + ((ssl) ? 2 : 0))
-#define MGR_GET_PORT_RTSP(port, ssl)      ((port) + ((ssl) ? 2 : 0))
+#define MGR_PORT_ALLOC_COUNT(ssl)         (2)
+#define MGR_GET_PORT_HTTP(port, ssl)      ((port) + ((ssl) ? 0 : 0))
+#define MGR_GET_PORT_RTMP(port, ssl)      ((port) + ((ssl) ? 0 : 0))
+#define MGR_GET_PORT_RTSP(port, ssl)      ((port) + ((ssl) ? 0 : 0))
 #define MGR_GET_PORT_STATUS(port)         ((port)+1)
 
 

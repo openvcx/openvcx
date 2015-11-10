@@ -112,7 +112,7 @@
 SOCKET net_opensocket(int socktype, unsigned int rcvbufsz, int sndbufsz, const struct sockaddr *psa);
 int net_issockremotelyclosed(SOCKET sock, int writer);
 SOCKET net_listen(const struct sockaddr *psa, int backlog);
-
+int net_peeknb(SOCKET sock, unsigned char *buf, unsigned int len, unsigned int mstmt);
 
 void net_closesocket(SOCKET *psock);
 int net_setsocknonblock(SOCKET sock, int on);

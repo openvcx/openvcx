@@ -43,15 +43,16 @@
                  NETIO_SSL_METHODSTR_SSLV23"|" \
                  NETIO_SSL_METHODSTR_TLSV1"|" \
                  NETIO_SSL_METHODSTR_TLSV1_1"|" \
-                NETIO_SSL_METHODSTR_TLSV1_2 \
+                 NETIO_SSL_METHODSTR_TLSV1_2 \
 
 typedef enum NETIO_FLAG {
   NETIO_FLAG_NONE                  = 0x0000,
-  NETIO_FLAG_SSL_TLS               = 0x0001,
-  NETIO_FLAG_SSL_DTLS              = 0x0002,
-  NETIO_FLAG_SRTP                  = 0x0004,
-  NETIO_FLAG_SSL_DTLS_SRTP_OUTKEY  = 0x0008,
-  NETIO_FLAG_SSL_DTLS_SERVER       = 0x0010
+  NETIO_FLAG_PLAINTEXT             = 0x0001,
+  NETIO_FLAG_SSL_TLS               = 0x0002,
+  NETIO_FLAG_SSL_DTLS              = 0x0004,
+  NETIO_FLAG_SRTP                  = 0x0008,
+  NETIO_FLAG_SSL_DTLS_SRTP_OUTKEY  = 0x0010,
+  NETIO_FLAG_SSL_DTLS_SERVER       = 0x0020
 } NETIO_FLAG_T;
 
 typedef enum SSL_SOCK_STATE {
@@ -139,6 +140,8 @@ typedef struct NETIO_SOCK {
 
 #define IS_ADDR4_VALID(sin_addr) ((sin_addr).s_addr != INADDR_NONE && (sin_addr).s_addr != INADDR_ANY)
 
+#define SSL_IDENTIFY_LEN_MIN                 5
+
 int netio_recvnb(NETIO_SOCK_T *psock, unsigned char *buf, unsigned int len,
                  unsigned int mstmt);
 int netio_recvnb_exact(NETIO_SOCK_T *psock, unsigned char *buf, unsigned int len,
@@ -161,6 +164,7 @@ int netio_ssl_init_srv(const char *certPath, const char *privKeyPath, const char
 int netio_ssl_init_cli(const char *certPath, const char *privKeyPath, const char *methodstr);
 int netio_ssl_close();
 int netio_ssl_enabled(int server);
+int netio_ssl_isssl(const unsigned char *pData, unsigned int len);
 
 
 

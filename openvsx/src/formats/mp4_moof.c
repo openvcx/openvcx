@@ -323,7 +323,6 @@ static int moof_addto_trun(MOOF_STATE_INT_T *pCtxtInt,
   BOX_TRUN_ENTRY_T *pSamples;
   unsigned int alloc_count;
   BOX_TRUN_ENTRY_T trunEntry;
-  BOX_TRUN_ENTRY_T **ppTrunEntryPrior = NULL;
   unsigned int dataLength = 0;
   unsigned char *pData = NULL;
   uint64_t ptsDuration = 0;
@@ -346,9 +345,14 @@ static int moof_addto_trun(MOOF_STATE_INT_T *pCtxtInt,
       LOG(X_CRITICAL("Failed to allocate %d bytes for trun samples block"), alloc_count);
       return -1;
     }
+
     if(pBoxTrun->sample_count > 0 && pBoxTrun->pSamples) {
+
       memcpy(pSamples, pBoxTrun->pSamples, sizeof(BOX_TRUN_ENTRY_T) * pBoxTrun->sample_count);
       free(pBoxTrun->pSamples);
+      if(pCtxtInt->pTrunEntryPrior) {
+        pCtxtInt->pTrunEntryPrior = &pSamples[pBoxTrun->sample_count];
+      }
     }
     pBoxTrun->pSamples = pSamples;
     pBoxTrun->alloc_count = alloc_count;
@@ -359,7 +363,6 @@ static int moof_addto_trun(MOOF_STATE_INT_T *pCtxtInt,
   dataLength = OUTFMT_LEN(pFrame);
   ptsDuration = (int64_t) OUTFMT_PTS(pFrame) - (int64_t) pCtxtInt->ptsElapsed;
   pCtxtInt->ptsElapsed += ptsDuration;
-  ppTrunEntryPrior = &pCtxtInt->pTrunEntryPrior;
 
   //
   // Handle codec specific data formatting and conversion
@@ -399,13 +402,11 @@ static int moof_addto_trun(MOOF_STATE_INT_T *pCtxtInt,
   //
   // Set the sample duration of the prior sample now that the time of the subsequent (current) sample is known
   //
-  if(ppTrunEntryPrior && *ppTrunEntryPrior) {
-    (*ppTrunEntryPrior)->sample_duration = trunEntry.sample_duration;
+  if(pCtxtInt->pTrunEntryPrior) {
+    pCtxtInt->pTrunEntryPrior->sample_duration = trunEntry.sample_duration;
   }
 
-  if(ppTrunEntryPrior) {
-    (*ppTrunEntryPrior) = &pBoxTrun->pSamples[pBoxTrun->sample_count];
-  }
+  pCtxtInt->pTrunEntryPrior = &pBoxTrun->pSamples[pBoxTrun->sample_count];
   memcpy(&pBoxTrun->pSamples[pBoxTrun->sample_count], &trunEntry, sizeof(BOX_TRUN_ENTRY_T));
 
   pBoxTrun->sample_count++;

@@ -39,6 +39,7 @@ typedef struct THREAD_FUNC_WRAPPER_ARG {
 void thread_func_wrapper(void *pArg) {
   THREAD_FUNC_WRAPPER_ARG_T wrap;
   char tmp[128];
+  int is_ssl = -1;
   int rc = 0;
   HTTP_REQ_T httpReq;
 
@@ -51,10 +52,62 @@ void thread_func_wrapper(void *pArg) {
 
   //fprintf(stderr, "%u THREAD_FUNC pConn:0x%x inuse:%d\n", pthread_self(), wrap.pConn, wrap.pConn->pool.inuse);
 
+  if((rc = net_peeknb(NETIOSOCK_FD(wrap.pConn->sd.netsocket), (unsigned char *) tmp, SSL_IDENTIFY_LEN_MIN, 
+                      HTTP_REQUEST_TIMEOUT_SEC * 1000)) == SSL_IDENTIFY_LEN_MIN) {
+  
+    is_ssl = netio_ssl_isssl((unsigned char *) tmp, rc);
+    VSX_DEBUG_SSL( LOG(X_DEBUG("SSL - Peeked %d bytes, is_ssl: %d"), rc, is_ssl);
+                   LOGHEXT_DEBUG(tmp, rc); );
+
+    if(is_ssl == 0) {
+
+      if((wrap.pConn->sd.netsocket.flags & NETIO_FLAG_SSL_TLS) && 
+         !(wrap.pConn->sd.netsocket.flags & NETIO_FLAG_PLAINTEXT)) {
+
+        rc = -1;
+        LOG(X_ERROR("Refusing unsecure connection on SSL/TLS port %d from %s:%d"), 
+          htons(INET_PORT(wrap.pConn->pListenCfg->sa)), 
+          FORMAT_NETADDR(wrap.pConn->sd.sa, tmp, sizeof(tmp)), htons(INET_PORT(wrap.pConn->sd.sa)));
+
+      } else if((wrap.pConn->sd.netsocket.flags & NETIO_FLAG_PLAINTEXT) &&
+                (wrap.pConn->sd.netsocket.flags & NETIO_FLAG_SSL_TLS)) {
+
+        // Allow plain-text connection on port setup for SSL/TLS and plain-text
+        wrap.pConn->sd.netsocket.flags &= ~NETIO_FLAG_SSL_TLS;
+      }
+
+    } else if(is_ssl == 1) {
+
+      if(!(wrap.pConn->sd.netsocket.flags & NETIO_FLAG_SSL_TLS)) {
+
+        rc = -1;
+        LOG(X_ERROR("Refusing SSL/TLS connection on unsecure port %d from %s:%d"), 
+          htons(INET_PORT(wrap.pConn->pListenCfg->sa)), 
+          FORMAT_NETADDR(wrap.pConn->sd.sa, tmp, sizeof(tmp)), htons(INET_PORT(wrap.pConn->sd.sa)));
+
+      } else if((wrap.pConn->sd.netsocket.flags & NETIO_FLAG_PLAINTEXT)) {
+
+        // Allow SSL/TLS connection on port setup for SSL/TLS and plain-text
+        wrap.pConn->sd.netsocket.flags &= ~NETIO_FLAG_PLAINTEXT;
+      }
+
+    } else {
+      LOG(X_DEBUG("Unable to determine if connecion is secure on port %d from %s:%d"), 
+          htons(INET_PORT(wrap.pConn->pListenCfg->sa)), 
+          FORMAT_NETADDR(wrap.pConn->sd.sa, tmp, sizeof(tmp)), htons(INET_PORT(wrap.pConn->sd.sa)));
+    }
+
+  } else {
+    LOG(X_ERROR("Failed to peek %d bytes of data start on port %d from %s:%d"), 
+          SSL_IDENTIFY_LEN_MIN, htons(INET_PORT(wrap.pConn->pListenCfg->sa)), 
+          FORMAT_NETADDR(wrap.pConn->sd.sa, tmp, sizeof(tmp)), htons(INET_PORT(wrap.pConn->sd.sa)));
+    rc = -1;
+  }
+
   //
   // Handle any SSL handshaking on the connection thread, to avoid blocking the accept loop
   //
-  if((wrap.pConn->sd.netsocket.flags & NETIO_FLAG_SSL_TLS)) {
+  if(rc >= 0 && (wrap.pConn->sd.netsocket.flags & NETIO_FLAG_SSL_TLS)) {
 
     if((rc = netio_acceptssl(&wrap.pConn->sd.netsocket)) < 0) {
       LOG(X_ERROR("Closing non-SSL connection on port %d from %s:%d"), htons(INET_PORT(wrap.pConn->pListenCfg->sa)), 
@@ -62,7 +115,7 @@ void thread_func_wrapper(void *pArg) {
     }
   }
 
-  if(rc == 0) {
+  if(rc >= 0) {
 
     memset(&httpReq, 0, sizeof(httpReq));
     wrap.pConn->phttpReq = &httpReq;

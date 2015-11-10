@@ -56,8 +56,8 @@ static const void *netio_ssl_getmethod(int server, const char *str);
 
 #endif // VSX_HAVE_SSL
 
-extern int net_recvnb(SOCKET sock, unsigned char *buf, unsigned int len, unsigned int mstmt);
-extern int net_recvnb_exact(SOCKET sock, unsigned char *buf, unsigned int len, unsigned int mstmt);
+extern int net_recvnb(SOCKET sock, unsigned char *buf, unsigned int len, unsigned int mstmt, int peek);
+extern int net_recvnb_exact(SOCKET sock, unsigned char *buf, unsigned int len, unsigned int mstmt, int peek);
 extern int net_recv_exact(SOCKET sock, const struct sockaddr *psa,
                    unsigned char *buf, unsigned int len);
 extern int net_recv(SOCKET sock, const struct sockaddr *psa,
@@ -94,6 +94,8 @@ int netio_peek(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned len) {
 }
 
 int netio_recvnb(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned int len, unsigned int mstmt) {
+  int peek = 0;
+
   if(!pnetsock) {
     return -1;
   }
@@ -111,12 +113,14 @@ int netio_recvnb(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned int len, u
 #endif // VSX_HAVE_SSL
 
   } else {
-    return net_recvnb(PNETIOSOCK_FD(pnetsock), buf, len, mstmt);
+    return net_recvnb(PNETIOSOCK_FD(pnetsock), buf, len, mstmt, peek);
   }
 }
 
 int netio_recvnb_exact(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned int len,
                      unsigned int mstmt) {
+  int peek = 0;
+
   if(!pnetsock) {
     return -1;
   }
@@ -131,7 +135,7 @@ int netio_recvnb_exact(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned int 
 #endif // VSX_HAVE_SSL
 
   } else {
-    return net_recvnb_exact(PNETIOSOCK_FD(pnetsock), buf, len, mstmt);
+    return net_recvnb_exact(PNETIOSOCK_FD(pnetsock), buf, len, mstmt, peek);
   }
 
 }
@@ -872,3 +876,72 @@ int netio_ssl_init_cli(const char *certPath, const char *privKeyPath) {
 }
 
 #endif // VSX_HAVE_SSL
+
+
+#define SSL_SSL3_RT_HANDSHAKE                0x16
+#define SSL_SSL3_VERSION_MAJOR               0x03
+#define SSL_SSL3_VERSION_MINOR               0x00
+#define SSL_TLS1_VERSION_MINOR               0x01
+#define SSL_TLS1_1_VERSION_MINOR             0x02
+#define SSL_TLS1_2_VERSION_MINOR             0x03
+
+#define SSL_SSL2_MT_CLIENT_HELLO             0x01
+#define SSL_SSL2_VERSION_MAJOR               0x00
+#define SSL_SSL2_VERSION_MINOR               0x02
+
+int netio_ssl_isssl(const unsigned char *pData, unsigned int len) {
+  int rc = 0;
+
+  if(len < SSL_IDENTIFY_LEN_MIN) {
+    return -1;
+  }
+
+  if(pData[0] == SSL_SSL3_RT_HANDSHAKE) {
+
+    if(pData[1] == SSL_SSL3_VERSION_MAJOR) {
+
+      if(pData[2] == SSL_SSL3_VERSION_MINOR) {
+        //
+        // SSLv3
+        // 0x16 0x30 0x00 < 2 bytes len >
+        //
+        return 1;
+      } else if(pData[2] == SSL_TLS1_VERSION_MINOR) {
+        //
+        // TLSv1 
+        // 0x16 0x30 0x01 < 2 bytes len >
+        //
+        return 1;
+      } else if(pData[2] == SSL_TLS1_1_VERSION_MINOR) {
+        //
+        // TLSv1_1
+        // 0x16 0x30 0x02 < 2 bytes len >
+        //
+        return 1;
+      } else if(pData[3] == SSL_TLS1_2_VERSION_MINOR) {
+        //
+        // TLSv1_2
+        // 0x16 0x30 0x03 < 2 bytes len >
+        //
+        return 1;
+      }
+
+    }
+
+  } else if((pData[0] >> 6)  == 0x02) {
+    //
+    // SSLv2
+    // 0x80 0x1c 0x01 0x00 0x02
+    // length = pData[0] & 0x3fff
+    //
+    if(pData[2] == SSL_SSL2_MT_CLIENT_HELLO &&
+       pData[3] == SSL_SSL2_VERSION_MAJOR &&
+       pData[4] == SSL_SSL2_VERSION_MINOR) {
+      return 1;
+    }
+
+  }
+
+  return rc;
+}
+

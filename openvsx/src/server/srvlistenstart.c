@@ -97,7 +97,8 @@ static void srvlisten_media_proc(void *pArg) {
     }
 
     LOG(X_INFO("rtmp %s%s available at "URL_RTMP_FMT_STR"%s max:%d"),
-           ((pListenCfg->netflags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : ""),
+       ((pListenCfg->netflags & NETIO_FLAG_PLAINTEXT) && (pListenCfg->netflags & NETIO_FLAG_SSL_TLS) ) ? "(SSL) " :
+       ((pListenCfg->netflags & NETIO_FLAG_SSL_TLS) ? "(SSL only) " : ""),
            ((pListenCfg->urlCapabilities & URL_CAP_RTMPTLIVE) && !(pListenCfg->urlCapabilities & URL_CAP_RTMPLIVE) ?
             "(tunneled only) " : ((pListenCfg->urlCapabilities & URL_CAP_RTMPTLIVE) ? "(tunneled) " : "")),
            URL_PROTO_FMT2_ARGS(
@@ -119,7 +120,8 @@ static void srvlisten_media_proc(void *pArg) {
     }
 
     LOG(X_INFO("rtsp %s available at "URL_RTSP_FMT_STR"%s max:%d%s"),
-             ((pListenCfg->netflags & NETIO_FLAG_SSL_TLS) ? "(SSL) " : ""),
+       ((pListenCfg->netflags & NETIO_FLAG_PLAINTEXT) && (pListenCfg->netflags & NETIO_FLAG_SSL_TLS) ) ? "(SSL) " :
+       ((pListenCfg->netflags & NETIO_FLAG_SSL_TLS) ? "(SSL only) " : ""),
              URL_PROTO_FMT2_ARGS(
                  (pListenCfg->netflags & NETIO_FLAG_SSL_TLS),
                    FORMAT_NETADDR(sa, tmp, sizeof(tmp))), ntohs(INET_PORT(sa)),
