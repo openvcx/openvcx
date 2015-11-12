@@ -79,13 +79,16 @@ static LOG_PROPERTIES_T *g_plogProps = &_g_logProps;
 typedef struct LOG_CTXT_INT {
   LOG_PROPERTIES_T *plogProps;
   void *plogutil_tidctxt; // LOGUTIL_THREAD_CTXT_T
+  int debug_flags;
 } LOG_CTXT_INT_T;
 
 static LOG_CTXT_INT_T g_logCtxtInt;
+extern int g_debug_flags;
 
 void *logger_getContext() {
   g_logCtxtInt.plogProps = &_g_logProps;
   g_logCtxtInt.plogutil_tidctxt = logutil_tid_getContext();
+  g_logCtxtInt.debug_flags = g_debug_flags;
   return &g_logCtxtInt;
 }
 
@@ -99,6 +102,7 @@ int logger_setContext(void *pCtxt) {
   if(pLogCtxtInt->plogutil_tidctxt) {
     logutil_tid_setContext(pLogCtxtInt->plogutil_tidctxt);
   }
+  g_debug_flags = pLogCtxtInt->debug_flags;
   return 0;
 }
 

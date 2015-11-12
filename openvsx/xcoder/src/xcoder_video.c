@@ -148,6 +148,11 @@ extern void av_log_set_level(int);
 
 pthread_mutex_t g_xcode_mtx = PTHREAD_MUTEX_INITIALIZER;
 
+#if defined(__APPLE__)
+// Needed when linking with libcommonutil.a or anything which references VSX_DEBUG_...
+int g_debug_flags;
+#endif // __APPLE__
+
 #define OUT_DIMENSIONS(pXcode, av, pipframeidx)  ((pXcode)->pip.active ? &((av).dim_pips[pipframeidx]) : &((av).dim_enc)) 
 
 
