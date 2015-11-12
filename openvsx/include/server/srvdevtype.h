@@ -54,6 +54,7 @@
 #define STREAM_METHOD_UDP_RTP_STR           "rtp"
 #define STREAM_METHOD_UDP_STR               "udp"
 #define STREAM_METHOD_ANYLIVE_STR           "anylive"
+#define STREAM_METHOD_NONE_STR              "none"
 
 #define STREAM_DEV_NAME_MAX       32
 

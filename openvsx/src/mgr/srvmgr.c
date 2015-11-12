@@ -661,9 +661,11 @@ static MEDIA_ACTION_T get_media_action(const MEDIA_DESCRIPTION_T *pMediaDescr,
 static int process_liveoverhttp(SRV_MGR_CONN_T *pMgrConn, 
                                 const SRVMEDIA_RSRC_T *pMediaRsrc, 
                                 const SYS_PROC_T *pProc, 
+                                HTTP_STATUS_T *pHttpStatus,
                                 MEDIA_ACTION_T action, 
                                 STREAM_METHOD_T method,
-                                int startProc) {
+                                int startProc,
+                                int directMediaReq) {
   int rc = 0;
   int sz, sz2;
   SRV_CFG_T cfg;
@@ -672,6 +674,8 @@ static int process_liveoverhttp(SRV_MGR_CONN_T *pMgrConn,
   SRV_CFG_T *pCfgOrig = pConn->pCfg;
   char rsrcurl[VSX_MAX_PATH_LEN];
   char tmp[128];
+  char urloutbuf[HTTP_URL_LEN];
+  char *purloutbuf = NULL;
   int is_remoteargfile = 0;
   const char *pvirtRsrc = pMediaRsrc->virtRsrc;
   MEDIA_DESCRIPTION_T mediaDescr;
@@ -861,33 +865,47 @@ static int process_liveoverhttp(SRV_MGR_CONN_T *pMgrConn,
 
   }
 
+  //
+  // Check if this is a request for direct live media such as /mkvlive, /flvlive, so we want to 
+  // only get the URL of the stream processor source just as if it were /mkv, /flv, and we don't 
+  // return an HTML page but rather a redirect to the media link
+  //
+  if(directMediaReq) {
+
+     memset(urloutbuf, 0, sizeof(urloutbuf));
+     purloutbuf = urloutbuf; 
+
+    //TODO: handle in proxy
+  }
+
+
   if(action == MEDIA_ACTION_CANNED_WEBM) {
 
     //
     // Return the rsrc/mkv_embed.html with a link of a canned resource such as /media/
     //
-    rc = srv_ctrl_mkv(pConn, rsrcurl, is_remoteargfile, cfg.pListenHttp);
+    rc = srv_ctrl_mkv(pConn, rsrcurl, is_remoteargfile, cfg.pListenHttp, purloutbuf);
 
   } else if(action == MEDIA_ACTION_CANNED_INFLASH) {
 
     //
     // Return the rsrc/http_embed.html with a link of a canned resource such as /media/
     //
-    rc = srv_ctrl_flv(pConn, rsrcurl, is_remoteargfile, cfg.pListenHttp);
+    rc = srv_ctrl_flv(pConn, rsrcurl, is_remoteargfile, cfg.pListenHttp, purloutbuf);
 
   } else if(method == STREAM_METHOD_MKVLIVE) {
 
     //
     // Return the rsrc/mkv_embed.html with a link of a live of the child stream processor
     //
-    rc = srv_ctrl_mkv(pConn, pvirtRsrc, is_remoteargfile, cfg.pListenHttp);
+    rc = srv_ctrl_mkv(pConn, pvirtRsrc, is_remoteargfile, cfg.pListenHttp, purloutbuf);
 
   } else if(method == STREAM_METHOD_FLVLIVE) {
 
     //
     // Return the rsrc/http_embed.html with a link of a live of the child stream processor
     //
-    rc = srv_ctrl_flv(pConn, pvirtRsrc, is_remoteargfile, cfg.pListenHttp);
+    rc = srv_ctrl_flv(pConn, pvirtRsrc, is_remoteargfile, cfg.pListenHttp, purloutbuf);
 
   } else if(method == STREAM_METHOD_RTSP || method == STREAM_METHOD_RTSP_HTTP||
            method == STREAM_METHOD_RTSP_INTERLEAVED) {
@@ -896,6 +914,16 @@ static int process_liveoverhttp(SRV_MGR_CONN_T *pMgrConn,
 
   } else {
     rc = srv_ctrl_rtmp(pConn, pvirtRsrc, is_remoteargfile, rsrcurl, cfg.pListenHttp, 0, method);
+  }
+
+  if(directMediaReq) {
+    // We now have the URL of the media source 
+    if(rc >= 0) {
+      rc = http_resp_moved(&pConn->sd, pConn->phttpReq, HTTP_STATUS_FOUND, 1, urloutbuf);
+    } else {
+      *pHttpStatus = HTTP_STATUS_SERVERERROR;
+      rc = -1;
+    }
   }
 
   pConn->pCfg = pCfgOrig;
@@ -1510,35 +1538,43 @@ int srvmgr_check_start_proc(SRV_MGR_CONN_T *pConn,
 
 static STREAM_METHOD_T get_method_fromurl(const CLIENT_CONN_T *pConn, 
                                           MEDIA_ACTION_T *pAction,  
-                                          int *pliveAutoFind) {
+                                          int *pliveAutoFind,
+                                          int *pdirectMediaReq) {
 
   STREAM_METHOD_T method = STREAM_METHOD_NONE;
 
-  if(!strncasecmp(pConn->phttpReq->puri, VSX_RTSP_URL, strlen(VSX_RTSP_URL))) {
+  if(!strncasecmp(pConn->phttpReq->puri, VSX_RTSP_URL"/", strlen(VSX_RTSP_URL) + 1)) {
     method = STREAM_METHOD_RTSP;
-  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_RTMPT_URL, strlen(VSX_RTMPT_URL))) {
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_RTMPT_URL"/", strlen(VSX_RTMPT_URL) + 1)) {
     method = STREAM_METHOD_RTMPT;
-  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_RTMP_URL, strlen(VSX_RTMP_URL))) {
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_RTMP_URL"/", strlen(VSX_RTMP_URL) + 1)) {
     method = STREAM_METHOD_RTMP;
-  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_HTTPLIVE_URL, strlen(VSX_HTTPLIVE_URL))) {
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_HTTPLIVE_URL"/", strlen(VSX_HTTPLIVE_URL) + 1)) {
     method = STREAM_METHOD_HTTPLIVE;
-  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_DASH_URL, strlen(VSX_DASH_URL))) {
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_DASH_URL"/", strlen(VSX_DASH_URL) + 1)) {
     method = STREAM_METHOD_DASH;
-  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_HTTP_URL, strlen(VSX_HTTP_URL))) {
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_HTTP_URL"/", strlen(VSX_HTTP_URL) + 1)) {
     method = STREAM_METHOD_FLASHHTTP;
-  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_MEDIA_URL, strlen(VSX_MEDIA_URL))) {
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_MEDIA_URL"/", strlen(VSX_MEDIA_URL) + 1)) {
     method = STREAM_METHOD_PROGDOWNLOAD;
-  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_FLV_URL, strlen(VSX_FLV_URL))) {
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_FLVLIVE_URL"/", strlen(VSX_FLVLIVE_URL) + 1)) {
     method = STREAM_METHOD_FLVLIVE;
-  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_MKV_URL, strlen(VSX_MKV_URL))) {
+    *pdirectMediaReq = 1;
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_FLV_URL"/", strlen(VSX_FLV_URL) + 1)) {
+    method = STREAM_METHOD_FLVLIVE;
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_MKVLIVE_URL"/", strlen(VSX_MKVLIVE_URL) + 1)) {
     method = STREAM_METHOD_MKVLIVE;
-  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_LIVE_URL, strlen(VSX_LIVE_URL))) {
+    *pdirectMediaReq = 1;
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_MKV_URL"/", strlen(VSX_MKV_URL) + 1) ||
+            !strncasecmp(pConn->phttpReq->puri, VSX_WEBM_URL"/", strlen(VSX_WEBM_URL) + 1)) {
+    method = STREAM_METHOD_MKVLIVE;
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_LIVE_URL"/", strlen(VSX_LIVE_URL) + 1)) {
     method = STREAM_METHOD_UNKNOWN;
     *pliveAutoFind = 1;
-  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_TMN_URL, strlen(VSX_TMN_URL))) {
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_TMN_URL"/", strlen(VSX_TMN_URL) + 1)) {
     method = STREAM_METHOD_NONE;
     *pAction = MEDIA_ACTION_TMN;
-  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_IMG_URL, strlen(VSX_IMG_URL))) {
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_IMG_URL"/", strlen(VSX_IMG_URL) + 1)) {
     method = STREAM_METHOD_NONE;
     *pAction = MEDIA_ACTION_IMG;
   } else if(!strncasecmp(pConn->phttpReq->puri, VSX_LIST_URL, strlen(VSX_LIST_URL))) {
@@ -1547,6 +1583,9 @@ static STREAM_METHOD_T get_method_fromurl(const CLIENT_CONN_T *pConn,
   } else if(!strncasecmp(pConn->phttpReq->puri, VSX_STATUS_URL, strlen(VSX_STATUS_URL))) {
     method = STREAM_METHOD_NONE;
     *pAction = MEDIA_ACTION_STATUS;
+  } else if(!strncasecmp(pConn->phttpReq->puri, VSX_TSLIVE_URL"/", strlen(VSX_TSLIVE_URL) + 1)) {
+    method = STREAM_METHOD_TSLIVE;
+    *pdirectMediaReq = 1;
   } else {
     method = STREAM_METHOD_NONE;
     *pAction = MEDIA_ACTION_INDEX_FILELIST;
@@ -1624,7 +1663,9 @@ int mgr_status_show_output(SRV_MGR_CONN_T *pConn, HTTP_STATUS_T *phttpStatus) {
   const char *parg;
   unsigned int idx = 0;
   char buf[4096];
-  char rateStr[64];
+  char tmpstrs[6][64];
+  CPU_USAGE_PERCENT_T *pCpuUsage = NULL;
+  MEM_SNAPSHOT_T *pMemUsage = NULL;
 
   if(!(pConn->conn.pListenCfg->urlCapabilities & URL_CAP_STATUS)) {
     *phttpStatus = HTTP_STATUS_FORBIDDEN;
@@ -1635,10 +1676,27 @@ int mgr_status_show_output(SRV_MGR_CONN_T *pConn, HTTP_STATUS_T *phttpStatus) {
     idx += rc;
   }
 
+  if((pCpuUsage = pConn->pMgrCfg->pCpuUsage)) {
+    if((rc = snprintf(&buf[idx], sizeof(idx) - idx, "&cpuuser=%.1f&cpunice=%.1f&cpusys=%.1f&cpuidle=%.1f", 
+          pCpuUsage->percentuser, pCpuUsage->percentnice, pCpuUsage->percentsys, pCpuUsage->percentidle)) >= 0) {
+      idx += rc;
+    }
+  }
+  if((pMemUsage = pConn->pMgrCfg->pMemUsage)) {
+    if((rc = snprintf(&buf[idx], sizeof(idx) - idx, "&memtot=%s&memused=%s&memfree=%s&membuffers=%s",
+            burstmeter_printBytesStr(tmpstrs[0], sizeof(tmpstrs[0]), pMemUsage->memTotal),
+            burstmeter_printBytesStr(tmpstrs[1], sizeof(tmpstrs[1]), pMemUsage->memUsed),
+            burstmeter_printBytesStr(tmpstrs[2], sizeof(tmpstrs[2]), pMemUsage->memFree),
+            burstmeter_printBytesStr(tmpstrs[3], sizeof(tmpstrs[3]), pMemUsage->buffers) 
+      )) >= 0) {
+      idx += rc;
+    }
+  }
+
   //
   // Get the total output bitrate
   //
-  burstmeter_printBitrateStr(rateStr, sizeof(rateStr), pConn->pMgrCfg->pProcList->bpsTot);
+  burstmeter_printBitrateStr(tmpstrs[0], sizeof(tmpstrs[0]), pConn->pMgrCfg->pProcList->bpsTot);
 
   if(pConn->pMgrCfg->pMonitor && (parg = conf_find_keyval(pConn->conn.phttpReq->uriPairs, "streamstats"))) {
 
@@ -1651,7 +1709,7 @@ int mgr_status_show_output(SRV_MGR_CONN_T *pConn, HTTP_STATUS_T *phttpStatus) {
     }
 
     //TODO: change totalRate= -> staticRate, outputRate -> liveRate
-    if((rc = snprintf(&buf[idx], sizeof(idx) - idx, "&outputRate=%s", rateStr)) >= 0) {
+    if((rc = snprintf(&buf[idx], sizeof(idx) - idx, "&outputRate=%s", tmpstrs[0])) >= 0) {
       idx += rc;
     }
 
@@ -1714,6 +1772,7 @@ void srvmgr_client_proc(void *pfuncarg) {
   SRVMEDIA_RSRC_T mediaRsrc;
   HTTP_STATUS_T httpStatus;
   int liveAutoFind;
+  int directMediaReq;
   int isShared;
   int itmp;
   HTTP_PARSE_CTXT_T hdrCtxt;
@@ -1776,6 +1835,7 @@ void srvmgr_client_proc(void *pfuncarg) {
     methodAuto = STREAM_METHOD_UNKNOWN;
     checkAction = MEDIA_ACTION_UNKNOWN;
     liveAutoFind = 0;
+    directMediaReq = 0;
     isShared = 0;
     memset(&mediaDescr, 0, sizeof(mediaDescr));
     memset(&mediaRsrc, 0, sizeof(mediaRsrc));
@@ -1786,7 +1846,10 @@ void srvmgr_client_proc(void *pfuncarg) {
       //
       // Get the client's requested streaming method from the URL 
       //
-      reqMethod = get_method_fromurl(&pConn->conn, &action, &liveAutoFind);
+      reqMethod = get_method_fromurl(&pConn->conn, &action, &liveAutoFind, &directMediaReq);
+
+      VSX_DEBUG_MGR(LOG(X_DEBUG("MGR - get_method_fromurl '%s' %s (%d), directMediaReq: %d"), 
+                        pConn->conn.phttpReq->puri, devtype_methodstr(reqMethod), reqMethod, directMediaReq); );
 
       if(reqMethod == STREAM_METHOD_INVALID || 
          ((action == MEDIA_ACTION_UNKNOWN || 
@@ -1887,6 +1950,9 @@ void srvmgr_client_proc(void *pfuncarg) {
           LOG(X_DEBUG("Unhandled "HTTP_HDR_USER_AGENT" '%s' default to %s"), 
                     userAgent, devtype_methodstr(methodAuto));
         }
+        VSX_DEBUG_MGR(LOG(X_DEBUG("MGR - findBestmethod '%s' methodAuto: %s (%d), reqMethod: %s (%d)"), 
+                        pConn->conn.phttpReq->puri, devtype_methodstr(methodAuto), methodAuto, 
+                        devtype_methodstr(reqMethod), reqMethod); );
       }
 
       if(methodAuto <= STREAM_METHOD_NONE) {
@@ -1980,11 +2046,12 @@ void srvmgr_client_proc(void *pfuncarg) {
 
     VSX_DEBUG_MGR(
        LOG(X_DEBUG("MGR - auth: %d, path: '%s', UA:'%s' devname:'%s', reqMethod: %s (%d), methodAuto: %s (%d), "
-                   "action: %s (%d), checkAction: %s (%d), virtRsrc:'%s', pRsrcName:'%s', media.type: 0x%x, "
-                   "media.profile: '%s', media.instanceId: '%s', mediaRsrc.tokenId: '%s', pauthbuf: '%s'"), 
+                   "action: %s (%d), checkAction: %s (%d), directMediaReq: %d, virtRsrc:'%s', pRsrcName:'%s', "
+                   "media.type: 0x%x, media.profile: '%s', media.instanceId: '%s', mediaRsrc.tokenId: '%s', "
+                   "pauthbuf: '%s'"), 
           httpStatus, mediaRsrc.filepath, userAgent, pdevtype ? pdevtype->name : "", devtype_methodstr(reqMethod), 
           reqMethod, devtype_methodstr(methodAuto), methodAuto, srvmgr_action_tostr(action), action, 
-          srvmgr_action_tostr(checkAction), checkAction, mediaRsrc.virtRsrc, mediaRsrc.pRsrcName, 
+          srvmgr_action_tostr(checkAction), checkAction, directMediaReq, mediaRsrc.virtRsrc, mediaRsrc.pRsrcName, 
           mediaDescr.type, mediaRsrc.profile, mediaRsrc.instanceId, mediaRsrc.tokenId, pauthbuf));
 
     if(httpStatus == HTTP_STATUS_OK) {
@@ -2037,13 +2104,15 @@ void srvmgr_client_proc(void *pfuncarg) {
                     methodAuto == STREAM_METHOD_FLASHHTTP ||
                     methodAuto == STREAM_METHOD_FLVLIVE || methodAuto == STREAM_METHOD_MKVLIVE) {
 
-            rc = process_liveoverhttp(pConn, &mediaRsrc, &proc, action, methodAuto, startProc);
+            rc = process_liveoverhttp(pConn, &mediaRsrc, &proc, &httpStatus, 
+                                      action, methodAuto, startProc, directMediaReq);
   
           } else if(methodAuto == STREAM_METHOD_RTSP ||
                     methodAuto == STREAM_METHOD_RTSP_INTERLEAVED ||
                     methodAuto == STREAM_METHOD_RTSP_HTTP) {
 
-            rc = process_liveoverhttp(pConn, &mediaRsrc, &proc, action, methodAuto, startProc);
+            rc = process_liveoverhttp(pConn, &mediaRsrc, &proc, &httpStatus, 
+                                      action, methodAuto, startProc, directMediaReq);
 
           } else if(methodAuto == STREAM_METHOD_TSLIVE) {
 

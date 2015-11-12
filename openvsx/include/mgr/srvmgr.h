@@ -40,7 +40,9 @@
 #define SRV_CONF_KEY_DISABLE_LISTING       "disableListing"
 #define SRV_CONF_KEY_LBNODES_CONF          "LBNodesConfig"
 #define SRV_CONF_KEY_MAX_CLIENTS_PER_PROC  "maxClientsPerProcess"
-#define SRV_CONF_KEY_MONITOR               "Monitor"
+#define SRV_CONF_KEY_STATUS_MONITOR        "statusMonitor"
+#define SRV_CONF_KEY_CPU_MONITOR           "cpuMonitor"
+#define SRV_CONF_KEY_MEM_MONITOR           "memMonitor"
 
 #define MGR_CONNECTIONS_MAX        1000 
 #define MGR_CONNECTIONS_DEFAULT    50 
@@ -115,6 +117,8 @@ typedef struct SRV_MGR_START_CFG {
   STREAM_STATS_MONITOR_T       *pMonitor;
   LIC_INFO_T                   *plic;
   int                           enable_ssl_childlisteners;
+  CPU_USAGE_PERCENT_T          *pCpuUsage;
+  MEM_SNAPSHOT_T               *pMemUsage;
 
   struct SRV_MGR_LISTENER_CFG  *pListenerRtmpProxy;
   struct SRV_MGR_LISTENER_CFG  *pListenerRtspProxy;

@@ -280,7 +280,7 @@ int rtsp_read_interleaved(NETIO_SOCK_T *pnetsock, HTTP_PARSE_CTXT_T *pHdrCtxt,
     if((rc = netio_recvnb_exact(pnetsock, &buf[pHdrCtxt->idxbuf], 4 - pHdrCtxt->idxbuf, tmtms)) != 
         4 - pHdrCtxt->idxbuf) {
       LOG(X_ERROR("RTSP Failed to read interleaved header rc:%d, tmt:%d"), rc, tmtms);
-      return rc;
+      return -1;
     }   
   } else if((rc = netio_recv_exact(pnetsock, NULL, &buf[pHdrCtxt->idxbuf], 4 - pHdrCtxt->idxbuf)) < 0) {
     LOG(X_ERROR("RTSP Failed to read interleaved header rc:%d"), rc);

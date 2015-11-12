@@ -500,8 +500,10 @@ int64_t strutil_read_numeric(const char *s, int bAllowbps, int bytesInK, int dfl
   }
   
   if(*p != '\0') {
+
     strncpy(buf, s, MIN(p - s, sizeof(buf) - 1));
     pnum = buf;
+    MOVE_WHILE_SPACE(p);
 
     if(*p == 'b' || *p == 'B') {
       multiplier = 1;

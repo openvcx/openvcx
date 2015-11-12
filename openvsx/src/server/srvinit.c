@@ -328,13 +328,13 @@ SRV_CONF_T *srv_init_conf(const char *listenArg, const char *mediaDirArg,
   }
 
   if((parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_DISABLEDB))) {
-    if(atoi(parg) > 0 || !strcasecmp(parg, "yes") || !strcasecmp(parg, "true")) {
+    if(IS_CONF_VAL_TRUE(parg)) {
       pCfg->usedb = 0;
     }
   }
 
   if((parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_DISABLEROOTLIST))) {
-    if(atoi(parg) > 0 || !strcasecmp(parg, "yes") || !strcasecmp(parg, "true")) {
+    if(IS_CONF_VAL_TRUE(parg)) {
       pCfg->cfgShared.disable_root_dirlist = 1;
     }
   }

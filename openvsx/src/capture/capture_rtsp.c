@@ -1089,7 +1089,7 @@ static int stream_rtsp_announce(STREAMER_CFG_T *pStreamerCfg) {
   //
   if(snprintf(url, sizeof(url), URL_RTSP_FMT_STR"%s", 
                             URL_HTTP_FMT_PROTO_HOST(session.sd.netsocket.flags, 
-                            pDestCfg->dstHost), pDestCfg->ports[0], pDestCfg->dstUri) < 0) {
+                            pDestCfg->dstHost, 0), pDestCfg->ports[0], pDestCfg->dstUri) < 0) {
     return -1;
   }
 

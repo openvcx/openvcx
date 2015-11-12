@@ -275,7 +275,6 @@ int mgrnode_init(const char *path, MGR_NODE_LIST_T *pNodes) {
   SRV_CONF_T *pConf = NULL;
   unsigned int idx;
   const char *parg;
-  int ival;
   MGR_NODE_T *pNode;
   char key[128];
 
@@ -299,7 +298,7 @@ int mgrnode_init(const char *path, MGR_NODE_LIST_T *pNodes) {
   for(idx = 0; idx < MGR_NODES_MAX * 2; idx++) {
 
     snprintf(key, sizeof(key) - 1, "node%d.active", idx);
-    if(!(parg = conf_find_keyval(pConf->pKeyvals, key)) || (strcasecmp("true", parg) && (ival = atoi(parg)) <= 0)) {
+    if(!(parg = conf_find_keyval(pConf->pKeyvals, key)) || !IS_CONF_VAL_TRUE(parg)) {
       continue;
     }
 

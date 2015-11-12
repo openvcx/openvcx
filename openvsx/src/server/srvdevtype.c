@@ -180,6 +180,8 @@ const char *devtype_methodstr(enum STREAM_METHOD method) {
       return STREAM_METHOD_UDP_STR;
     case STREAM_METHOD_ANYLIVE:
       return STREAM_METHOD_ANYLIVE_STR;
+    case STREAM_METHOD_NONE:
+      return STREAM_METHOD_NONE_STR;
     default:
       return ""; 
   }

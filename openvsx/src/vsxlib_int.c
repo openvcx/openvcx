@@ -675,7 +675,7 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
 
   if(BOOL_ISDFLT(pParams->enable_symlink) && 
      (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_ENABLESYMLINK))) {
-    pParams->enable_symlink = MAKE_BOOL(atoi(parg));
+    pParams->enable_symlink = MAKE_BOOL(IS_CONF_VAL_TRUE(parg));
   }
 
   //TODO: get multiple output indexes
@@ -751,7 +751,7 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
 
   if((pParams->moof_nodelete <= 0) &&
      (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_MOOFNODELETE))) {
-    pParams->moof_nodelete = atoi(parg);
+    pParams->moof_nodelete = IS_CONF_VAL_TRUE(parg);
   }
 
   if((pParams->moofMp4MinDurationSec == MOOF_MP4_MIN_DURATION_SEC_DEFAULT) &&
@@ -776,7 +776,7 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
 
   if((pParams->moofUseInitMp4 == MOOF_USE_INITMP4_DEFAULT) &&
      (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_MOOFUSEINIT))) {
-    pParams->moofUseInitMp4 = atoi(parg);
+    pParams->moofUseInitMp4 = IS_CONF_VAL_TRUE(parg);
   }
 
 
@@ -890,7 +890,7 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
 
   if(BOOL_ISDFLT(pParams->rtcp_reply_from_mcast) &&
      (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_RTCP_MCAST_REPLIES))) {
-    pParams->rtcp_reply_from_mcast = MAKE_BOOL(atoi(parg));
+    pParams->rtcp_reply_from_mcast = MAKE_BOOL(IS_CONF_VAL_TRUE(parg));
   }
 
   //
@@ -899,35 +899,35 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
 
   if(BOOL_ISDFLT(pParams->firCfg.fir_encoder) &&
      (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_FIR_ENCODER))) {
-    pParams->firCfg.fir_encoder = MAKE_BOOL(atoi(parg));
+    pParams->firCfg.fir_encoder = MAKE_BOOL(IS_CONF_VAL_TRUE(parg));
   }
   if(BOOL_ISDFLT(pParams->firCfg.fir_recv_via_rtcp) &&
      (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_FIR_RECV_VIA_RTCP))) {
-    pParams->firCfg.fir_recv_via_rtcp = MAKE_BOOL(atoi(parg));
+    pParams->firCfg.fir_recv_via_rtcp = MAKE_BOOL(IS_CONF_VAL_TRUE(parg));
   }
   if(BOOL_ISDFLT(pParams->firCfg.fir_recv_from_connect) &&
      (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_FIR_RECV_FROM_CONNECT))) {
-    pParams->firCfg.fir_recv_from_connect = MAKE_BOOL(atoi(parg));
+    pParams->firCfg.fir_recv_from_connect = MAKE_BOOL(IS_CONF_VAL_TRUE(parg));
   }
   if(BOOL_ISDFLT(pParams->firCfg.fir_recv_from_remote) &&
      (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_FIR_RECV_FROM_REMOTE))) {
-    pParams->firCfg.fir_recv_from_remote = MAKE_BOOL(atoi(parg));
+    pParams->firCfg.fir_recv_from_remote = MAKE_BOOL(IS_CONF_VAL_TRUE(parg));
   }
   if(BOOL_ISDFLT(pParams->firCfg.fir_send_from_local) &&
      (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_FIR_SEND_FROM_LOCAL))) {
-    pParams->firCfg.fir_send_from_local = MAKE_BOOL(atoi(parg));
+    pParams->firCfg.fir_send_from_local = MAKE_BOOL(IS_CONF_VAL_TRUE(parg));
   }
   if(BOOL_ISDFLT(pParams->firCfg.fir_send_from_remote) &&
      (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_FIR_SEND_FROM_REMOTE))) {
-    pParams->firCfg.fir_send_from_remote = MAKE_BOOL(atoi(parg));
+    pParams->firCfg.fir_send_from_remote = MAKE_BOOL(IS_CONF_VAL_TRUE(parg));
   }
   if(BOOL_ISDFLT(pParams->firCfg.fir_send_from_decoder) &&
      (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_FIR_SEND_FROM_DECODER))) {
-    pParams->firCfg.fir_send_from_decoder = MAKE_BOOL(atoi(parg));
+    pParams->firCfg.fir_send_from_decoder = MAKE_BOOL(IS_CONF_VAL_TRUE(parg));
   }
   if(BOOL_ISDFLT(pParams->firCfg.fir_send_from_capture) &&
      (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_FIR_SEND_FROM_CAPTURE))) {
-    pParams->firCfg.fir_send_from_capture = MAKE_BOOL(atoi(parg));
+    pParams->firCfg.fir_send_from_capture = MAKE_BOOL(IS_CONF_VAL_TRUE(parg));
   }
 
   //
@@ -936,11 +936,11 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
 
   if(BOOL_ISDFLT(pParams->nackRtcpSendVideo) &&
      (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_NACK_RTCP_REQUEST))) {
-    pParams->nackRtcpSendVideo = MAKE_BOOL(atoi(parg));
+    pParams->nackRtcpSendVideo = MAKE_BOOL(IS_CONF_VAL_TRUE(parg));
   }
   if(BOOL_ISDFLT(pParams->nackRtpRetransmitVideo ) &&
      (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_NACK_RTP_RETRANSMIT))) {
-    pParams->nackRtpRetransmitVideo = MAKE_BOOL(atoi(parg));
+    pParams->nackRtpRetransmitVideo = MAKE_BOOL(IS_CONF_VAL_TRUE(parg));
   }
 
   //
@@ -949,7 +949,7 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
 
   if(BOOL_ISDFLT(pParams->apprembRtcpSendVideo) &&
      (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_APPREMB_RTCP_NOTIFY))) {
-    pParams->apprembRtcpSendVideo = MAKE_BOOL(atoi(parg));
+    pParams->apprembRtcpSendVideo = MAKE_BOOL(IS_CONF_VAL_TRUE(parg));
   }
   if(pParams->apprembRtcpSendVideoMaxRateBps == 0 &&
      (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_APPREMB_RTCP_MAXRATE))) {
@@ -961,7 +961,7 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
   }
   if(BOOL_ISDFLT(pParams->apprembRtcpSendVideoForceAdjustment) &&
      (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_APPREMB_RTCP_FORCE))) {
-    pParams->apprembRtcpSendVideoForceAdjustment = MAKE_BOOL(atoi(parg));
+    pParams->apprembRtcpSendVideoForceAdjustment = MAKE_BOOL(IS_CONF_VAL_TRUE(parg));
   }
 
   //
@@ -977,7 +977,7 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
   //
   if(BOOL_ISDFLT(pParams->outq_prealloc) &&
      (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_OUTQ_PREALLOC))) {
-    pParams->outq_prealloc = MAKE_BOOL(atoi(parg));
+    pParams->outq_prealloc = MAKE_BOOL(IS_CONF_VAL_TRUE(parg));
   }
 
   //
@@ -985,7 +985,7 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
   //
   if(BOOL_ISDFLT(pParams->frameThin) &&
      (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_FRAME_THIN))) {
-    pParams->frameThin = MAKE_BOOL(atoi(parg));
+    pParams->frameThin = MAKE_BOOL(IS_CONF_VAL_TRUE(parg));
   }
 
   //
@@ -1071,7 +1071,7 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
   }
 
   if((parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_RTSPRTCPREFRESH))) {
-    pParams->rtsprefreshtimeoutviartcp = atoi(parg);
+    pParams->rtsprefreshtimeoutviartcp = IS_CONF_VAL_TRUE(parg);
   }
 
   if((parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_RTSPLOCALRTPPORT))) {

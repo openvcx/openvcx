@@ -226,7 +226,7 @@ int net_bindlistener(SOCKET sock, struct sockaddr_in *psain)  {
 #endif // 0
 
 int net_recvnb(SOCKET sock, unsigned char *buf, unsigned int len, 
-                      unsigned int mstmt, int peek) {
+                      unsigned int mstmt, int peek, int *pclosed) {
   struct timeval tv;
   fd_set fdsetRd;
   int rc;
@@ -244,6 +244,10 @@ int net_recvnb(SOCKET sock, unsigned char *buf, unsigned int len,
     sockflags |= MSG_PEEK;
   }
 
+  if(pclosed) {
+    *pclosed = 0;
+  }
+
   tv.tv_sec = (mstmt / 1000);
   tv.tv_usec = (mstmt % 1000) * 1000;
 
@@ -257,7 +261,11 @@ int net_recvnb(SOCKET sock, unsigned char *buf, unsigned int len,
           len, sockflags, rc, ERRNO_FMT_ARGS);
     } else if(rc == 0) {
       LOG(X_WARNING("recv nonblock %d - connection has been closed."), len);
-      rc = -1;
+      if(pclosed) {
+        *pclosed = 1;
+      }
+      // Do not return 0, since that is what select will return if timeout has expired
+      return -1;
     } else {
       VSX_DEBUG_NET( LOG(X_DEBUG("NET - net_recvnb %s %d/%d bytes, fd: %d"), peek ? "peeked" : "got", rc, len, sock) );
     }
@@ -378,18 +386,29 @@ int net_connect(SOCKET sock, const struct sockaddr *psa) {
 
 
 int net_recvnb_exact(SOCKET sock, unsigned char *buf, unsigned int len, 
-                            unsigned int mstmt, int peek) {
+                            unsigned int mstmt, int peek, int *pclosed) {
   unsigned int idx = 0;
   int rc;
   unsigned int ms;
   struct timeval tv0, tv1;
+  int closed = 0;
   
+  if(pclosed) {
+    *pclosed = 0;
+  }
+
   gettimeofday(&tv0, NULL);
  
   do {
 
-    if((rc = net_recvnb(sock, &buf[idx], len - idx, MIN(mstmt, 1000), peek)) < 0) {
+    if((rc = net_recvnb(sock, &buf[idx], len - idx, MIN(mstmt, 1000), peek, &closed)) < 0) {
+
+      if(closed && pclosed) {
+        *pclosed = closed;
+      }
+
       return rc;
+
     } else if(rc > 0) {
       idx += rc;
     }
@@ -459,8 +478,16 @@ int net_recv_exact(SOCKET sock, const struct sockaddr *psa,
 }
 
 int net_peeknb(SOCKET sock, unsigned char *buf, unsigned int len, unsigned int mstmt) {
+  int closed = 0;
+  int rc;
+
   VSX_DEBUG_NET( LOG(X_DEBUG("NET - net_peeknb len: %d, mstmt: %u ms calling net_recvnb..."), len, mstmt); );
-  return net_recvnb(sock, buf, len, mstmt, 1);
+
+  if((rc = net_recvnb(sock, buf, len, mstmt, 1, &closed)) < 0 && closed) {
+    rc = 0;
+  }
+
+  return rc;
 }
 
 

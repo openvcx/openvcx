@@ -479,11 +479,12 @@ static int resp_index_file(CLIENT_CONN_T *pConn,
                            const char *pargfile, 
                            int is_remoteargfile,
                            const SRV_LISTENER_CFG_T *pListenCfg,
-                           int urlCap) {
+                           int urlCap,
+                           char *purloutbuf) {
 
   int rc = 0;
   unsigned int idx = 0;
-  char rsrcUrl[VSX_MAX_PATH_LEN];
+  char rsrcUrl[HTTP_URL_LEN];
   char tmp[VSX_MAX_PATH_LEN];
   char tokenstr[16 + META_FILE_TOKEN_LEN];
   char stroutidx[32];
@@ -660,7 +661,13 @@ static int resp_index_file(CLIENT_CONN_T *pConn,
                              "stroutidx: '%s', tmp: '%s', '%s', is_remote: %d"), 
                               rsrcUrl, protoUrl, pargfile, stroutidx, tmp, protoLiveUrl, is_remoteargfile));
 
-  if(rc >= 0 && (rc = cbUpdateProtoIndexFile(pConn, pStreamerCfg, rsrcUrl,  outidx, (char *) buf,
+  if(rc >= 0 && purloutbuf) {
+    //
+    // Don't return any HTML response but only the URL
+    //
+    strncpy(purloutbuf, rsrcUrl, HTTP_URL_LEN - 1);
+    rc = 0;
+  } else if(rc >= 0 && (rc = cbUpdateProtoIndexFile(pConn, pStreamerCfg, rsrcUrl,  outidx, (char *) buf,
                                  sizeof(buf))) > 0) {
     rc = http_resp_send(&pConn->sd, pConn->phttpReq, HTTP_STATUS_OK, buf, rc);
   } else {
@@ -1599,7 +1606,8 @@ int srv_ctrl_rtmp(CLIENT_CONN_T *pConn,
   // Return the rsrc/rtmp_embed.html file with all substitions
   //
   return resp_index_file(pConn, pargfile, is_remoteargfile, pListenRtmp, 
-           streamMethod == STREAM_METHOD_RTMPT ? URL_CAP_RTMPTLIVE : (URL_CAP_RTMPLIVE | URL_CAP_RTMPTLIVE));
+           streamMethod == STREAM_METHOD_RTMPT ? URL_CAP_RTMPTLIVE : (URL_CAP_RTMPLIVE | URL_CAP_RTMPTLIVE), 
+           NULL);
 }
 
 int srv_ctrl_rtsp(CLIENT_CONN_T *pConn, 
@@ -1616,7 +1624,7 @@ int srv_ctrl_rtsp(CLIENT_CONN_T *pConn,
   //
   // Return the rsrc/rtsp_embed.html file with all substitions
   //
-  return resp_index_file(pConn, pargfile, is_remoteargfile, pListenRtsp, URL_CAP_RTSPLIVE);
+  return resp_index_file(pConn, pargfile, is_remoteargfile, pListenRtsp, URL_CAP_RTSPLIVE, NULL);
 
   return rc;
 }
@@ -1819,7 +1827,8 @@ int srv_ctrl_httplive(CLIENT_CONN_T *pConn,
 int srv_ctrl_flv(CLIENT_CONN_T *pConn, 
                  const char *pargfile,  
                  int is_remoteargfile, 
-                 const SRV_LISTENER_CFG_T *pListenHttp) {
+                 const SRV_LISTENER_CFG_T *pListenHttp, 
+                 char *urloutbuf) {
 
   int rc = 0;
 
@@ -1828,7 +1837,7 @@ int srv_ctrl_flv(CLIENT_CONN_T *pConn,
   //
   // Return the rsrc/http_embed.html file with all substitions
   //
-  rc = resp_index_file(pConn, pargfile, is_remoteargfile, pListenHttp, URL_CAP_FLVLIVE);
+  rc = resp_index_file(pConn, pargfile, is_remoteargfile, pListenHttp, URL_CAP_FLVLIVE, urloutbuf);
 
   return rc;
 }
@@ -1836,14 +1845,15 @@ int srv_ctrl_flv(CLIENT_CONN_T *pConn,
 int srv_ctrl_mkv(CLIENT_CONN_T *pConn, 
                  const char *pargfile, 
                  int is_remoteargfile, 
-                 const SRV_LISTENER_CFG_T *pListenHttp) {
+                 const SRV_LISTENER_CFG_T *pListenHttp,
+                 char *urloutbuf) {
 
   VSX_DEBUG_LIVE(LOG(X_DEBUG("LIVE - srv_ctrl_mkv file: '%s', is_remoteargfile: %d"), pargfile, is_remoteargfile));
 
   //
   // Return the rsrc/mkv_embed.html file with all substitions
   //
-  return resp_index_file(pConn, pargfile, is_remoteargfile, pListenHttp, URL_CAP_MKVLIVE);
+  return resp_index_file(pConn, pargfile, is_remoteargfile, pListenHttp, URL_CAP_MKVLIVE, urloutbuf);
 
 }
 
@@ -1895,7 +1905,7 @@ static int srv_ctrl_rsrc(CLIENT_CONN_T *pConn,
     //
     // Return the rsrc/rtmp_embed.html file with all substitions
     //
-    return resp_index_file(pConn, pargfile, is_remoteargfile, pListenRtmp, 0);
+    return resp_index_file(pConn, pargfile, is_remoteargfile, pListenRtmp, 0, NULL);
   }
 
   return rc;
@@ -2170,12 +2180,12 @@ int srv_ctrl_live(CLIENT_CONN_T *pConn, HTTP_STATUS_T *pHttpStatus, const char *
 
     case STREAM_METHOD_FLVLIVE:
 
-      rc = srv_ctrl_flv(pConn, pargfile, 0, NULL);
+      rc = srv_ctrl_flv(pConn, pargfile, 0, NULL, NULL);
       break;
 
     case STREAM_METHOD_MKVLIVE:
 
-      rc = srv_ctrl_mkv(pConn, pargfile, 0, NULL);
+      rc = srv_ctrl_mkv(pConn, pargfile, 0, NULL, NULL);
       break;
 
     case STREAM_METHOD_PROGDOWNLOAD:
@@ -2223,8 +2233,11 @@ SRV_REQ_PEEK_TYPE_T srv_ctrl_peek(CLIENT_CONN_T *pConn, HTTP_PARSE_CTXT_T *pHdrC
 
     if((rc = netio_recvnb_exact(&pConn->sd.netsocket, (unsigned char *) pHdrCtxt->pbuf,
                                 SRV_REQ_PEEK_SIZE, HTTP_REQUEST_TIMEOUT_SEC * 1000)) != SRV_REQ_PEEK_SIZE) {
+
       if(rc < 0 && NETIOSOCK_FD(pConn->sd.netsocket) != INVALID_SOCKET) {
         rc = http_resp_error(&pConn->sd, pConn->phttpReq, HTTP_STATUS_BADREQUEST, 1, NULL, NULL);
+      } else if(rc == 0) {
+        pHdrCtxt->rcvclosed = 1;
       }
       return SRV_REQ_PEEK_TYPE_INVALID;
     }

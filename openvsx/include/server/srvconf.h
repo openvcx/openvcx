@@ -164,6 +164,7 @@
 #define SRV_CONF_KEY_XCODEARGS             "xcodeArgs"
 
 
+#define IS_CONF_VAL_TRUE(parg)   ((avc_isnumeric(parg) && atoi((parg)) > 0) || !strcasecmp((parg), "yes") || !strcasecmp((parg), "true"))
 
 
 #endif // __SERVER_CONF_H__

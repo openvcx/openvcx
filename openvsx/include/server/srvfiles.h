@@ -38,15 +38,19 @@
 #define URL_RTMPT_FMT_STR                  "rtmpt%s://%s:%d"
 #define URL_HTTP_FMT_STR                   "http%s://%s:%d"
 
-#define URL_HTTP_FMT_PROTO_HOST(sockflags, location) (((sockflags) & NETIO_FLAG_PLAINTEXT) && \
-                                                      ((sockflags) & NETIO_FLAG_SSL_TLS)) \
+#define URL_HTTP_FMT_PROTO_HOST(sockflags, location, fordisponly) \
+                                                      (fordisponly && ((sockflags) & NETIO_FLAG_PLAINTEXT) && \
+                                                      ((sockflags) & NETIO_FLAG_SSL_TLS) ) \
                                                       ? "[s]" : ((sockflags) & NETIO_FLAG_SSL_TLS) \
                                                       ? "s" : "", (location)
-#define URL_HTTP_FMT_ARGS2(p, location)              URL_HTTP_FMT_PROTO_HOST( (p)->netflags, (location)), \
-                                                     ntohs(INET_PORT((p)->sa))
-#define URL_HTTP_FMT_ARGS(p)                         URL_HTTP_FMT_ARGS2(p, net_getlocalhostname())   
-                                   
 
+#define URL_HTTP_FMT_ARGS2(p, location)             URL_HTTP_FMT_PROTO_HOST((p)->netflags, (location), 1), \
+                                                    ntohs(INET_PORT((p)->sa))
+
+#define URL_HTTP_FMT_ARGS(p)                        URL_HTTP_FMT_PROTO_HOST((p)->netflags, \
+                                                                            (net_getlocalhostname()), 0), \
+                                                    ntohs(INET_PORT((p)->sa))
+                                   
 
 typedef enum SRV_REQ_PEEK_TYPE {
   SRV_REQ_PEEK_TYPE_INVALID    = -1,
@@ -85,9 +89,9 @@ int srv_ctrl_rtmp(CLIENT_CONN_T *pConn, const char *uri, int is_remoteargfile,
                   const char *rsrcUrl, const SRV_LISTENER_CFG_T *pListenHttp, unsigned int outidx, 
                   STREAM_METHOD_T streamMethod);
 int srv_ctrl_flv(CLIENT_CONN_T *pConn, const char *uri,  int is_remoteargfile, 
-                 const SRV_LISTENER_CFG_T *pListenHttp);
+                 const SRV_LISTENER_CFG_T *pListenHttp, char *urloutbuf);
 int srv_ctrl_mkv(CLIENT_CONN_T *pConn, const char *uri, int is_remoteargfile, 
-                 const SRV_LISTENER_CFG_T *pListenHttp);
+                 const SRV_LISTENER_CFG_T *pListenHttp, char *urloutbuf);
 int srv_ctrl_rtsp(CLIENT_CONN_T *pConn, const char *uri, int is_remoteargfile, 
                   const SRV_LISTENER_CFG_T *pListenRtsp);
 SRV_REQ_PEEK_TYPE_T srv_ctrl_peek(CLIENT_CONN_T *pConn, HTTP_PARSE_CTXT_T *pHdrCtxt);

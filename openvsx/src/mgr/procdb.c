@@ -159,8 +159,13 @@ static void procdb_monitor_proc(void *pArg) {
   struct timeval *ptvlatest;
   struct timeval tvnow;
   float bpsTot;
+  SYS_USAGE_CTXT_T sysinfo;
 
   logutil_tid_add(pthread_self(), pProcs->tid_tag);
+
+  memset(&sysinfo, 0, sizeof(sysinfo));
+  sysinfo.pcurC = pProcs->pCpuUsage;
+  sysinfo.pcurM = pProcs->pMemUsage;
 
   while(pProcs->runMonitor) {
 
@@ -263,6 +268,20 @@ static void procdb_monitor_proc(void *pArg) {
     }  // end of while(pProc
 
     pProcs->bpsTot = bpsTot;
+
+    //
+    // Collect system utilization stats
+    //
+    if(sysinfo.pcurC && sys_cpu_usage(&sysinfo) > 0) {
+      LOG(X_DEBUG("cpu user: %.2f, nice: %.2f, sys: %.2f, idle: %.2f"), 
+                sysinfo.pcurC->percentuser, sysinfo.pcurC->percentnice, 
+                sysinfo.pcurC->percentsys, sysinfo.pcurC->percentidle);
+    }
+    if(sysinfo.pcurM && sys_mem_usage(&sysinfo) > 0) {
+      LOG(X_DEBUG("memtot: %lld, memused: %lld, memfree:%lld, membuffers: %lld"), 
+                 sysinfo.pcurM->memTotal, sysinfo.pcurM->memUsed,
+                 sysinfo.pcurM->memFree, sysinfo.pcurM->buffers);
+    }
 
     usleep(1000000);
 

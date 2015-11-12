@@ -1,1 +1,1 @@
-#define BUILD_INFO_NUM 60
+#define BUILD_INFO_NUM 64

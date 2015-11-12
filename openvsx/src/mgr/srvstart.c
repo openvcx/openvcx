@@ -253,6 +253,8 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
   STREAM_STATS_MONITOR_T monitor;
   SRV_LISTENER_CFG_T listenRtmp[SRV_LISTENER_MAX];
   SRV_LISTENER_CFG_T listenRtsp[SRV_LISTENER_MAX];
+  CPU_USAGE_PERCENT_T cpuUsage;
+  MEM_SNAPSHOT_T memUsage;
   unsigned int outidx;
   const char *log_tag = "main";
   int rc = 0;
@@ -279,6 +281,8 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
   memset(&poolHttpProxy, 0, sizeof(poolHttpProxy));
   memset(&poolRtmpProxy, 0, sizeof(poolRtmpProxy));
   memset(&poolRtspProxy, 0, sizeof(poolRtspProxy));
+  memset(&cpuUsage, 0, sizeof(cpuUsage));
+  memset(&memUsage, 0, sizeof(memUsage));
 
 #if defined(VSX_HAVE_SSL)
   //
@@ -393,7 +397,7 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
   
     if(!params.disable_root_dirlist) {
       if((p = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_DISABLE_LISTING)) && p[0] != '\0') {
-        params.disable_root_dirlist = atoi(p);
+        params.disable_root_dirlist = IS_CONF_VAL_TRUE(p);
       }
     }
   
@@ -442,8 +446,17 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
       LOG(X_DEBUG("Symlink following enabled."));
     }
 
-    if((p = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_MONITOR)) && p[0] != '\0') {
+    if((p = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_STATUS_MONITOR)) && IS_CONF_VAL_TRUE(p)) {
       start.pMonitor = &monitor;
+    }
+
+    if((p = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_CPU_MONITOR)) && IS_CONF_VAL_TRUE(p)) {
+      start.pProcList->pCpuUsage = &cpuUsage;
+      start.pCpuUsage = start.pProcList->pCpuUsage;
+    }
+    if((p = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_MEM_MONITOR)) && IS_CONF_VAL_TRUE(p)) {
+      start.pProcList->pMemUsage = &memUsage;
+      start.pMemUsage = start.pProcList->pMemUsage;
     }
   
     //

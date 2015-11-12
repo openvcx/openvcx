@@ -56,8 +56,10 @@ static const void *netio_ssl_getmethod(int server, const char *str);
 
 #endif // VSX_HAVE_SSL
 
-extern int net_recvnb(SOCKET sock, unsigned char *buf, unsigned int len, unsigned int mstmt, int peek);
-extern int net_recvnb_exact(SOCKET sock, unsigned char *buf, unsigned int len, unsigned int mstmt, int peek);
+extern int net_recvnb(SOCKET sock, unsigned char *buf, unsigned int len, unsigned int mstmt, 
+                      int peek, int *pclosed);
+extern int net_recvnb_exact(SOCKET sock, unsigned char *buf, unsigned int len, unsigned int mstmt, 
+                            int peek, int *pclosed);
 extern int net_recv_exact(SOCKET sock, const struct sockaddr *psa,
                    unsigned char *buf, unsigned int len);
 extern int net_recv(SOCKET sock, const struct sockaddr *psa,
@@ -95,6 +97,8 @@ int netio_peek(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned len) {
 
 int netio_recvnb(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned int len, unsigned int mstmt) {
   int peek = 0;
+  int closed = 0;
+  int rc;
 
   if(!pnetsock) {
     return -1;
@@ -113,13 +117,21 @@ int netio_recvnb(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned int len, u
 #endif // VSX_HAVE_SSL
 
   } else {
-    return net_recvnb(PNETIOSOCK_FD(pnetsock), buf, len, mstmt, peek);
+
+    if((rc = net_recvnb(PNETIOSOCK_FD(pnetsock), buf, len, mstmt, peek, &closed)) < 0) {
+      if(closed) {
+        rc = 0;
+      }
+    } 
+    return rc;
   }
 }
 
 int netio_recvnb_exact(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned int len,
                      unsigned int mstmt) {
   int peek = 0;
+  int closed = 0;
+  int rc;
 
   if(!pnetsock) {
     return -1;
@@ -135,7 +147,13 @@ int netio_recvnb_exact(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned int 
 #endif // VSX_HAVE_SSL
 
   } else {
-    return net_recvnb_exact(PNETIOSOCK_FD(pnetsock), buf, len, mstmt, peek);
+    if((rc = net_recvnb_exact(PNETIOSOCK_FD(pnetsock), buf, len, mstmt, peek, &closed)) < 0) {
+
+      if(closed) {
+        rc = 0;
+      }
+    }
+    return rc;
   }
 
 }

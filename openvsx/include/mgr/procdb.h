@@ -73,6 +73,8 @@ typedef struct SYS_PROCLIST {
   char                  tid_tag[LOGUTIL_TAG_LENGTH];
   int                   runMonitor;
   unsigned int          pollIntervalMs;
+  CPU_USAGE_PERCENT_T  *pCpuUsage;
+  MEM_SNAPSHOT_T       *pMemUsage;
   pthread_mutex_t       mtx;
   float                 bpsTot;
   unsigned int          maxInstances;
