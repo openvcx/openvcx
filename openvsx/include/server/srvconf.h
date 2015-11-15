@@ -64,6 +64,9 @@
 #define SRV_CONF_KEY_APPREMB_RTCP_MINRATE  "REMBRtcpMinRateKbps"
 #define SRV_CONF_KEY_APPREMB_RTCP_FORCE    "REMBRtcpForceAdjustment"
 
+#define SRV_CONF_KEY_ALLOWLIST             "allowList"
+#define SRV_CONF_KEY_DENYLIST              "denyList"
+#define SRV_CONF_KEY_STATUSALLOWLIST       "statusAllowList"
 #define SRV_CONF_KEY_FRAME_THIN            "FrameThin"
 #define SRV_CONF_KEY_OUTQ_PREALLOC         "preallocBuffers"
 #define SRV_CONF_KEY_THREAD_STACKSIZE      "threadStackSize"

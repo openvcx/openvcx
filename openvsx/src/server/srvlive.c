@@ -464,10 +464,10 @@ static const SRV_LISTENER_CFG_T *findlistener(CLIENT_CONN_T *pConn,
   //
   // Try to find an SSL/TLS listener first
   //
-  if(!(pListener = srv_ctrl_findlistener(pConn->pCfg->pListenHttp, SRV_LISTENER_MAX, 
+  if(!(pListener = srv_ctrl_findlistener(pConn->pCfg->pListenMedia, SRV_LISTENER_MAX, 
                                   urlCap, pConn->pListenCfg->netflags, NETIO_FLAG_SSL_TLS, preferredPort))) {
 
-        pListener = srv_ctrl_findlistener(pConn->pCfg->pListenHttp, SRV_LISTENER_MAX, 
+        pListener = srv_ctrl_findlistener(pConn->pCfg->pListenMedia, SRV_LISTENER_MAX, 
                                   urlCap, 0, 0, preferredPort);
   }
 
@@ -1384,7 +1384,7 @@ int srv_ctrl_mooflive(CLIENT_CONN_T *pConn,
   unsigned char buf[PREPROCESS_FILE_LEN_MAX];
   size_t sz = 0;
   size_t sz2;
-  const SRV_LISTENER_CFG_T *pListenHttp = NULL;
+  const SRV_LISTENER_CFG_T *pListenMedia = NULL;
   char url[HTTP_URL_LEN];
   const char *puri;
   int haveoutidx = 0;
@@ -1447,10 +1447,10 @@ int srv_ctrl_mooflive(CLIENT_CONN_T *pConn,
     //
     // Find the correct listener for the flvlive FLV data source
     //
-    if(!pListenHttp) {
-      pListenHttp = findlistener(pConn, URL_CAP_MOOFLIVE, 0);
+    if(!pListenMedia) {
+      pListenMedia = findlistener(pConn, URL_CAP_MOOFLIVE, 0);
       //
-      // pListenHttp may be null when called from mgr context
+      // pListenMedia may be null when called from mgr context
       //
     }
 
@@ -1459,8 +1459,8 @@ int srv_ctrl_mooflive(CLIENT_CONN_T *pConn,
       virtFilePath = filePath = path;
     }
 
-    if(pListenHttp) {
-      snprintf(hostpath, sizeof(hostpath), URL_HTTP_FMT_STR, URL_HTTP_FMT_ARGS(pListenHttp));
+    if(pListenMedia) {
+      snprintf(hostpath, sizeof(hostpath), URL_HTTP_FMT_STR, URL_HTTP_FMT_ARGS(pListenMedia));
     } else {
       hostpath[0] = '\0';
     }
@@ -1643,7 +1643,7 @@ int srv_ctrl_httplive(CLIENT_CONN_T *pConn,
   struct stat st;
   unsigned char *presp = NULL;
   unsigned int lenresp = 0;
-  const SRV_LISTENER_CFG_T *pListenHttp = NULL;
+  const SRV_LISTENER_CFG_T *pListenMedia = NULL;
   char url[HTTP_URL_LEN];
   const char *puri, *pend;
   unsigned char buf[PREPROCESS_FILE_LEN_MAX];
@@ -1736,15 +1736,15 @@ int srv_ctrl_httplive(CLIENT_CONN_T *pConn,
       // Find the correct listener for the data source
       // and construct the hostname url for the .m3u8 master playlist
       //
-      if(!pListenHttp) {
-        pListenHttp = findlistener(pConn, URL_CAP_TSHTTPLIVE, 0);
+      if(!pListenMedia) {
+        pListenMedia = findlistener(pConn, URL_CAP_TSHTTPLIVE, 0);
         //
-        // pListenHttp may be null when called from mgr context
+        // pListenMedia may be null when called from mgr context
         //
       }
 
-      if(pListenHttp) {
-        snprintf(hostpath, sizeof(hostpath), URL_HTTP_FMT_STR, URL_HTTP_FMT_ARGS(pListenHttp));
+      if(pListenMedia) {
+        snprintf(hostpath, sizeof(hostpath), URL_HTTP_FMT_STR, URL_HTTP_FMT_ARGS(pListenMedia));
       } else {
         hostpath[0] = '\0';
       }
@@ -1827,7 +1827,7 @@ int srv_ctrl_httplive(CLIENT_CONN_T *pConn,
 int srv_ctrl_flv(CLIENT_CONN_T *pConn, 
                  const char *pargfile,  
                  int is_remoteargfile, 
-                 const SRV_LISTENER_CFG_T *pListenHttp, 
+                 const SRV_LISTENER_CFG_T *pListenMedia, 
                  char *urloutbuf) {
 
   int rc = 0;
@@ -1837,7 +1837,7 @@ int srv_ctrl_flv(CLIENT_CONN_T *pConn,
   //
   // Return the rsrc/http_embed.html file with all substitions
   //
-  rc = resp_index_file(pConn, pargfile, is_remoteargfile, pListenHttp, URL_CAP_FLVLIVE, urloutbuf);
+  rc = resp_index_file(pConn, pargfile, is_remoteargfile, pListenMedia, URL_CAP_FLVLIVE, urloutbuf);
 
   return rc;
 }
@@ -1845,7 +1845,7 @@ int srv_ctrl_flv(CLIENT_CONN_T *pConn,
 int srv_ctrl_mkv(CLIENT_CONN_T *pConn, 
                  const char *pargfile, 
                  int is_remoteargfile, 
-                 const SRV_LISTENER_CFG_T *pListenHttp,
+                 const SRV_LISTENER_CFG_T *pListenMedia,
                  char *urloutbuf) {
 
   VSX_DEBUG_LIVE(LOG(X_DEBUG("LIVE - srv_ctrl_mkv file: '%s', is_remoteargfile: %d"), pargfile, is_remoteargfile));
@@ -1853,7 +1853,7 @@ int srv_ctrl_mkv(CLIENT_CONN_T *pConn,
   //
   // Return the rsrc/mkv_embed.html file with all substitions
   //
-  return resp_index_file(pConn, pargfile, is_remoteargfile, pListenHttp, URL_CAP_MKVLIVE, urloutbuf);
+  return resp_index_file(pConn, pargfile, is_remoteargfile, pListenMedia, URL_CAP_MKVLIVE, urloutbuf);
 
 }
 

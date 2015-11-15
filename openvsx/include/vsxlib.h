@@ -1429,6 +1429,29 @@ typedef struct VSXLIB_STREAM_PARAMS {
 
   /**
    *
+   * CSV of 'IP Address / Mask bits' from which to explicitly allow
+   * connections from.
+   *
+   */
+  const char *allowlist;
+
+  /**
+   *
+   * CSV of 'IP Address / Mask bits' from which to deny connections from.
+   *
+   */
+  const char *denylist;
+
+  /**
+   *
+   * CSV of 'IP Address / Mask bits' from which to explicitly allow
+   * connections to the HTTP '/status' URL from.
+   *
+   */
+  const char *statusallowlist;
+
+  /**
+   *
    * SSL certificate path
    *
    */

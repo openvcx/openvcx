@@ -564,7 +564,7 @@ static int pip_validate_output_listener(const PIP_CFG_T *pPipCfgArg, const STREA
   unsigned int idxPip;
   int rc;
   SRV_START_CFG_T *pStartCfg;
-  SRV_LISTENER_CFG_T srvListenHttp[SRV_LISTENER_MAX + 1];
+  SRV_LISTENER_CFG_T srvListenMedia[SRV_LISTENER_MAX + 1];
   const char *arrAddr[SRV_LISTENER_MAX + 1];
 
 
@@ -584,10 +584,10 @@ static int pip_validate_output_listener(const PIP_CFG_T *pPipCfgArg, const STREA
 
       memset(arrAddr, 0, sizeof(arrAddr));
       arrAddr[0] = pPipCfgArg->tsliveaddr;
-      memcpy(srvListenHttp, pStartCfg->listenHttp, SRV_LISTENER_MAX * sizeof(SRV_LISTENER_CFG_T));
-      memset(&srvListenHttp[SRV_LISTENER_MAX], 0, sizeof(SRV_LISTENER_CFG_T));
+      memcpy(srvListenMedia, pStartCfg->listenMedia, SRV_LISTENER_MAX * sizeof(SRV_LISTENER_CFG_T));
+      memset(&srvListenMedia[SRV_LISTENER_MAX], 0, sizeof(SRV_LISTENER_CFG_T));
 
-      if((rc = vsxlib_parse_listener(arrAddr, SRV_LISTENER_MAX + 1, srvListenHttp, URL_CAP_TSLIVE, NULL)) <= 0) {
+      if((rc = vsxlib_parse_listener(arrAddr, SRV_LISTENER_MAX + 1, srvListenMedia, URL_CAP_TSLIVE, NULL)) <= 0) {
         return -1;
       }
     }

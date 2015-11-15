@@ -30,5 +30,6 @@
 
 SOCKET srvlisten_listen(struct sockaddr *pSockAddr, int backlog);
 int srvlisten_loop(SRV_LISTENER_CFG_T *pListenCfg, void *thread_func);
+int srvlisten_matchAddrFilters(const CLIENT_CONN_T *pConn, SRV_ADDR_FILTER_TYPE_T type);
 
 #endif // __SERVER_LISTENER_H__

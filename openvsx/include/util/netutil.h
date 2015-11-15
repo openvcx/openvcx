@@ -64,8 +64,8 @@
 #define ADDR_LEN_IPV6               16
 
 #define INET_NTOP(storage, buf, bufsz)  ((const struct sockaddr_storage *) &(storage))->ss_family == AF_INET6 ? \
-                      inet_ntop(AF_INET6, &((const struct sockaddr_in6 *) &(storage))->sin6_addr, (buf), (bufsz)) : \
-                      inet_ntop(AF_INET, &((const struct sockaddr_in *) &(storage))->sin_addr, (buf), (bufsz))
+                  inet_ntop(AF_INET6, &((const struct sockaddr_in6 *) &(storage))->sin6_addr, (buf), (bufsz)) : \
+                  inet_ntop(AF_INET, &((const struct sockaddr_in *) &(storage))->sin_addr, (buf), (bufsz))
 
 #define INET_PTON(ip, storage)  (((const const struct sockaddr_storage *) &(storage))->ss_family == AF_INET6 ? \
                       inet_pton(AF_INET6, ip, &((struct sockaddr_in6 *) &(storage))->sin6_addr) : \
@@ -73,22 +73,24 @@
 #define INET_PORT(storage) (((struct sockaddr_in *) &(storage))->sin_port)
 #define PINET_PORT(pstorage) (((struct sockaddr_in *) (pstorage))->sin_port)
 
-#define INET_SIZE(storage) (((const struct sockaddr *) &(storage))->sa_family == AF_INET6 ? sizeof(struct sockaddr_in6) : \
-                            sizeof(struct sockaddr_in))
+#define INET_SIZE(storage) (((const struct sockaddr *) &(storage))->sa_family == AF_INET6 ? \
+                            sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in))
 
 #define INET_IS_MULTICAST(storage) (((const struct sockaddr_storage *) &(storage))->ss_family == AF_INET6 ? \
                       IN6_IS_ADDR_MULTICAST( &((const struct sockaddr_in6 *)  &(storage))->sin6_addr) : \
                       IN_MULTICAST( htonl(((const struct sockaddr_in *) &(storage))->sin_addr.s_addr)))
 
 #define INET_IS_SAMEADDR(s1, s2)  \
-     ((((const struct sockaddr *)&(s1))->sa_family == AF_INET6 && (!memcmp(&((const struct sockaddr_in6 *) &(s1))->sin6_addr.s6_addr[0],  \
-                                          &((const struct sockaddr_in6 *) &(s2))->sin6_addr.s6_addr[0], 16))) ||  \
-      (((const struct sockaddr *)&(s1))->sa_family != AF_INET6 && ((const struct sockaddr_in *) &(s1))->sin_addr.s_addr == \
-                                  ((const struct sockaddr_in *) &(s2))->sin_addr.s_addr))
+                              ((((const struct sockaddr *)&(s1))->sa_family == AF_INET6 && \
+                              (!memcmp(&((const struct sockaddr_in6 *) &(s1))->sin6_addr.s6_addr[0],  \
+                              &((const struct sockaddr_in6 *) &(s2))->sin6_addr.s6_addr[0], 16))) ||  \
+                              (((const struct sockaddr *)&(s1))->sa_family != AF_INET6 && \
+                              ((const struct sockaddr_in *) &(s1))->sin_addr.s_addr == \
+                              ((const struct sockaddr_in *) &(s2))->sin_addr.s_addr))
 
 #define INET_ADDR_VALID(storage)   (((const struct sockaddr_storage *) &(storage))->ss_family == AF_INET6 ? \
-                                   !IN6_IS_ADDR_UNSPECIFIED( &((const struct sockaddr_in6 *) &(storage))->sin6_addr) : \
-                                   IS_ADDR4_VALID(   ((const struct sockaddr_in *) &(storage))->sin_addr ))
+                          !IN6_IS_ADDR_UNSPECIFIED( &((const struct sockaddr_in6 *) &(storage))->sin6_addr) : \
+                           IS_ADDR4_VALID(   ((const struct sockaddr_in *) &(storage))->sin_addr ))
 
 #define INET_ADDR_LOCALHOST(storage)  (((const struct sockaddr_storage *) &(storage))->ss_family == AF_INET6 ? \
                                    IN6_IS_ADDR_LOOPBACK( &((const struct sockaddr_in6 *) &(storage))->sin6_addr) : \

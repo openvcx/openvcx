@@ -2249,8 +2249,6 @@ VSX_RC_T vsxlib_stream(VSXLIB_STREAM_PARAMS_T *pParams) {
   //
   // Set up any server listeners
   //
-  //TODO: these really don't need to be duplicated between VSXLIB_STREAM_PARAMS and SRV_CFG
-  //memset(&srvParam, 0, sizeof(srvParam));
 
   if(rc == VSX_RC_OK && do_server) {
 
@@ -2266,9 +2264,7 @@ VSX_RC_T vsxlib_stream(VSXLIB_STREAM_PARAMS_T *pParams) {
     pS->srvParam.startcfg.cfgShared.enable_symlink = pParams->enable_symlink;
     pS->srvParam.startcfg.cfgShared.disable_root_dirlist = pParams->disable_root_dirlist;
     pS->srvParam.startcfg.cfgShared.pRtspSessions = &pS->rtspSessions;
-    //pS->srvParam.startcfg.cfgShared.pListenRtmp = pS->srvParam.startcfg.listenRtmp;
-    //pS->srvParam.startcfg.cfgShared.pListenRtsp = pS->srvParam.startcfg.listenRtsp;
-    pS->srvParam.startcfg.cfgShared.pListenHttp = pS->srvParam.startcfg.listenHttp;
+    pS->srvParam.startcfg.cfgShared.pListenMedia = pS->srvParam.startcfg.listenMedia;
 
     for(idx = 0; idx < IXCODE_VIDEO_OUT_MAX; idx++) { 
       pS->srvParam.startcfg.cfgShared.pMoofCtxts[idx] = &pS->moofRecordCtxts[idx];
@@ -2385,9 +2381,7 @@ VSX_RC_T vsxlib_stream(VSXLIB_STREAM_PARAMS_T *pParams) {
       pS->srvParamPips[idx].pStreamerCfg = &pS->streamerCfgPips[idx];
       pS->srvParamPips[idx].startcfg.cfgShared.enable_symlink = pS->srvParam.startcfg.cfgShared.enable_symlink;
       pS->srvParamPips[idx].startcfg.cfgShared.pRtspSessions = &pS->rtspSessionsPips[idx];
-      //pS->srvParamPips[idx].startcfg.cfgShared.pListenRtmp = pS->srvParamPips[idx].startcfg.listenRtmp;
-      //pS->srvParamPips[idx].startcfg.cfgShared.pListenRtsp = pS->srvParamPips[idx].startcfg.listenRtsp;
-      pS->srvParamPips[idx].startcfg.cfgShared.pListenHttp = pS->srvParamPips[idx].startcfg.listenHttp;
+      pS->srvParamPips[idx].startcfg.cfgShared.pListenMedia = pS->srvParamPips[idx].startcfg.listenMedia;
       pS->srvParamPips[idx].startcfg.phomedir = pS->srvParamPips[idx].mediaDb.homeDir = pS->srvParam.cwd;
       pS->srvParamPips[idx].startcfg.cfgShared.pMediaDb = &pS->srvParam.mediaDb;
       set_qslot_sizes(&pS->streamerCfgPips[idx], pParams);

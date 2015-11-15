@@ -170,6 +170,7 @@ function make_dev_opt {
       OPT_METHOD+=" --live${LISTENER}"
     elif [ "${METHOD}" = "status" ]; then
       OPT_METHOD+=" --status${LISTENER}"
+      OPT_EXTRA+=" --filterstatus=127.0.0.1/8"
     elif [ "${METHOD}" = "pip" ]; then
       OPT_METHOD+=" --piphttp${LISTENER} --piphttpmax=4 --tslive"
     fi

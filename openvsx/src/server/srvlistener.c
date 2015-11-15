@@ -150,7 +150,7 @@ int srvlisten_loop(SRV_LISTENER_CFG_T *pListenCfg, void *thread_func) {
   //pthread_cond_t cond;
   pthread_mutex_t mtx;
   TIME_VAL tv0, tv1;
-  char tmp[128];
+  char tmps[2][128];
 
 #if defined(__APPLE__) 
   int sockopt = 0;
@@ -181,8 +181,7 @@ int srvlisten_loop(SRV_LISTENER_CFG_T *pListenCfg, void *thread_func) {
       if(!g_proc_exit) {
         LOG(X_ERROR("%saccept failed on %s:%d"), 
              ((pListenCfg->pnetsockSrv->flags & NETIO_FLAG_SSL_TLS) ? "SSL " : ""),
-                 //inet_ntoa(saSrv.sin_addr), ntohs(saSrv.sin_port));
-                 FORMAT_NETADDR(pListenCfg->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pListenCfg->sa)));
+                 FORMAT_NETADDR(pListenCfg->sa, tmps[0], sizeof(tmps[0])), ntohs(INET_PORT(pListenCfg->sa)));
       }
       break;
     }
@@ -193,13 +192,25 @@ int srvlisten_loop(SRV_LISTENER_CFG_T *pListenCfg, void *thread_func) {
 
     sdclient.netsocket.flags = pListenCfg->pnetsockSrv->flags;
 
+    if(vsxlib_matchaddrfilters(pListenCfg->pfilters, (const struct sockaddr *) &sdclient.sa,
+                               SRV_ADDR_FILTER_TYPE_GLOBAL) != 0) {
+
+      LOG(X_WARNING("Connection from %s:%d on %s:%d administratively prohibited"), 
+           FORMAT_NETADDR(sdclient.sa, tmps[0], sizeof(tmps[0])), ntohs(INET_PORT(sdclient.sa)), 
+           FORMAT_NETADDR(pListenCfg->sa, tmps[1], sizeof(tmps[1])), ntohs(INET_PORT(pListenCfg->sa)));
+
+      netio_closesocket(&sdclient.netsocket);
+      continue;
+    }
+
     //
     // Find an available client thread to process the client request
     //
     if((pConn = (CLIENT_CONN_T *) pool_get(pListenCfg->pConnPool)) == NULL) {
-      LOG(X_WARNING("No available connection for %s:%d (max:%d) on port %d"), 
-           FORMAT_NETADDR(sdclient.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(sdclient.sa)), 
-           pListenCfg->pConnPool->numElements, ntohs(INET_PORT(pListenCfg->sa)));
+      LOG(X_WARNING("No available connection for %s:%d (max:%d) on %s:%d"), 
+           FORMAT_NETADDR(sdclient.sa, tmps[0], sizeof(tmps[0])), ntohs(INET_PORT(sdclient.sa)), 
+           pListenCfg->pConnPool->numElements, FORMAT_NETADDR(sdclient.sa, tmps[1], sizeof(tmps[1])),
+           ntohs(INET_PORT(pListenCfg->sa)));
 
       netio_closesocket(&sdclient.netsocket);
       continue;
@@ -213,11 +224,9 @@ int srvlisten_loop(SRV_LISTENER_CFG_T *pListenCfg, void *thread_func) {
     }
 #endif // __APPLE__
 
-    //pConn->psrvsaListen = &saSrv;
-    //memcpy(&pConn->srvsaListen, &saSrv, sizeof(pConn->srvsaListen));
-
-    LOG(X_DEBUG("Accepted connection on port %d from %s:%d"), htons(INET_PORT(pListenCfg->sa)), 
-        FORMAT_NETADDR(sdclient.sa, tmp, sizeof(tmp)), htons(INET_PORT(sdclient.sa)));
+    LOG(X_DEBUG("Accepted connection on %s:%d from %s:%d"), 
+        FORMAT_NETADDR(pListenCfg->sa, tmps[0], sizeof(tmps[0])), htons(INET_PORT(pListenCfg->sa)), 
+        FORMAT_NETADDR(sdclient.sa, tmps[1], sizeof(tmps[1])), htons(INET_PORT(sdclient.sa)));
 
     PHTREAD_INIT_ATTR(&pConn->attr);
     memset(&pConn->sd.netsocket, 0, sizeof(pConn->sd.netsocket));
@@ -244,8 +253,8 @@ int srvlisten_loop(SRV_LISTENER_CFG_T *pListenCfg, void *thread_func) {
                     (void *) thread_func_wrapper,
                     (void *) &wrapArg)) != 0) {
       LOG(X_ERROR("Unable to create connection handler thread on port %d from %s:%d (%d %s)"), 
-          htons(INET_PORT(pListenCfg->sa)), FORMAT_NETADDR(sdclient.sa, tmp, sizeof(tmp)),
-          htons(INET_PORT(sdclient.sa)), rc, strerror(rc));
+          FORMAT_NETADDR(pListenCfg->sa, tmps[0], sizeof(tmps[0])), htons(INET_PORT(pListenCfg->sa)), 
+          FORMAT_NETADDR(sdclient.sa, tmps[1], sizeof(tmps[1])), htons(INET_PORT(sdclient.sa)), rc, strerror(rc));
       netio_closesocket(&pConn->sd.netsocket);
       pool_return(pListenCfg->pConnPool, &pConn->pool);
       wrapArg.flags = 0;
@@ -275,9 +284,9 @@ int srvlisten_loop(SRV_LISTENER_CFG_T *pListenCfg, void *thread_func) {
       while(wrapArg.flags == 1) {
         usleep(100);
         if(((tv1 = timer_GetTime()) - tv0) / TIME_VAL_MS > 1000) {
-          LOG(X_WARNING("Abandoning wait for connection thread start on port %d from %s:%d"),
-               htons(INET_PORT(pListenCfg->sa)),
-              FORMAT_NETADDR(pListenCfg->sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pListenCfg->sa)));
+          LOG(X_WARNING("Abandoning wait for connection thread start on %s:%d from %s:%d"),
+              FORMAT_NETADDR(pListenCfg->sa, tmps[0], sizeof(tmps[0])), htons(INET_PORT(pListenCfg->sa)),
+              FORMAT_NETADDR(pListenCfg->sa, tmps[1], sizeof(tmps[1])), ntohs(INET_PORT(pListenCfg->sa)));
           break;
         } 
       }
@@ -298,3 +307,21 @@ int srvlisten_loop(SRV_LISTENER_CFG_T *pListenCfg, void *thread_func) {
   return rc;
 }
 
+
+
+int srvlisten_matchAddrFilters(const CLIENT_CONN_T *pConn, SRV_ADDR_FILTER_TYPE_T type) {
+
+  char tmps[2][128];
+  int rc; 
+
+  if((rc = vsxlib_matchaddrfilters(pConn->pListenCfg->pfilters, (const struct sockaddr *) &pConn->sd.sa, 
+                                   type)) != 0) {
+
+    LOG(X_WARNING("HTTP %s from %s:%d on %s:%d administratively prohibited"),
+          pConn->phttpReq->puri,
+          FORMAT_NETADDR(pConn->sd.sa, tmps[0], sizeof(tmps[0])), ntohs(INET_PORT(pConn->sd.sa)),
+          FORMAT_NETADDR(pConn->pListenCfg->sa, tmps[1], sizeof(tmps[1])), ntohs(INET_PORT(pConn->pListenCfg->sa)));
+  }
+
+  return rc;
+}

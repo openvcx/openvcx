@@ -96,8 +96,6 @@ typedef struct SRV_PARAM {
   int                      isinit;
   SRV_START_CFG_T          startcfg;
   POOL_T                   poolHttp;
-  //POOL_T                   poolRtmp;
-  //POOL_T                   poolRtsp;
   struct STREAM_STORAGE   *pStorageBuf;
   MEDIADB_DESCR_T          mediaDb;
   char                     cwd[VSX_MAX_PATH_LEN];
@@ -157,6 +155,11 @@ void vsxlib_setsrvconflimits(VSXLIB_STREAM_PARAMS_T *pParams,
                            unsigned int httphardlimit);
 int vsxlib_ssl_initserver(const VSXLIB_STREAM_PARAMS_T *pParams, const SRV_LISTENER_CFG_T *pListenCfg);
 int vsxlib_ssl_initclient(NETIO_SOCK_T *pnetsock);
+void vsxlib_closeaddrfilter(struct SRV_ADDR_FILTER **ppAddrFilter);
+int vsxlib_parseaddrfilters(struct SRV_LISTENER_CFG *pListenerCfg, const char *acceptList, 
+                            const char *denyList, const char *statusUrlList);
+int vsxlib_matchaddrfilters(const SRV_ADDR_FILTER_T *pAddrFilters, const struct sockaddr *psa,
+                            SRV_ADDR_FILTER_TYPE_T type);
 //int vsxlib_init_srtp(STREAMER_DEST_CFG_T *pdestsCfg, unsigned int numChannels, const SRTP_CFG_T *pSrtpCfg);
 int vsxlib_init_srtp(SRTP_CTXT_T srtps[2], unsigned int numChannels, const SRTP_CFG_T *pSrtpCfg,
                      const char *dstHost, uint16_t *ports);

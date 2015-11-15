@@ -70,8 +70,8 @@ typedef struct IP_ADDR_PAIR {
       struct in_addr                   dstIp;
     } ipv4;
     struct pqos_ip_addr_ipv6 {
-      struct in6_addr                    srcIp;
-      struct in6_addr                    dstIp;
+      struct in6_addr                  srcIp;
+      struct in6_addr                  dstIp;
     } ipv6;
   } ip_un;
 

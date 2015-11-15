@@ -404,7 +404,9 @@ fprintf(stderr, "COOKIE: '%s' 0x%x\n", phdrcookie, pSession);
     //
     } else if(!strncasecmp(pConn->phttpReq->puri, VSX_STATUS_URL, strlen(VSX_STATUS_URL) + 1)) {
 
-      if(capability & URL_CAP_STATUS) {
+      if(srvlisten_matchAddrFilters(pConn, SRV_ADDR_FILTER_TYPE_ALLOWSTATUS) != 0) {
+        httpStatus = HTTP_STATUS_FORBIDDEN;
+      } else if((capability & URL_CAP_STATUS)) {
         rc = srv_ctrl_status(pConn);
       } else {
         httpStatus = HTTP_STATUS_FORBIDDEN;

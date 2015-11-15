@@ -711,7 +711,7 @@ static int process_liveoverhttp(SRV_MGR_CONN_T *pMgrConn,
       // fprintf(stderr, "FLASH PROFILE:%d %d %s %dx%d\n", mediaDescr.vid.generic.profile, mediaDescr.vid.generic.mediaType, codecType_getCodecDescrStr(mediaDescr.vid.generic.mediaType), mediaDescr.vid.generic.resH, mediaDescr.vid.generic.resV);
       memcpy(&listenCfg, pMgrConn->conn.pListenCfg, sizeof(listenCfg));
       listenCfg.urlCapabilities |= URL_CAP_MKVLIVE | URL_CAP_FLVLIVE;
-      cfg.pListenHttp = &listenCfg;
+      cfg.pListenMedia = &listenCfg;
 
       //
       // The resource is located on a remote server
@@ -777,7 +777,7 @@ static int process_liveoverhttp(SRV_MGR_CONN_T *pMgrConn,
                                         (listenCfg.netflags & NETIO_FLAG_SSL_TLS)));
       }
       listenCfg.urlCapabilities |= URL_CAP_MKVLIVE | URL_CAP_FLVLIVE;
-      cfg.pListenHttp = &listenCfg; 
+      cfg.pListenMedia = &listenCfg; 
 
       VSX_DEBUG_MGR(LOG(X_DEBUG("MGR - liveoverhttp set http urlCap: 0x%x,  listen %s:%d for '%s'"), 
             listenCfg.urlCapabilities,
@@ -800,7 +800,7 @@ static int process_liveoverhttp(SRV_MGR_CONN_T *pMgrConn,
                                         (listenCfg.netflags & NETIO_FLAG_SSL_TLS)));
       }
       listenCfg.urlCapabilities |= URL_CAP_RTSPLIVE;
-      cfg.pListenHttp = &listenCfg; 
+      cfg.pListenMedia = &listenCfg; 
 
       VSX_DEBUG_MGR(LOG(X_DEBUG("MGR - liveoverhttp set rtsp urlCap: 0x%x, listen %s:%d for '%s'"), 
             listenCfg.urlCapabilities,
@@ -830,7 +830,7 @@ static int process_liveoverhttp(SRV_MGR_CONN_T *pMgrConn,
                                         (listenCfg.netflags & NETIO_FLAG_SSL_TLS)));
       }
       listenCfg.urlCapabilities |= URL_CAP_RTMPLIVE | URL_CAP_RTMPTLIVE;
-      cfg.pListenHttp = &listenCfg; 
+      cfg.pListenMedia = &listenCfg; 
 
       VSX_DEBUG_MGR(LOG(X_DEBUG("MGR - liveoverhttp set rtmp urlCap: 0x%x, listen %s:%d for '%s'"), 
             listenCfg.urlCapabilities,
@@ -884,36 +884,36 @@ static int process_liveoverhttp(SRV_MGR_CONN_T *pMgrConn,
     //
     // Return the rsrc/mkv_embed.html with a link of a canned resource such as /media/
     //
-    rc = srv_ctrl_mkv(pConn, rsrcurl, is_remoteargfile, cfg.pListenHttp, purloutbuf);
+    rc = srv_ctrl_mkv(pConn, rsrcurl, is_remoteargfile, cfg.pListenMedia , purloutbuf);
 
   } else if(action == MEDIA_ACTION_CANNED_INFLASH) {
 
     //
     // Return the rsrc/http_embed.html with a link of a canned resource such as /media/
     //
-    rc = srv_ctrl_flv(pConn, rsrcurl, is_remoteargfile, cfg.pListenHttp, purloutbuf);
+    rc = srv_ctrl_flv(pConn, rsrcurl, is_remoteargfile, cfg.pListenMedia, purloutbuf);
 
   } else if(method == STREAM_METHOD_MKVLIVE) {
 
     //
     // Return the rsrc/mkv_embed.html with a link of a live of the child stream processor
     //
-    rc = srv_ctrl_mkv(pConn, pvirtRsrc, is_remoteargfile, cfg.pListenHttp, purloutbuf);
+    rc = srv_ctrl_mkv(pConn, pvirtRsrc, is_remoteargfile, cfg.pListenMedia, purloutbuf);
 
   } else if(method == STREAM_METHOD_FLVLIVE) {
 
     //
     // Return the rsrc/http_embed.html with a link of a live of the child stream processor
     //
-    rc = srv_ctrl_flv(pConn, pvirtRsrc, is_remoteargfile, cfg.pListenHttp, purloutbuf);
+    rc = srv_ctrl_flv(pConn, pvirtRsrc, is_remoteargfile, cfg.pListenMedia, purloutbuf);
 
   } else if(method == STREAM_METHOD_RTSP || method == STREAM_METHOD_RTSP_HTTP||
            method == STREAM_METHOD_RTSP_INTERLEAVED) {
 
-    rc = srv_ctrl_rtsp(pConn, pvirtRsrc, is_remoteargfile, cfg.pListenHttp);
+    rc = srv_ctrl_rtsp(pConn, pvirtRsrc, is_remoteargfile, cfg.pListenMedia);
 
   } else {
-    rc = srv_ctrl_rtmp(pConn, pvirtRsrc, is_remoteargfile, rsrcurl, cfg.pListenHttp, 0, method);
+    rc = srv_ctrl_rtmp(pConn, pvirtRsrc, is_remoteargfile, rsrcurl, cfg.pListenMedia, 0, method);
   }
 
   if(directMediaReq) {
@@ -941,24 +941,24 @@ static int process_tslive(SRV_MGR_CONN_T *pMgrConn, const SRVMEDIA_RSRC_T *pMedi
   int rc = 0;
   CLIENT_CONN_T *pConn = &pMgrConn->conn;
   const char *pvirtRsrc = pMediaRsrc->virtRsrc;
-  SRV_LISTENER_CFG_T listenHttp;
+  SRV_LISTENER_CFG_T listenMedia;
   char rsrcurl[VSX_MAX_PATH_LEN];
 
-  memset(&listenHttp, 0, sizeof(listenHttp));
+  memset(&listenMedia, 0, sizeof(listenMedia));
 
   if(pMgrConn->pMgrCfg->pListenerHttpProxy[0].listenCfg.active &&
      INET_PORT(pMgrConn->pMgrCfg->pListenerHttpProxy[0].listenCfg.sa) != 0) {
-    memcpy(&listenHttp, &pMgrConn->pMgrCfg->pListenerHttpProxy[0].listenCfg, sizeof(listenHttp));
+    memcpy(&listenMedia, &pMgrConn->pMgrCfg->pListenerHttpProxy[0].listenCfg, sizeof(listenMedia));
   } else {
-    INET_PORT(listenHttp.sa) = htons(MGR_GET_PORT_HTTP(pProc->startPort,
-                                     (listenHttp.netflags & NETIO_FLAG_SSL_TLS)));
+    INET_PORT(listenMedia.sa) = htons(MGR_GET_PORT_HTTP(pProc->startPort,
+                                     (listenMedia.netflags & NETIO_FLAG_SSL_TLS)));
   }
 
   //
   // Send HTTP 30x redirect
   // 
   snprintf(rsrcurl, sizeof(rsrcurl), "http://%s:%d%s/%s", net_getlocalhostname(),
-           htons(INET_PORT(listenHttp.sa)),
+           htons(INET_PORT(listenMedia.sa)),
            VSX_TSLIVE_URL,
            pvirtRsrc ? pvirtRsrc: "live");
 
@@ -2211,15 +2211,22 @@ void srvmgr_client_proc(void *pfuncarg) {
           break;
 
         case MEDIA_ACTION_CHECK_TYPE:
+
           snprintf(tmpfile, sizeof(tmpfile), "action=%d&method=%d&methodAuto=%d", 
                    checkAction, reqMethod, methodAuto);
+
           rc = http_resp_send(&pConn->conn.sd, pConn->conn.phttpReq,
                     HTTP_STATUS_OK, (unsigned char *) tmpfile, strlen(tmpfile));
 
           break;
 
         case MEDIA_ACTION_STATUS:
-          rc = mgr_status_show_output(pConn, &httpStatus);
+
+          if(srvlisten_matchAddrFilters(&pConn->conn, SRV_ADDR_FILTER_TYPE_ALLOWSTATUS) != 0) {
+            httpStatus = HTTP_STATUS_FORBIDDEN;
+          } else {
+            rc = mgr_status_show_output(pConn, &httpStatus);
+          }
           break;
 
         case MEDIA_ACTION_CHECK_EXISTS:

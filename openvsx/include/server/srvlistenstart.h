@@ -35,6 +35,19 @@
 
 #include "srvcmd.h"
 
+typedef enum SRV_ADDR_FILTER_TYPE {
+  SRV_ADDR_FILTER_TYPE_ALLOW         = 0x01,
+  SRV_ADDR_FILTER_TYPE_DENY          = 0x02,
+  SRV_ADDR_FILTER_TYPE_GLOBAL        = 0x04,
+  SRV_ADDR_FILTER_TYPE_ALLOWSTATUS   = 0x08 
+} SRV_ADDR_FILTER_TYPE_T;
+
+typedef struct SRV_ADDR_FILTER {
+  SRV_ADDR_FILTER_TYPE_T          type;
+  struct sockaddr_storage         sa;
+  uint32_t                        mask;
+  struct SRV_ADDR_FILTER         *pnext;
+} SRV_ADDR_FILTER_T;
 
 typedef struct SRV_LISTENER_CFG {
   int                             active;
@@ -50,13 +63,14 @@ typedef struct SRV_LISTENER_CFG {
   enum URL_CAPABILITY             urlCapabilities;
   struct AUTH_CREDENTIALS_STORE  *pAuthStore;
   const char                     *pAuthTokenId;
+  SRV_ADDR_FILTER_T              *pfilters;
   char                            tid_tag[LOGUTIL_TAG_LENGTH];
   struct SRV_START_CFG           *pCfg;
 } SRV_LISTENER_CFG_T;
 
 typedef struct SRV_START_CFG {
 
-  SRV_LISTENER_CFG_T    listenHttp[SRV_LISTENER_MAX];
+  SRV_LISTENER_CFG_T    listenMedia[SRV_LISTENER_MAX];
 
   unsigned int       maxrtp;
   const unsigned int *prtspsessiontimeout;

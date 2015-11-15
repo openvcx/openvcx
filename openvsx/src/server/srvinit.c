@@ -193,7 +193,7 @@ SRV_CONF_T *srv_init_conf(const char *listenArg, const char *mediaDirArg,
   }
 
   if((rc = vsxlib_parse_listener((const char **) listenaddr, SRV_LISTENER_MAX,
-                            pCfg->listenHttp, urlCapability, ppAuthStores)) < 0) {
+                            pCfg->listenMedia, urlCapability, ppAuthStores)) < 0) {
     conf_free(pConf);
     return NULL;
   }
@@ -293,7 +293,7 @@ SRV_CONF_T *srv_init_conf(const char *listenArg, const char *mediaDirArg,
 
     if(pCfg->pParams->rtmpliveaddr[0] && pCfg->pParams->rtmpliveaddr[0][0] != '\0') {
 
-      if(vsxlib_parse_listener(pCfg->pParams->rtmpliveaddr, 1, pCfg->listenHttp, URL_CAP_RTMPLIVE, NULL) < 0) {
+      if(vsxlib_parse_listener(pCfg->pParams->rtmpliveaddr, 1, pCfg->listenMedia, URL_CAP_RTMPLIVE, NULL) < 0) {
         LOG(X_ERROR("Invalid RTMP listen address:port '%s'"), pCfg->pParams->rtmpliveaddr[0]);
         conf_free(pConf);
         return NULL;
@@ -307,7 +307,7 @@ SRV_CONF_T *srv_init_conf(const char *listenArg, const char *mediaDirArg,
 
     if(pCfg->pParams->rtspliveaddr[0] && pCfg->pParams->rtspliveaddr[0][0] != '\0') {
 
-      if(vsxlib_parse_listener(pCfg->pParams->rtspliveaddr, 1, pCfg->listenHttp, URL_CAP_RTSPLIVE, NULL) < 0) {
+      if(vsxlib_parse_listener(pCfg->pParams->rtspliveaddr, 1, pCfg->listenMedia, URL_CAP_RTSPLIVE, NULL) < 0) {
         LOG(X_ERROR("Invalid RTSP listen address:port '%s'"), pCfg->pParams->rtspliveaddr[0]);
         conf_free(pConf);
         return NULL;

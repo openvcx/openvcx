@@ -1057,6 +1057,9 @@ enum CMD_OPT {
   CMD_OPT_TOKENID,
   CMD_OPT_OUTQ_PREALLOC,
   CMD_OPT_THREAD_STACKSIZE,
+  CMD_OPT_FILTERALLOW,
+  CMD_OPT_FILTERDENY,
+  CMD_OPT_FILTERALLOWSTATUS,
   CMD_OPT_DEBUG,
   CMD_OPT_DEBUG_CODEC,
   CMD_OPT_DEBUG_AUTH,
@@ -1176,6 +1179,9 @@ int main(int argc, char *argv[]) {
                  { "dump",        optional_argument,       NULL, 'd' },
                  { "duration",    required_argument,       NULL, CMD_OPT_DURATION },
                  { "filter",      required_argument,       NULL, CMD_OPT_FILTER },
+                 { "filterallow", required_argument,       NULL, CMD_OPT_FILTERALLOW},
+                 { "filterdeny",  required_argument,       NULL, CMD_OPT_FILTERDENY },
+                 { "filterstatus",required_argument,       NULL, CMD_OPT_FILTERALLOWSTATUS },
                  { "flvdelay",    required_argument,       NULL, CMD_OPT_FLVLIVEDELAY },
                  { "flvlive",     optional_argument,       NULL, CMD_OPT_FLVLIVEADDRPORT },
                  { "flvlivemax",  required_argument,       NULL, CMD_OPT_FLVLIVEMAX },
@@ -1631,6 +1637,15 @@ int main(int argc, char *argv[]) {
         if(idxFilters < 2) {
           streamParams.strfilters[idxFilters++] = optarg;
         }
+        break;
+      case CMD_OPT_FILTERALLOW:
+        streamParams.allowlist = optarg;
+        break;
+      case CMD_OPT_FILTERDENY:
+        streamParams.denylist = optarg;
+        break;
+      case CMD_OPT_FILTERALLOWSTATUS:
+        streamParams.statusallowlist = optarg;
         break;
       case CMD_OPT_FLVLIVEDELAY:
         streamParams.flvlivedelay = atof(optarg);

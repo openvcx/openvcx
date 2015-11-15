@@ -62,11 +62,7 @@ static int srv_start(SRV_START_CFG_T *pCfg) {
   char cwd[VSX_MAX_PATH_LEN];
   CLIENT_CONN_T *pClient;
   POOL_T poolHttp;
-  //POOL_T poolRtmp;
-  //POOL_T poolRtsp;
   unsigned int maxConnectionsTsLive = 0;
-  //unsigned int maxConnectionsRtmpLive = 0;
-  //unsigned int maxConnectionsTot;
   unsigned int maxConnectionsDefault;
   int rawxmit = 0;
   char buf[VSX_MAX_PATH_LEN];
@@ -74,16 +70,10 @@ static int srv_start(SRV_START_CFG_T *pCfg) {
   STREAMER_LIVEQ_T *pLiveQ;
   unsigned int outidx;
 
-  //TODO: enable rtsp, rtmp in server mode
-  //pCfg->listenRtmp[0].max = pCfg->listenRtsp[0].max = 0;
-  //pCfg->listenRtsp[0].max = 0;
-
   maxConnectionsTsLive = MAX(pCfg->pParams->tslivemax, 1);
   maxConnectionsDefault = MAX(pCfg->pParams->httpmax, 4);
 
   memset(&poolHttp, 0, sizeof(poolHttp));
-  //memset(&poolRtmp, 0, sizeof(poolRtmp));
-  //memset(&poolRtsp, 0, sizeof(poolRtsp));
   memset(srvCtrl, 0, sizeof(srvCtrl));
   memset(&sessionCache, 0, sizeof(sessionCache));
 
@@ -208,9 +198,7 @@ static int srv_start(SRV_START_CFG_T *pCfg) {
                         MEDIADB_PREFIXES_MAX);
   mediadb_parseprefixes(pCfg->pignorefileprfx, pCfg->cfgShared.pMediaDb->ignorefileprefixes, 
                         MEDIADB_PREFIXES_MAX);
-  //pCfg->cfgShared.pListenRtmp = pCfg->listenRtmp;
-  //pCfg->cfgShared.pListenRtsp = pCfg->listenRtsp;
-  pCfg->cfgShared.pListenHttp = pCfg->listenHttp;
+  pCfg->cfgShared.pListenMedia = pCfg->listenMedia;
   pCfg->cfgShared.pSessionCache = &sessionCache;
   for(outidx = 0; outidx < 1; outidx++) {
     pCfg->cfgShared.pHttpLiveDatas[outidx] = &httpLiveData;
@@ -267,37 +255,16 @@ static int srv_start(SRV_START_CFG_T *pCfg) {
                sizeof(CLIENT_CONN_T), 1) != 0) {
     return -1;
   }
-  //if(pool_open(&poolRtmp, maxrtmplive, sizeof(CLIENT_CONN_T), 1) != 0) {
-  //  return -1;
-  //}
-  //if(pool_open(&poolRtmp, maxrtsplive, sizeof(CLIENT_CONN_T), 1) != 0) {
-  //  return -1;
-  //}
 
   pClient = (CLIENT_CONN_T *) poolHttp.pElements;
   while(pClient) {
-    init_conn(pClient, srvCtrl, &pCfg->listenHttp[0], &pCfg->cfgShared);
+    init_conn(pClient, srvCtrl, &pCfg->listenMedia[0], &pCfg->cfgShared);
     pClient = (CLIENT_CONN_T *) pClient->pool.pNext;
   }
 
-  //pClient = (CLIENT_CONN_T *) poolRtsp.pElements;
-  //while(pClient) {
-  //  init_conn(pClient);
-  //  pClient = pClient->pNext;
-  //}
-
-  //pClient = (CLIENT_CONN_T *) poolRtmp.pElements;
-  //while(pClient) {
-  //  init_conn(pClient);
-  //  pClient = pClient->pNext;
-  //}
-
-
   //memset(&netsocksrv, 0, sizeof(netsocksrv));
-  //if((netsocksrv.sock = net_listen(&pCfg->saListenHttp, 5)) == INVALID_SOCKET) {
+  //if((netsocksrv.sock = net_listen(&pCfg->saListenMedia, 5)) == INVALID_SOCKET) {
   //  pool_close(&poolHttp, 0);
-    //pool_close(&poolRtmp, 0);
-    //pool_close(&poolRtsp, 0);
   //  return -1;
   //}
 
@@ -398,7 +365,7 @@ static int srv_start(SRV_START_CFG_T *pCfg) {
 
   if(pCfg->pParams->tslivemax > 0) {
     if((rc = vsxlib_parse_listener((const char **) pCfg->pParams->tsliveaddr, SRV_LISTENER_MAX,
-                            pCfg->listenHttp, URL_CAP_TSLIVE, NULL)) < 0) {
+                            pCfg->listenMedia, URL_CAP_TSLIVE, NULL)) < 0) {
       pool_close(&poolHttp, 0);
       return -1;
     }
@@ -406,7 +373,7 @@ static int srv_start(SRV_START_CFG_T *pCfg) {
 
   if(pCfg->pParams->httplivemax > 0) {
     if((rc = vsxlib_parse_listener((const char **) pCfg->pParams->httpliveaddr, SRV_LISTENER_MAX,
-                            pCfg->listenHttp, URL_CAP_TSHTTPLIVE, NULL)) < 0) {
+                            pCfg->listenMedia, URL_CAP_TSHTTPLIVE, NULL)) < 0) {
       pool_close(&poolHttp, 0);
       return -1;
     }
@@ -416,30 +383,30 @@ static int srv_start(SRV_START_CFG_T *pCfg) {
   // Ensure there is at least one /tslive and one /httplive listener
   // if not explicitly specified in the config via 'tslive=' and 'httplive='
   //
-  if(!srv_ctrl_findlistener(pCfg->listenHttp, SRV_LISTENER_MAX, URL_CAP_TSLIVE, 0, 0, 0)) {
-    pCfg->listenHttp[0].urlCapabilities |= URL_CAP_TSLIVE;
+  if(!srv_ctrl_findlistener(pCfg->listenMedia, SRV_LISTENER_MAX, URL_CAP_TSLIVE, 0, 0, 0)) {
+    pCfg->listenMedia[0].urlCapabilities |= URL_CAP_TSLIVE;
   }
-  if(!srv_ctrl_findlistener(pCfg->listenHttp, SRV_LISTENER_MAX, URL_CAP_TSHTTPLIVE, 0, 0, 0)) {
-    pCfg->listenHttp[0].urlCapabilities |= URL_CAP_TSHTTPLIVE;
+  if(!srv_ctrl_findlistener(pCfg->listenMedia, SRV_LISTENER_MAX, URL_CAP_TSHTTPLIVE, 0, 0, 0)) {
+    pCfg->listenMedia[0].urlCapabilities |= URL_CAP_TSHTTPLIVE;
   }
 
 
   for(idx = 0; idx < SRV_LISTENER_MAX; idx++) {
 
-    //fprintf(stderr, "LISTENER[%d] %s %s:%d active:%d cap: 0x%x\n", idx, pCfg->listenHttp[idx].netflags & NETIO_FLAG_SSL_TLS ? "SSL" : "", inet_ntoa(pCfg->listenHttp[idx].sain.sin_addr), ntohs(pCfg->listenHttp[idx].sain.sin_port), pCfg->listenHttp[idx].active, pCfg->listenHttp[idx].urlCapabilities);
+    //fprintf(stderr, "LISTENER[%d] %s %s:%d active:%d cap: 0x%x\n", idx, pCfg->listenMedia[idx].netflags & NETIO_FLAG_SSL_TLS ? "SSL" : "", inet_ntoa(pCfg->listenMedia[idx].sain.sin_addr), ntohs(pCfg->listenMedia[idx].sain.sin_port), pCfg->listenMedia[idx].active, pCfg->listenMedia[idx].urlCapabilities);
 
-    if(pCfg->listenHttp[idx].active) {
+    if(pCfg->listenMedia[idx].active) {
 
       //
       // Create and listen on the UI HTTP port
       //
-      pCfg->listenHttp[idx].max = maxConnectionsDefault + maxConnectionsTsLive;
-      pCfg->listenHttp[idx].pConnPool = &poolHttp;
-      pCfg->listenHttp[idx].pCfg = pCfg;
+      pCfg->listenMedia[idx].max = maxConnectionsDefault + maxConnectionsTsLive;
+      pCfg->listenMedia[idx].pConnPool = &poolHttp;
+      pCfg->listenMedia[idx].pCfg = pCfg;
       if(idx > 0) {
 
-        if((rc = vsxlib_ssl_initserver(pCfg->pParams, &pCfg->listenHttp[idx])) < 0 ||
-           (rc = srvlisten_startmediasrv(&pCfg->listenHttp[idx], 1)) < 0) {
+        if((rc = vsxlib_ssl_initserver(pCfg->pParams, &pCfg->listenMedia[idx])) < 0 ||
+           (rc = srvlisten_startmediasrv(&pCfg->listenMedia[idx], 1)) < 0) {
           pool_close(&poolHttp, 0);
           return -1;
         }
@@ -450,8 +417,8 @@ static int srv_start(SRV_START_CFG_T *pCfg) {
   //
   // Start the first listener synchronously, thus blocking here
   //
-  if((rc = vsxlib_ssl_initserver(pCfg->pParams, &pCfg->listenHttp[0])) < 0 ||
-     (rc = srvlisten_startmediasrv(&pCfg->listenHttp[0], 0)) < 0) {
+  if((rc = vsxlib_ssl_initserver(pCfg->pParams, &pCfg->listenMedia[0])) < 0 ||
+     (rc = srvlisten_startmediasrv(&pCfg->listenMedia[0], 0)) < 0) {
     pool_close(&poolHttp, 0);
     return -1;
   }
@@ -480,8 +447,6 @@ static int srv_start(SRV_START_CFG_T *pCfg) {
 
   httplive_close(&httpLiveData);
   pool_close(&poolHttp, 3000);
-  //pool_close(&poolRtsp, 3000);
-  //pool_close(&poolRtmp, 3000);
 
   return 0;
 }

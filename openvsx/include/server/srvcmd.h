@@ -116,7 +116,7 @@ typedef struct SRV_CFG {
   HTTPLIVE_DATA_T                 *pHttpLiveDatas[IXCODE_VIDEO_OUT_MAX];
   MOOFSRV_CTXT_T                  *pMoofCtxts[IXCODE_VIDEO_OUT_MAX];
   STREAM_RTSP_SESSIONS_T          *pRtspSessions;
-  const struct SRV_LISTENER_CFG   *pListenHttp;
+  const struct SRV_LISTENER_CFG   *pListenMedia;
   float                            throttlerate;
   float                            throttleprebuf;
   int                              enable_symlink;
@@ -166,7 +166,6 @@ typedef struct CLIENT_CONN {
   pthread_t                       ptd;
   pthread_attr_t                  attr;
   SOCKET_DESCR_T                  sd;
-  //const struct sockaddr        *psrvsaListen; // server tcp listener port
 
   // Digest auth connection specific state
   //char nonce[AUTH_NONCE_MAXLEN];

@@ -1115,6 +1115,20 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
 */
   }
 
+  //
+  // IP source connection allow and deny filter list
+  //
+  if(!pParams->allowlist && (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_ALLOWLIST))) {
+    pParams->allowlist = parg;
+  }
+
+  if(!pParams->denylist && (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_DENYLIST))) {
+    pParams->denylist = parg;
+  }
+
+  if(!pParams->statusallowlist && (parg = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_STATUSALLOWLIST))) {
+    pParams->statusallowlist = parg;
+  }
 
   //
   // Packetization config
@@ -2470,4 +2484,234 @@ int vsxlib_init_threads(const VSXLIB_STREAM_PARAMS_T *pParams) {
   }
 
   return rc;
+}
+
+void vsxlib_closeaddrfilter(SRV_ADDR_FILTER_T **ppAddrFilter) {
+  SRV_ADDR_FILTER_T *pFilter;
+
+  if(!ppAddrFilter) {
+    return;
+  }
+
+  while(*ppAddrFilter) {
+    pFilter = (*ppAddrFilter)->pnext;
+    avc_free((void **) ppAddrFilter);
+    *ppAddrFilter = pFilter;
+  }
+
+}
+
+#define PARSE_ADDRFILTER_MAX             40
+
+typedef struct PARSE_ADDRFILTER_CTXT {
+  int                                count;
+  SRV_ADDR_FILTER_TYPE_T             type;
+  const char                        *descr;
+  SRV_ADDR_FILTER_T                 *pAddrFilterList;
+  SRV_ADDR_FILTER_T                 *pAddrFilterLast;
+} PARSE_ADDRFILTER_CTXT_T;
+
+static int parse_addrfilter(const char *straddr, const char *strmask, SRV_ADDR_FILTER_T *pfilter) {
+  int rc = 0;
+  unsigned int idx;
+  unsigned int mask = 0;
+
+  mask = (ADDR_LEN_IPV4 * 8);
+  if(strmask && strmask[0] != '\0') {
+    mask = (unsigned int) atoi(strmask);
+  }
+  if(mask > (ADDR_LEN_IPV4 * 8)) {
+    mask = (ADDR_LEN_IPV4 * 8);
+  }
+
+  if(net_getaddress(straddr, &pfilter->sa) < 0) {
+    LOG(X_ERROR("Invalid address '%s'"), straddr);
+    return -1;
+  } else if(pfilter->sa.ss_family != AF_INET) {
+    LOG(X_WARNING("Only ipv4 address supported in list '%s'"), straddr);
+    return -1;
+  }
+
+  pfilter->mask = 0;
+  for(idx = 0; idx < mask; idx++) {
+    pfilter->mask |= htonl(1 << ((ADDR_LEN_IPV4 * 8) - 1 - idx));
+  }
+
+  return rc;
+}
+
+int  cbparse_addrfilter(void *pArg, const char *p) {
+  int rc = 0;
+  const char *p2 = NULL;
+  const char *paddrstr = NULL;
+  size_t sz;
+  char addrstr[128];
+  char tmp[128];
+  PARSE_ADDRFILTER_CTXT_T *p_parseCtxt = (PARSE_ADDRFILTER_CTXT_T *) pArg;
+  SRV_ADDR_FILTER_T filter;
+  SRV_ADDR_FILTER_T *pfilter;
+
+  paddrstr = p = p2 = avc_dequote(p, NULL, 0);
+  MOVE_UNTIL_CHAR(p2, '/');
+  while(*p2 == '/') {
+    sz = MIN(sizeof(addrstr) -1, p2 - p);
+    strncpy(addrstr, p, sz);
+    addrstr[sz] = '\0';
+    p2++;
+    paddrstr = addrstr;
+  }
+  memset(&filter, 0, sizeof(filter));
+
+  if((rc = parse_addrfilter(paddrstr, p2, &filter)) >= 0) {
+
+    if(++p_parseCtxt->count > PARSE_ADDRFILTER_MAX) {
+      LOG(X_ERROR("Reached maximum of %d %s filters"), PARSE_ADDRFILTER_MAX, p_parseCtxt->descr); 
+      return -1;
+    } else if(!(pfilter = (SRV_ADDR_FILTER_T *) avc_calloc(1, sizeof(SRV_ADDR_FILTER_T)))) {
+      return -1;
+    }
+    memcpy(pfilter, &filter, sizeof(SRV_ADDR_FILTER_T));
+    pfilter->type = p_parseCtxt->type;
+
+    if(!p_parseCtxt->pAddrFilterList) {
+      p_parseCtxt->pAddrFilterList = pfilter;
+    } else if(p_parseCtxt->pAddrFilterLast) {
+      p_parseCtxt->pAddrFilterLast->pnext = pfilter;
+    }
+    p_parseCtxt->pAddrFilterLast = pfilter;
+  }
+
+  LOG(X_DEBUGV("Loaded address filter %d type: %d, %s mask: 0x%x"), p_parseCtxt->count, 
+               p_parseCtxt->type, INET_NTOP(filter.sa, tmp, sizeof(tmp)), htonl(filter.mask));
+
+  return 0;
+}
+
+static SRV_ADDR_FILTER_T *addFilters(SRV_LISTENER_CFG_T *pListenerCfg, 
+                                     const char *strlist, 
+                                     SRV_ADDR_FILTER_TYPE_T type, 
+                                     const char *descr,
+                                     SRV_ADDR_FILTER_T *pfilterLast) {
+
+  int rc = 0;
+  PARSE_ADDRFILTER_CTXT_T parseCtxt;
+  const char *p = NULL;
+
+  if(!strlist || strlist[0] == '\0') {
+    return pfilterLast;
+  }
+
+  memset(&parseCtxt, 0, sizeof(parseCtxt));
+  parseCtxt.type = type;
+  parseCtxt.descr = descr;
+
+  p = avc_dequote(strlist, NULL, 0);
+
+  rc = strutil_parse_csv(cbparse_addrfilter, &parseCtxt, p);
+
+  if(parseCtxt.pAddrFilterList) {
+
+    LOG(X_DEBUG("%s filter: %s"), descr, strlist);
+
+    if(!pListenerCfg->pfilters) {
+      pListenerCfg->pfilters = parseCtxt.pAddrFilterList;
+    } else if(pfilterLast) {
+      pfilterLast->pnext = parseCtxt.pAddrFilterList;
+    }
+    pfilterLast = parseCtxt.pAddrFilterLast;
+  }
+
+  return pfilterLast;
+}
+
+int vsxlib_parseaddrfilters(SRV_LISTENER_CFG_T *pListenerCfg, 
+                            const char *allowList, 
+                            const char *denyList,
+                            const char *statusAllowList) {
+  int rc = 0;
+  SRV_ADDR_FILTER_T *pfilterLast = NULL;
+  SRV_ADDR_FILTER_TYPE_T type = SRV_ADDR_FILTER_TYPE_GLOBAL;
+
+  if(!pListenerCfg) {
+    return -1;
+  }
+
+  pfilterLast = addFilters(pListenerCfg, denyList, type | SRV_ADDR_FILTER_TYPE_DENY, "Deny", pfilterLast);
+  pfilterLast = addFilters(pListenerCfg, allowList, type | SRV_ADDR_FILTER_TYPE_ALLOW, "Allow", pfilterLast);
+  pfilterLast = addFilters(pListenerCfg, statusAllowList, 
+                  SRV_ADDR_FILTER_TYPE_ALLOWSTATUS | SRV_ADDR_FILTER_TYPE_ALLOW, "Status-Allow", pfilterLast);
+
+#if 0
+  char tmp[128]; pfilterLast=pListenerCfg->pfilters;
+  while(pfilterLast) {
+    LOG(X_DEBUG("type: 0x%x %s/0x%x"), pfilterLast->type, INET_NTOP(pfilterLast->sa, tmp, sizeof(tmp)), htonl(pfilterLast->mask));
+    pfilterLast=pfilterLast->pnext;
+  }
+#endif // 0
+
+  return rc;
+}
+
+static int ismatchAddrFilter(const SRV_ADDR_FILTER_T *pFilter, const struct sockaddr *psa) {
+
+  if(pFilter->sa.ss_family != psa->sa_family) {
+    return 0;
+  }
+
+  //char tmps[2][128]; LOG(X_DEBUG("vsxlib_ismatchAddrFilter filter type: 0x%x, '%s' (0x%x) mask: 0x%x, connection: '%s' (0x%x)"), pFilter->type, INET_NTOP(pFilter->sa, tmps[0], sizeof(tmps[0])), htonl( ((struct sockaddr_in *) &pFilter->sa)->sin_addr.s_addr), htonl(pFilter->mask), INET_NTOP(*psa, tmps[1], sizeof(tmps[1])), htonl( ((struct sockaddr_in *) psa)->sin_addr.s_addr));
+
+  if( (((struct sockaddr_in *) &pFilter->sa)->sin_addr.s_addr & pFilter->mask) ==
+     (((struct sockaddr_in *) psa)->sin_addr.s_addr & pFilter->mask) ) {
+    return 1;
+  } else {
+    return 0;
+  }
+}
+
+int vsxlib_matchaddrfilters(const SRV_ADDR_FILTER_T *pAddrFilters, const struct sockaddr *psa,
+                            SRV_ADDR_FILTER_TYPE_T type) {
+  int rc = 0;
+  int haveAccept = -1;
+  const SRV_ADDR_FILTER_T *pFilter;
+
+  if((pFilter = pAddrFilters)) {
+
+    if((type & pFilter->type) && pFilter->sa.ss_family != psa->sa_family) {
+      return -1;
+    }
+
+    while(pFilter) {
+
+      if(((type | SRV_ADDR_FILTER_TYPE_DENY) == pFilter->type) &&
+        (rc = ismatchAddrFilter(pFilter, psa))) {
+        //
+        // Explicitly denied
+        //
+        return -1;
+      }
+      pFilter = pFilter->pnext;
+    }
+  }
+
+  if((pFilter = pAddrFilters)) {
+
+    while(pFilter) {
+
+      if(((type | SRV_ADDR_FILTER_TYPE_ALLOW) == pFilter->type)) {
+
+        if(haveAccept == -1) {
+          haveAccept = 0;
+        }
+
+        if((rc = ismatchAddrFilter(pFilter, psa))) {
+          haveAccept = 1;
+          break;
+        }
+      }
+
+      pFilter = pFilter->pnext;
+    }
+  }
+
+  return haveAccept != 0 ? 0 : -1;
 }

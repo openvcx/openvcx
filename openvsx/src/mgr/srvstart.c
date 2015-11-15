@@ -218,6 +218,25 @@ static int check_other_listeners(const SRV_LISTENER_CFG_T *pListenerThis,
   return 0;
 }
 
+static int start_close(SRV_CONF_T *pConf, SRV_MGR_START_CFG_T *pstart) {
+
+  conf_free(pConf);
+
+  if(pstart->pLbNodes) {
+    mgrnode_close(pstart->pLbNodes);
+  }
+
+  if(pstart->pMonitor) {
+    stream_monitor_stop(pstart->pMonitor);
+  }
+
+  if(pstart->pCfg->listenMedia[0].pfilters) {
+    vsxlib_closeaddrfilter(&pstart->pCfg->listenMedia[0].pfilters);
+  }
+
+  return -1;
+}
+
 int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
   MEDIADB_DESCR_T mediaDb;
   HTTPLIVE_DATA_T httpLiveDatas[IXCODE_VIDEO_OUT_MAX];
@@ -351,13 +370,11 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
 
   if(pParams->lbnodesfile) {
     if((rc = mgrnode_init(pParams->lbnodesfile, &lbnodes)) < 0) {
-      conf_free(pConf);
-      return -1;
+      return start_close(pConf, &start);
     } else if(lbnodes.count <= 0) {
       LOG(X_ERROR("No active nodes loaded from %s"), pParams->lbnodesfile);
-      conf_free(pConf);
       mgrnode_close(&lbnodes);
-      return -1;
+      return start_close(pConf, &start);
     }
     start.pLbNodes = &lbnodes;
     cfg.usedb = 0;
@@ -391,8 +408,7 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
       get_port_range(p, &pParams->procList.minStartPort, &pParams->procList.maxStartPort) < 0) {
   
       LOG(X_ERROR("Invalid %s"), SRV_CONF_KEY_PORTRANGE);
-      conf_free(pConf);
-      return -1;
+      return start_close(pConf, &start);
     }
   
     if(!params.disable_root_dirlist) {
@@ -429,8 +445,7 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
   
     if(fileops_stat(start.plaunchpath, &st) != 0) {
       LOG(X_ERROR("Launch script %s does not exist"), start.plaunchpath);
-      conf_free(pConf);
-      return -1;
+      return start_close(pConf, &start);
     }
   
     if(cfg.pdbdir == NULL) {
@@ -478,6 +493,7 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
                           MEDIADB_PREFIXES_MAX);
     mediadb_parseprefixes(cfg.pignorefileprfx, mediaDb.ignorefileprefixes,
                           MEDIADB_PREFIXES_MAX);
+
     for(outidx = 0; outidx < IXCODE_VIDEO_OUT_MAX; outidx++) {
   
       //
@@ -514,9 +530,7 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
                     cfg.phomedir, mediaDb.mediaDir, mediaDb.dbDir));
 
     if(procdb_create(&pParams->procList) < 0) {
-      conf_free(pConf);
-      mgrnode_close(start.pLbNodes);
-      return -1;
+      return start_close(pConf, &start);
     }
 
     LOG(X_INFO("Home dir: '%s', Media dir: '%s', database %s, %d max connections"), 
@@ -540,14 +554,10 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
 #if defined(VSX_HAVE_LICENSE)
 
   if(license_init(&lic, cfg.licfilepath, cfg.phomedir) < 0) {
-    conf_free(pConf);
-    mgrnode_close(start.pLbNodes);
-    return -1;
+    return start_close(pConf, &start);
   } else if((lic.capabilities & LIC_CAP_NO_MGR)) {
     LOG(X_ERROR("VSXMgr not enabled in license"));
-    conf_free(pConf);
-    mgrnode_close(start.pLbNodes);
-    return -1;
+    return start_close(pConf, &start);
   } 
 
   tmstart = timer_GetTime();
@@ -556,25 +566,29 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
 
   if(start.pMonitor) {
     if(stream_monitor_start(start.pMonitor, NULL, params.statdumpintervalms) < 0) {
-      conf_free(pConf);
-      mgrnode_close(start.pLbNodes);
-      return -1;
+      return start_close(pConf, &start);
     }
   }
 
   //
+  // Init and allocate any remote connection filters
+  //
+  vsxlib_parseaddrfilters(&cfg.listenMedia[0], params.allowlist, params.denylist,
+                          params.statusallowlist);
+
+  //
   // Create and init each available http connection instance
   //
-  if(init_listener(&poolHttp, &start, listenerHttp, params.httpmax, cfg.listenHttp) < 0) {
-    conf_free(pConf);
-    mgrnode_close(start.pLbNodes);
-    stream_monitor_stop(start.pMonitor);
-    return -1;
+  if(init_listener(&poolHttp, &start, listenerHttp, params.httpmax, cfg.listenMedia) < 0) {
+    return start_close(pConf, &start);
   }
 
-  memset(cfg.listenHttp, 0, sizeof(cfg.listenHttp));
+  //memset(cfg.listenMedia, 0, sizeof(cfg.listenMedia));
   for(idx = 0; idx < SRV_LISTENER_MAX; idx++) {
     memcpy(&listenerTmp[idx], &listenerHttp[idx].listenCfg, sizeof(listenerTmp[idx]));
+    if(idx > 0) {
+      listenerHttp[idx].listenCfg.pfilters = listenerHttp[0].listenCfg.pfilters;
+    }
   }
 
   if(cfg.usedb) {
@@ -582,10 +596,7 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
     if(!mediaDb.mediaDir) {
       LOG(X_CRITICAL("Media directory not set.  Please specify your media directory by modifying '%s' or by passing the '--media=' command line option"),
                MGR_CONF_PATH);
-      conf_free(pConf);
-      mgrnode_close(start.pLbNodes);
-      stream_monitor_stop(start.pMonitor);
-      return -1;
+      return start_close(pConf, &start);
     }
 
     //
@@ -599,10 +610,7 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
                       (void *) &mediaDb) != 0) {
 
       LOG(X_ERROR("Unable to create media database thread"));
-      conf_free(pConf);
-      mgrnode_close(start.pLbNodes);
-      stream_monitor_stop(start.pMonitor);
-      return -1;
+      return start_close(pConf, &start);
     }
   }
 
@@ -678,21 +686,21 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
 
   if(rc >= 0 && params.flvlivemax > 0 && params.flvliveaddr[0] &&
      (rc = vsxlib_parse_listener((const char **) params.flvliveaddr, SRV_LISTENER_MAX,
-                                  cfg.listenHttp, URL_CAP_FLVLIVE, NULL)) > 0) {
+                                  cfg.listenMedia, URL_CAP_FLVLIVE, NULL)) > 0) {
 
     //
     // Start the HTTP / FLV proxy
     //
-    if((rc = check_other_listeners(cfg.listenHttp, SRV_LISTENER_MAX,
+    if((rc = check_other_listeners(cfg.listenMedia, SRV_LISTENER_MAX,
                                    listenerTmp, listenRtmp, listenRtsp)) > 0) {
       LOG(X_WARNING("HTTP (proxy) server listener %s:%d cannot be shared with another protocol"),
-          FORMAT_NETADDR(cfg.listenHttp[rc - 1].sa, tmp, sizeof(tmp)), htons(INET_PORT(cfg.listenHttp[rc - 1].sa)));
+          FORMAT_NETADDR(cfg.listenMedia[rc - 1].sa, tmp, sizeof(tmp)), htons(INET_PORT(cfg.listenMedia[rc - 1].sa)));
     } else {
 
       //
       // Create and init each available client connection instance
       //
-      if((rc = init_listener(&poolHttpProxy, &start, listenerHttpProxy, params.flvlivemax, cfg.listenHttp)) >= 0) {
+      if((rc = init_listener(&poolHttpProxy, &start, listenerHttpProxy, params.flvlivemax, cfg.listenMedia)) >= 0) {
 
         //
         // Start the HTTP / FLV listener(s)
@@ -753,9 +761,7 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
   if(start.pLbNodes) {
     procdb_destroy(&pParams->procList);
   }
-  conf_free(pConf);
-  mgrnode_close(start.pLbNodes);
-  stream_monitor_stop(start.pMonitor);
+  start_close(pConf, &start);
 
   return rc;
 }

@@ -750,7 +750,7 @@ static char *get_methods_str(int methodBits,
   // Include a /status URL listener bound to localhost without any credentials
   //
   if(do_status && (rc = write_listener(NULL, MGR_GET_PORT_STATUS(startPort), 0, "status", HTTP_PROTO_STR, 
-                      NULL, "127.0.0.1", *pidxbuf > 0 ? 1 : 0, &buf[*pidxbuf], szbuf - *pidxbuf)) > 0) {
+                      NULL, NULL, *pidxbuf > 0 ? 1 : 0, &buf[*pidxbuf], szbuf - *pidxbuf)) > 0) {
     *pidxbuf += rc;
   }
 
