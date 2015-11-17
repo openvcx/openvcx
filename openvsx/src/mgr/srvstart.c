@@ -163,7 +163,6 @@ static int init_listener(POOL_T *pPool,
   while(pConn) {
     NETIOSOCK_FD(pConn->conn.sd.netsocket) = INVALID_SOCKET;
     pConn->conn.pCfg = &pStart->pCfg->cfgShared;
-    //memcpy(&pConn->cfg, pStart, sizeof(pConn->cfg));
     pConn->pMgrCfg = pStart;
     pConn = (SRV_MGR_CONN_T *) pConn->conn.pool.pNext;
   }
@@ -560,9 +559,9 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
     return start_close(pConf, &start);
   } 
 
-  tmstart = timer_GetTime();
-
 #endif //VSX_HAVE_LICENSE
+
+  tmstart = timer_GetTime();
 
   if(start.pMonitor) {
     if(stream_monitor_start(start.pMonitor, NULL, params.statdumpintervalms) < 0) {

@@ -1666,15 +1666,19 @@ int mgr_status_show_output(SRV_MGR_CONN_T *pConn, HTTP_STATUS_T *phttpStatus) {
   char tmpstrs[6][64];
   CPU_USAGE_PERCENT_T *pCpuUsage = NULL;
   MEM_SNAPSHOT_T *pMemUsage = NULL;
+  TIME_VAL tmelapsed;
 
   if(!(pConn->conn.pListenCfg->urlCapabilities & URL_CAP_STATUS)) {
     *phttpStatus = HTTP_STATUS_FORBIDDEN;
     return -1;
   }
 
-  if((rc = snprintf(&buf[idx], sizeof(buf) - idx, "status=OK")) >= 0) {
+  tmelapsed = ((timer_GetTime() - *pConn->pMgrCfg->ptmstart) / TIME_VAL_US);
+
+  if((rc = snprintf(&buf[idx], sizeof(buf) - idx, "status=OK&uptime=%lld", tmelapsed)) >= 0) {
     idx += rc;
   }
+
 
   if((pCpuUsage = pConn->pMgrCfg->pCpuUsage)) {
     if((rc = snprintf(&buf[idx], sizeof(idx) - idx, "&cpuuser=%.1f&cpunice=%.1f&cpusys=%.1f&cpuidle=%.1f", 
