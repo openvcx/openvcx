@@ -75,6 +75,7 @@ typedef struct _STUN_SOCKET {
 
   struct STREAM_STATS               *pXmitStats;
   pthread_mutex_t                    mtxXmit;
+  int                                rcvclosed; // remotely closed
 } STUN_SOCKET_T;
 
 typedef STUN_SOCKET_T STUN_SOCKET;

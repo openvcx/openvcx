@@ -236,6 +236,96 @@ static int start_close(SRV_CONF_T *pConf, SRV_MGR_START_CFG_T *pstart) {
   return -1;
 }
 
+static int srvmgr_startup_proc(const char *pvirtRsrc, const SRV_MGR_START_CFG_T *pstart) {
+  int rc = 0;
+  META_FILE_T metaFile;
+  MEDIA_DESCRIPTION_T mediaDescr;
+  SRVMEDIA_RSRC_T mediaRsrc;
+  SYS_PROC_T proc;
+  STREAM_DEVICE_T devtype;
+  STREAM_METHOD_T streamMethod = STREAM_METHOD_MGR;
+  int isShared = 0;
+  int startProc = 0;
+  struct stat st;
+  SRV_MGR_CONN_T conn; 
+  HTTP_REQ_T httpReq;
+  MEDIA_ACTION_T action = MEDIA_ACTION_UNKNOWN;
+
+  LOG(X_DEBUG("Processing tartup task for '%s'"), pvirtRsrc);
+
+  if(!pstart || !pvirtRsrc || pvirtRsrc[0] == '\0' || !srv_ctrl_islegal_fpath(pvirtRsrc)) {
+    LOG(X_ERROR("Invalid media resource request '%s'"), pvirtRsrc ? pvirtRsrc : "");
+    return -1;
+  }
+
+  memset(&metaFile, 0, sizeof(metaFile));
+  memset(&mediaDescr, 0, sizeof(mediaDescr));
+  memset(&devtype, 0, sizeof(devtype));
+  memset(&proc, 0, sizeof(proc));
+  memset(&mediaRsrc, 0, sizeof(mediaRsrc));
+  memset(&httpReq, 0, sizeof(httpReq));
+  memset(&conn, 0, sizeof(conn));
+
+  NETIOSOCK_FD(conn.conn.sd.netsocket) = INVALID_SOCKET;
+  conn.conn.pCfg = &pstart->pCfg->cfgShared;
+  conn.pMgrCfg = pstart;
+  httpReq.puri = httpReq.url;
+  conn.conn.phttpReq = &httpReq;
+
+
+  if((rc = srvmgr_load_metafile(pvirtRsrc, pstart->pCfg, &metaFile, &mediaRsrc, &devtype, &mediaDescr)) < 0) {
+    return -1;
+  } else {
+    action = (MEDIA_ACTION_T) rc;
+  }
+
+  metafile_close(&metaFile);
+
+  switch(action) { 
+    case MEDIA_ACTION_LIVE_STREAM:
+    case MEDIA_ACTION_CANNED_PROCESS:
+      break;
+    default:
+      LOG(X_ERROR("Media resource for startup is not setup for live processing '%s'"), mediaRsrc.filepath);
+      return -1;
+  }
+
+  if(fileops_stat(mediaRsrc.filepath, &st) != 0) {
+    LOG(X_ERROR("Media resource for startup does not exist '%s'"), mediaRsrc.filepath);
+    return -1;
+  } 
+
+  isShared = srvmgr_is_shared_resource(&mediaRsrc, MEDIA_ACTION_LIVE_STREAM);
+
+//TODO: set proc flag so that startup stream does not expire
+
+  if((rc = srvmgr_check_start_proc(&conn, &mediaRsrc, &mediaDescr, &proc, &devtype,
+                          MEDIA_ACTION_UNKNOWN, streamMethod, isShared, &startProc)) < 0) {
+    LOG(X_ERROR("Unable to %s process for '%s'"), (startProc ? "start" : "find"), mediaRsrc.filepath);
+    return -1;
+  } else {
+    rc = proc.startPort;
+  }
+
+  return rc;
+}
+
+static int startup_procs(const SRV_MGR_START_CFG_T *pstart) {
+  int rc = 0;
+  unsigned int idx = 0;
+  const char *path;
+
+  for(idx = 0; idx < sizeof(pstart->pStartupMediaProcs) / sizeof(pstart->pStartupMediaProcs[0]); idx++) {
+    if((path = pstart->pStartupMediaProcs[idx]) && path[0] != '\0') {
+
+      srvmgr_startup_proc(path, pstart);
+
+    }
+  }
+
+  return rc;
+}
+
 int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
   MEDIADB_DESCR_T mediaDb;
   HTTPLIVE_DATA_T httpLiveDatas[IXCODE_VIDEO_OUT_MAX];
@@ -396,7 +486,7 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
     // Get config entries specific to the mgr
     //
   
-    if((p = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_LAUNCHMEDIA)) && p[0] != '\0') {
+    if((p = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_LAUNCHMEDIASCRIPT)) && p[0] != '\0') {
       start.plaunchpath = p;
     } else {
       mediadb_prepend_dir(cfg.phomedir, MGR_LAUNCHCHILD, launchpath, sizeof(launchpath));
@@ -460,17 +550,18 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
       LOG(X_DEBUG("Symlink following enabled."));
     }
 
+    conf_load_vals_multi(pConf, start.pStartupMediaProcs, sizeof(start.pStartupMediaProcs) /
+                   sizeof(start.pStartupMediaProcs[0]), SRV_CONF_KEY_STARTUP_STREAM);
+
     if((p = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_STATUS_MONITOR)) && IS_CONF_VAL_TRUE(p)) {
       start.pMonitor = &monitor;
     }
 
     if((p = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_CPU_MONITOR)) && IS_CONF_VAL_TRUE(p)) {
       start.pProcList->pCpuUsage = &cpuUsage;
-      start.pCpuUsage = start.pProcList->pCpuUsage;
     }
     if((p = conf_find_keyval(pConf->pKeyvals, SRV_CONF_KEY_MEM_MONITOR)) && IS_CONF_VAL_TRUE(p)) {
       start.pProcList->pMemUsage = &memUsage;
-      start.pMemUsage = start.pProcList->pMemUsage;
     }
   
     //
@@ -584,10 +675,19 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
 
   //memset(cfg.listenMedia, 0, sizeof(cfg.listenMedia));
   for(idx = 0; idx < SRV_LISTENER_MAX; idx++) {
+
+    //
+    // Check if we have any SSL/TLS http listeners
+    //
+    if((listenerHttp[idx].listenCfg.netflags & NETIO_FLAG_SSL_TLS)) {
+      start.enable_ssl_childlisteners = 1;
+    }
+
     memcpy(&listenerTmp[idx], &listenerHttp[idx].listenCfg, sizeof(listenerTmp[idx]));
     if(idx > 0) {
       listenerHttp[idx].listenCfg.pfilters = listenerHttp[0].listenCfg.pfilters;
     }
+
   }
 
   if(cfg.usedb) {
@@ -612,6 +712,11 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
       return start_close(pConf, &start);
     }
   }
+
+  //
+  // Launch any startup tasks
+  //
+  startup_procs(&start);
 
   memset(&listenRtmp, 0, sizeof(listenRtmp));
   if(rc >= 0 && params.rtmplivemax > 0 && params.rtmpliveaddr[0] &&
@@ -718,16 +823,6 @@ int srvmgr_start(SRV_MGR_PARAMS_T *pParams) {
   } // end of if(params.flvlivemax > 0 ... 
 
   if(rc >= 0) {
-
-    //
-    // Check if we have any SSL/TLS http listeners
-    //
-    for(idx = 0; idx < sizeof(listenerHttp) / sizeof(listenerHttp[0]); idx++) {
-      if((listenerHttp[idx].listenCfg.netflags & NETIO_FLAG_SSL_TLS)) {
-         start.enable_ssl_childlisteners = 1;
-         break;
-      }
-    }
 
     //
     // Start the HTTP listener(s)

@@ -216,7 +216,8 @@ static void procdb_monitor_proc(void *pArg) {
           }
           
 //fprintf(stderr, "comparing %d\n", tvnow.tv_sec - ptvlatest->tv_sec);
-          if(tvnow.tv_sec > ptvlatest->tv_sec + pProcs->procexpiresec) {
+          if(!(pProc->flags & SYS_PROC_FLAG_NOTERMINATE) && 
+             tvnow.tv_sec > ptvlatest->tv_sec + pProcs->procexpiresec) {
             snprintf(logstr, sizeof(logstr), "Expiring idle process");
             remove = 1;
           }
@@ -526,8 +527,7 @@ SYS_PROC_T *procdb_setup(SYS_PROCLIST_T *pProcs,
                          const char *pXcodeStr, 
                          const char *pInstanceId,
                          const char *pTokenId,
-                         int lock,
-                         int ssl) {
+                         int lock) {
 
   SYS_PROC_T *pProc = NULL;
 
@@ -577,7 +577,7 @@ SYS_PROC_T *procdb_setup(SYS_PROCLIST_T *pProcs,
   //
   // for the time being, each process uses 4 unique tcp ports (http media, rtmp, rtsp, localhost only http status)
   //
-  pProcs->priorStartPort += MGR_PORT_ALLOC_COUNT(ssl);
+  pProcs->priorStartPort += MGR_PORT_ALLOC_COUNT;
 
   //
   // Add to list
@@ -767,7 +767,8 @@ int procdb_start(SYS_PROCLIST_T *pProcs,
                  const char *userpass, 
                  int methodBits,
                  int ssl,
-                 int nossl) {
+                 int nossl,
+                 SYS_PROC_FLAG_T flags) {
   int rc = -1;
   int pid;
   struct timeval tv0, tv1;
@@ -776,6 +777,9 @@ int procdb_start(SYS_PROCLIST_T *pProcs,
   char cmd[512];
 
   if(!pProcs || !pProc || !filePath || !pDev || !launchpath || (!ssl && !nossl)) {
+    return -1;
+  } else if(pProc->flags != SYS_PROC_FLAG_PENDING) {
+    // procdb_setup has not been called succesfully
     return -1;
   }
 
@@ -800,10 +804,7 @@ int procdb_start(SYS_PROCLIST_T *pProcs,
 
     LOG(X_ERROR("Failed to start process '%s'"), cmd);
 
-    //if(procdb_delete(pProcs, pProc->name, pProc->id, 1) < 0) {
-      pProc->flags |= SYS_PROC_FLAG_FAILSTART;
-    //}
-
+    pProc->flags |= SYS_PROC_FLAG_FAILSTART;
     rc = -1;
 
   } else {
@@ -826,13 +827,13 @@ int procdb_start(SYS_PROCLIST_T *pProcs,
       pProc->pid = pid;
       gettimeofday(&pProc->tmLastAccess, NULL);
       pProcs->mbbpsTot += pProc->mbbps;
-      LOG(X_DEBUG("Process started '%s' instance id: %s, pid: %d, port: %d"), 
-                  pProc->name, pProc->instanceId, pProc->pid, pProc->startPort);
-      pProc->flags = SYS_PROC_FLAG_RUNNING;
+      LOG(X_DEBUG("Process started '%s' instance id: %s, pid: %d, port: %d%s"), 
+                  pProc->name, pProc->instanceId, pProc->pid, pProc->startPort,
+                  (flags & SYS_PROC_FLAG_NOTERMINATE) ? " no-terminate" : "");
+      pProc->flags = (SYS_PROC_FLAG_RUNNING | (flags & SYS_PROC_FLAG_NOTERMINATE));
       rc = 0;
     } else {
       pProc->flags |= SYS_PROC_FLAG_FAILSTART;
-      //procdb_delete(pProcs, pProc->name, pProc->id, 1);
       rc = -1;
     }
 

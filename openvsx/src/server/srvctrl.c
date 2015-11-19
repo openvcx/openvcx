@@ -383,10 +383,10 @@ static int srv_start(SRV_START_CFG_T *pCfg) {
   // Ensure there is at least one /tslive and one /httplive listener
   // if not explicitly specified in the config via 'tslive=' and 'httplive='
   //
-  if(!srv_ctrl_findlistener(pCfg->listenMedia, SRV_LISTENER_MAX, URL_CAP_TSLIVE, 0, 0, 0)) {
+  if(!srv_ctrl_findlistener(pCfg->listenMedia, SRV_LISTENER_MAX, URL_CAP_TSLIVE, -1, 0)) {
     pCfg->listenMedia[0].urlCapabilities |= URL_CAP_TSLIVE;
   }
-  if(!srv_ctrl_findlistener(pCfg->listenMedia, SRV_LISTENER_MAX, URL_CAP_TSHTTPLIVE, 0, 0, 0)) {
+  if(!srv_ctrl_findlistener(pCfg->listenMedia, SRV_LISTENER_MAX, URL_CAP_TSHTTPLIVE, -1, 0)) {
     pCfg->listenMedia[0].urlCapabilities |= URL_CAP_TSHTTPLIVE;
   }
 

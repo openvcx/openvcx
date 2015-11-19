@@ -183,7 +183,7 @@ SRV_CONF_T *srv_init_conf(const char *listenArg, const char *mediaDirArg,
     //TODO: this should accept up to SRV_LISTENER_MAX
     listenaddr[0] = listenArg;
   } else {
-    conf_load_addr_multi(pConf, listenaddr, SRV_LISTENER_MAX, SRV_CONF_KEY_LISTEN);
+    conf_load_vals_multi(pConf, listenaddr, SRV_LISTENER_MAX, SRV_CONF_KEY_LISTEN);
 
     if(!listenaddr[0]) {
       LOG(X_ERROR("'%s=' not found in configuration"), SRV_CONF_KEY_LISTEN);

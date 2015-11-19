@@ -120,6 +120,7 @@ int netio_recvnb(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned int len, u
 
     if((rc = net_recvnb(PNETIOSOCK_FD(pnetsock), buf, len, mstmt, peek, &closed)) < 0) {
       if(closed) {
+        PSTUNSOCK(pnetsock)->rcvclosed = closed;
         rc = 0;
       }
     } 
@@ -150,6 +151,7 @@ int netio_recvnb_exact(NETIO_SOCK_T *pnetsock, unsigned char *buf, unsigned int 
     if((rc = net_recvnb_exact(PNETIOSOCK_FD(pnetsock), buf, len, mstmt, peek, &closed)) < 0) {
 
       if(closed) {
+        PSTUNSOCK(pnetsock)->rcvclosed = closed;
         rc = 0;
       }
     }
@@ -280,6 +282,7 @@ void netio_closesocket(NETIO_SOCK_T *pnetsock) {
 #endif // VSX_HAVE_SSL
 
   net_closesocket(&PNETIOSOCK_FD(pnetsock));
+  PSTUNSOCK(pnetsock)->rcvclosed = 0;
 
   pthread_mutex_destroy(&PSTUNSOCK(pnetsock)->mtxXmit);
 
@@ -300,6 +303,7 @@ SOCKET netio_opensocket(NETIO_SOCK_T *pnetsock, int socktype, unsigned int rcvbu
   PSTUNSOCK(pnetsock)->stunFlags = 0;
   PSTUNSOCK(pnetsock)->tmLastXmit = 0;
   PSTUNSOCK(pnetsock)->tmLastRcv = 0;
+  PSTUNSOCK(pnetsock)->rcvclosed = 0;
   memset(&PSTUNSOCK(pnetsock)->sainLastXmit, 0, sizeof(PSTUNSOCK(pnetsock)->sainLastXmit));
   memset(&PSTUNSOCK(pnetsock)->sainLastRcv, 0, sizeof(PSTUNSOCK(pnetsock)->sainLastRcv));
   PSTUNSOCK(pnetsock)->pXmitStats = NULL;

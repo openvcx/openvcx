@@ -57,16 +57,16 @@ static const char *conf_find_keyval_multi(const KEYVAL_PAIR_T *pKvs, const char 
   return NULL;
 }
 
-int conf_load_addr_multi(const SRV_CONF_T *pConf, const char *addr[], unsigned int max,
+int conf_load_vals_multi(const SRV_CONF_T *pConf, const char *vals[], unsigned int max,
                          const char *key) {
   const char *parg;
   unsigned int idx;
 
   for(idx = 0; idx < max; idx++) {
 
-    if((!addr[idx] || addr[idx][0] == '\0')) {
+    if((!vals[idx] || vals[idx][0] == '\0')) {
       if((parg = conf_find_keyval_multi(pConf->pKeyvals, key, idx))) {
-        addr[idx] = parg;
+        vals[idx] = parg;
       } else {
         break;
       }

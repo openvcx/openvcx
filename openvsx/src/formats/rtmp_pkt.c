@@ -1009,7 +1009,7 @@ int rtmp_cbReadDataNet(void *pArg, unsigned char *pData, unsigned int len) {
   }
 
   if(rc == 0) {
-    // timeout reached
+    // timeout or remotely closed
     return -1;
   } else if(rc != len) {
     return -1;

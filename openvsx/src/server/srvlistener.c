@@ -55,6 +55,9 @@ void thread_func_wrapper(void *pArg) {
   if((rc = net_peeknb(NETIOSOCK_FD(wrap.pConn->sd.netsocket), (unsigned char *) tmp, SSL_IDENTIFY_LEN_MIN, 
                       HTTP_REQUEST_TIMEOUT_SEC * 1000)) == SSL_IDENTIFY_LEN_MIN) {
   
+    //
+    // Check if the client is attempting a SSL/TLS connection
+    //
     is_ssl = netio_ssl_isssl((unsigned char *) tmp, rc);
     VSX_DEBUG_SSL( LOG(X_DEBUG("SSL - Peeked %d bytes, is_ssl: %d"), rc, is_ssl);
                    LOGHEXT_DEBUG(tmp, rc); );

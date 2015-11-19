@@ -168,6 +168,7 @@
 
 
 #define IS_CONF_VAL_TRUE(parg)   ((avc_isnumeric(parg) && atoi((parg)) > 0) || !strcasecmp((parg), "yes") || !strcasecmp((parg), "true"))
+#define IS_CONF_VAL_FALSE(parg)  ((avc_isnumeric(parg) && atoi((parg)) <= 0) || !strcasecmp((parg), "no") || !strcasecmp((parg), "false"))
 
 
 #endif // __SERVER_CONF_H__

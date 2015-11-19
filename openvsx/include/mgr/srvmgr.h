@@ -31,15 +31,16 @@
 
 #define MGR_CONF_FILE                      "vsxwp.conf"
 
-#define SRV_CONF_KEY_LAUNCHMEDIA           "launchMedia"
+#define SRV_CONF_KEY_LAUNCHMEDIASCRIPT     "launchMedia"
 #define SRV_CONF_KEY_PORTRANGE             "portRange"
 #define SRV_CONF_KEY_MAX_MEDIA             "maxProcesses"
 #define SRV_CONF_KEY_MAX_MEDIA_XCODE       "maxXcoders"
 #define SRV_CONF_KEY_MAX_MBPS              "maxMacroBlocks"
+#define SRV_CONF_KEY_MAX_CLIENTS_PER_PROC  "maxClientsPerProcess"
 #define SRV_CONF_KEY_EXPIRE_CHILD_SEC      "expireSec"
 #define SRV_CONF_KEY_DISABLE_LISTING       "disableListing"
+#define SRV_CONF_KEY_STARTUP_STREAM        "startupStream"
 #define SRV_CONF_KEY_LBNODES_CONF          "LBNodesConfig"
-#define SRV_CONF_KEY_MAX_CLIENTS_PER_PROC  "maxClientsPerProcess"
 #define SRV_CONF_KEY_STATUS_MONITOR        "statusMonitor"
 #define SRV_CONF_KEY_CPU_MONITOR           "cpuMonitor"
 #define SRV_CONF_KEY_MEM_MONITOR           "memMonitor"
@@ -60,8 +61,7 @@
 
 #endif // WIN32
 
-//#define MGR_PORT_ALLOC_COUNT(ssl)         (2 + (ssl ? 1 : 0)) 
-#define MGR_PORT_ALLOC_COUNT(ssl)         (1)
+#define MGR_PORT_ALLOC_COUNT              (1)
 #define MGR_GET_PORT_HTTP(port, ssl)      ((port) + ((ssl) ? 0 : 0))
 #define MGR_GET_PORT_RTMP(port, ssl)      ((port) + ((ssl) ? 0 : 0))
 #define MGR_GET_PORT_RTSP(port, ssl)      ((port) + ((ssl) ? 0 : 0))
@@ -105,17 +105,18 @@ typedef struct SRV_MGR_PARAMS {
   SYS_PROCLIST_T           procList;
 } SRV_MGR_PARAMS_T;
 
+#define SRV_MGR_MAX_STARTUP_PROCS        10
+
 typedef struct SRV_MGR_START_CFG {
   SRV_START_CFG_T              *pCfg;
   const char                   *plaunchpath;
+  const char                   *pStartupMediaProcs[SRV_MGR_MAX_STARTUP_PROCS];
   SYS_PROCLIST_T               *pProcList;
   TIME_VAL                     *ptmstart;
   MGR_NODE_LIST_T              *pLbNodes;
   STREAM_STATS_MONITOR_T       *pMonitor;
   LIC_INFO_T                   *plic;
   int                           enable_ssl_childlisteners;
-  CPU_USAGE_PERCENT_T          *pCpuUsage;
-  MEM_SNAPSHOT_T               *pMemUsage;
 
   struct SRV_MGR_LISTENER_CFG  *pListenerRtmpProxy;
   struct SRV_MGR_LISTENER_CFG  *pListenerRtspProxy;
@@ -138,6 +139,7 @@ typedef struct SRV_MGR_CONN {
 typedef struct SRVMEDIA_RSRC {
   int              *pmethodBits;    // 'methods=' metafile bitmask value 
   int              *pshared;        // 'shared=' metafile value
+  int              *psecure;        // 'secure=' metafile value
   char             *pXcodeStr;      // 'xcodeargs=' metafile value
   char             *pUserpass;      // 'digestauth=' metafile value
   char             *pTokenId;       // 'token=' metafile value
@@ -160,13 +162,16 @@ typedef struct SRVMEDIA_RSRC {
 
 
 int srvmgr_start(SRV_MGR_PARAMS_T *pParams);
-int srvmgr_check_metafile(META_FILE_T *pMetaFile, SRVMEDIA_RSRC_T *pMediaRsrc,
-                          const char *devname, HTTP_STATUS_T *phttpStatus);
+//int srvmgr_check_metafile(META_FILE_T *pMetaFile, SRVMEDIA_RSRC_T *pMediaRsrc,
+//                          const char *devname, HTTP_STATUS_T *phttpStatus);
 int srvmgr_check_start_proc(SRV_MGR_CONN_T *pConn, const SRVMEDIA_RSRC_T *pMediaRsrc,
                             MEDIA_DESCRIPTION_T *pMediaDescr, SYS_PROC_T *procArg,
                             const STREAM_DEVICE_T *pdevtype, MEDIA_ACTION_T action, 
                             STREAM_METHOD_T methodAuto, int isShared, int *pstartProc);
-const char *srvmgr_action_tostr(MEDIA_ACTION_T action);
+int srvmgr_load_metafile(const char *pvirtRsrc, SRV_START_CFG_T *pCfg, META_FILE_T *pmetaFile,
+                         SRVMEDIA_RSRC_T *pmediaRsrc, STREAM_DEVICE_T *pdevtype, 
+                         MEDIA_DESCRIPTION_T *pmediaDescr);
+//const char *srvmgr_action_tostr(MEDIA_ACTION_T action);
 int srvmgr_is_shared_resource(const SRVMEDIA_RSRC_T *pMediaRsrc,  MEDIA_ACTION_T action);
 
 

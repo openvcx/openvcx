@@ -47,7 +47,7 @@
 #define URL_HTTP_FMT_ARGS2(p, location)             URL_HTTP_FMT_PROTO_HOST((p)->netflags, (location), 1), \
                                                     ntohs(INET_PORT((p)->sa))
 
-#define URL_HTTP_FMT_ARGS(p)                        URL_HTTP_FMT_PROTO_HOST((p)->netflags, \
+#define URL_HTTP_FMT_ARGS(p, ssl)                   URL_HTTP_FMT_PROTO_HOST(((ssl) > 0 ? NETIO_FLAG_SSL_TLS : 0), \
                                                                             (net_getlocalhostname()), 0), \
                                                     ntohs(INET_PORT((p)->sa))
                                    
@@ -105,8 +105,7 @@ int srv_ctrl_file_find_wext(char *filepath);
 
 const SRV_LISTENER_CFG_T *srv_ctrl_findlistener(const SRV_LISTENER_CFG_T *arrCfgs,
                                                 unsigned int maxCfgs, enum URL_CAPABILITY urlCap,
-                                                NETIO_FLAG_T flags, NETIO_FLAG_T flagsMask, 
-                                                int preferredPort);
+                                                int ssl, int preferredPort);
 
 
 #endif // __SERVER_CTRL_H__

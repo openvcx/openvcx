@@ -88,6 +88,10 @@ typedef struct META_FILE {
   // boolean flag for shared resource using one common child processor
   int                 shared;
 
+  // boolean flag indicating resource should only be available
+  // through secure means, such as SSL/TLS
+  int                 secure;
+
   // The following should only be found in a directory wide metafile
   ENTRY_IGNORE_T            *pignoreList;
   ENTRY_META_DESCRIPTION_T  *pDescriptionList;

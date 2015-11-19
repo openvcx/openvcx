@@ -48,8 +48,7 @@ typedef struct SRV_CONF {
 } SRV_CONF_T;
 
 const char *conf_find_keyval(const KEYVAL_PAIR_T *pKvs, const char *key);
-//const char *conf_find_keyval_multi(const KEYVAL_PAIR_T *pKvs, const char *key, unsigned int idx);
-int conf_load_addr_multi(const SRV_CONF_T *pConf, const char *addr[], unsigned int max,
+int conf_load_vals_multi(const SRV_CONF_T *pConf, const char *vals[], unsigned int max,
                          const char *key);
 
 int conf_parse_keyval(KEYVAL_PAIR_T *pKv, const char *buf, 

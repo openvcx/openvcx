@@ -660,7 +660,7 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
   //
   // Get live auto-detect server broadcast config settings
   //
-  conf_load_addr_multi(pConf, pParams->liveaddr, sizeof(pParams->liveaddr) / 
+  conf_load_vals_multi(pConf, pParams->liveaddr, sizeof(pParams->liveaddr) / 
                      sizeof(pParams->liveaddr[0]), SRV_CONF_KEY_LIVE);
 
   if((pParams->livemax == 0) &&
@@ -683,7 +683,7 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
   //
   // Get tslive broadcast config settings
   //
-  conf_load_addr_multi(pConf, pParams->tsliveaddr, sizeof(pParams->tsliveaddr) / 
+  conf_load_vals_multi(pConf, pParams->tsliveaddr, sizeof(pParams->tsliveaddr) / 
                      sizeof(pParams->tsliveaddr[0]), SRV_CONF_KEY_TSLIVE);
 
   if((pParams->tslivemax == 0 || pParams->tslivemax == STREAMER_LIVEQ_DEFAULT) &&
@@ -708,7 +708,7 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
   //
   // Get (fragmented) mp4 moof / dash broadcast config settings
   //
-  conf_load_addr_multi(pConf, pParams->dashliveaddr, sizeof(pParams->dashliveaddr) /
+  conf_load_vals_multi(pConf, pParams->dashliveaddr, sizeof(pParams->dashliveaddr) /
                      sizeof(pParams->dashliveaddr[0]), SRV_CONF_KEY_MOOFLIVE);
   
   if(pParams->dashliveaddr[0] && pParams->dash_moof_segments == -1) {
@@ -783,7 +783,7 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
   //
   // Get httplive broadcast config settings
   //
-  conf_load_addr_multi(pConf, pParams->httpliveaddr, sizeof(pParams->httpliveaddr) / 
+  conf_load_vals_multi(pConf, pParams->httpliveaddr, sizeof(pParams->httpliveaddr) / 
                      sizeof(pParams->httpliveaddr[0]), SRV_CONF_KEY_HTTPLIVE);
 
   if(!pParams->httplivedir &&
@@ -996,10 +996,10 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
     pParams->rtmplivemax = atoi(parg);
   }
 
-  conf_load_addr_multi(pConf, pParams->rtmpliveaddr, sizeof(pParams->rtmpliveaddr) / 
+  conf_load_vals_multi(pConf, pParams->rtmpliveaddr, sizeof(pParams->rtmpliveaddr) / 
                      sizeof(pParams->rtmpliveaddr[0]), SRV_CONF_KEY_RTMPLIVE);
 
-  conf_load_addr_multi(pConf, pParams->rtmptliveaddr, sizeof(pParams->rtmptliveaddr) / 
+  conf_load_vals_multi(pConf, pParams->rtmptliveaddr, sizeof(pParams->rtmptliveaddr) / 
                      sizeof(pParams->rtmptliveaddr[0]), SRV_CONF_KEY_RTMPTLIVE);
 
   if(pParams->rtmpq_slots == 0 &&
@@ -1025,13 +1025,13 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
     pParams->flvlivemax = atoi(parg);
   }
 
-  conf_load_addr_multi(pConf, pParams->flvliveaddr, sizeof(pParams->flvliveaddr) / 
+  conf_load_vals_multi(pConf, pParams->flvliveaddr, sizeof(pParams->flvliveaddr) / 
                      sizeof(pParams->flvliveaddr[0]), SRV_CONF_KEY_FLVLIVE);
 
   //
   // Get the MKV config settings
   // 
-  conf_load_addr_multi(pConf, pParams->mkvliveaddr, sizeof(pParams->mkvliveaddr) / 
+  conf_load_vals_multi(pConf, pParams->mkvliveaddr, sizeof(pParams->mkvliveaddr) / 
                      sizeof(pParams->mkvliveaddr[0]), SRV_CONF_KEY_MKVLIVE);
 
   if((pParams->mkvlivemax == 0 || pParams->mkvlivemax == STREAMER_OUTFMT_DEFAULT)  &&
@@ -1047,7 +1047,7 @@ SRV_CONF_T *vsxlib_loadconf(VSXLIB_STREAM_PARAMS_T *pParams) {
     pParams->rtsplivemax = atoi(parg);
   }
 
-  conf_load_addr_multi(pConf, pParams->rtspliveaddr, sizeof(pParams->rtspliveaddr) / 
+  conf_load_vals_multi(pConf, pParams->rtspliveaddr, sizeof(pParams->rtspliveaddr) / 
                      sizeof(pParams->rtspliveaddr[0]), SRV_CONF_KEY_RTSPLIVE);
 
   if(pParams->rtspinterq_slots == 0 &&

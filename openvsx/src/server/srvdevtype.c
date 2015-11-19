@@ -178,6 +178,8 @@ const char *devtype_methodstr(enum STREAM_METHOD method) {
       return STREAM_METHOD_UDP_RTP_STR;
     case STREAM_METHOD_UDP:
       return STREAM_METHOD_UDP_STR;
+    case STREAM_METHOD_MGR:
+      return STREAM_METHOD_MGR_STR;
     case STREAM_METHOD_ANYLIVE:
       return STREAM_METHOD_ANYLIVE_STR;
     case STREAM_METHOD_NONE:
@@ -234,6 +236,9 @@ STREAM_METHOD_T devtype_methodfromstr(const char *str) {
   } else if(!strncasecmp(str, STREAM_METHOD_UDP_STR, 
                   strlen(STREAM_METHOD_UDP_STR) + 1)) {
     return STREAM_METHOD_UDP;
+  } else if(!strncasecmp(str, STREAM_METHOD_MGR_STR, 
+                  strlen(STREAM_METHOD_MGR_STR) + 1)) {
+    return STREAM_METHOD_MGR;
   } else if(!strncasecmp(str, STREAM_METHOD_ANYLIVE_STR, 
                   strlen(STREAM_METHOD_ANYLIVE_STR) + 1)) {
     return STREAM_METHOD_ANYLIVE;

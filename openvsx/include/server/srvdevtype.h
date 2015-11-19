@@ -53,6 +53,7 @@
 #define STREAM_METHOD_FLASHHTTP_STR         "flashhttp"
 #define STREAM_METHOD_UDP_RTP_STR           "rtp"
 #define STREAM_METHOD_UDP_STR               "udp"
+#define STREAM_METHOD_MGR_STR               "mgr"
 #define STREAM_METHOD_ANYLIVE_STR           "anylive"
 #define STREAM_METHOD_NONE_STR              "none"
 
@@ -77,7 +78,8 @@ typedef enum STREAM_METHOD {
   STREAM_METHOD_UDP_RTP            = 14,
   STREAM_METHOD_UDP                = 15,
   STREAM_METHOD_ANYLIVE            = 16,
-  STREAM_METHOD_MAX                = 17 
+  STREAM_METHOD_MGR                = 17,
+  STREAM_METHOD_MAX                = 18 
 } STREAM_METHOD_T;
 
 typedef enum STREAM_DEVICE_TYPE {

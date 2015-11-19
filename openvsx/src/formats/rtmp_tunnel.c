@@ -332,6 +332,7 @@ static int consume_payload(RTMP_CTXT_T *pRtmp, unsigned int *pidxdata, unsigned 
     VSX_DEBUG_RTMPT( LOG(X_DEBUG("RTMPT - consume_payload reading %d from socket, rcvdata: [%d]/%d, contentLen: [%d]/%d, buf: [%d]/%d, hdrslen:%d, idxbuf: %d, lenFirstByte: %d"), szcopy, *pidxdata, len, pRtmpT->idxInContentLen, pRtmpT->contentLen, pRtmpT->idxInHttpBuf, pRtmpT->httpCtxt.szbuf, pRtmpT->httpCtxt.hdrslen, pRtmpT->httpCtxt.idxbuf, pRtmpT->lenFirstByte););
     if((rc = netio_recvnb_exact(&pRtmp->pSd->netsocket, &pData[*pidxdata], szcopy, pRtmp->rcvTmtMs)) != szcopy) {
       if(rc == 0) {
+        // timeout or remotely closed
         return -1;
       }
       return -1;

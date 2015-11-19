@@ -639,6 +639,11 @@ static unsigned char *httpcli_getbody(HTTP_RESP_T *pHttpResp, HTTP_PARSE_CTXT_T 
         LOGHEXT_DEBUG(&pdata[consumed], sz)
       );
       consumed += sz;
+    } else if(sz == 0 && PSTUNSOCK(pnetsock)->rcvclosed) {
+      LOG(X_WARNING("HTTP %s:%d%s connection closed"),
+           FORMAT_NETADDR(*psa, tmp, sizeof(tmp)), ntohs(PINET_PORT(psa)), puri);
+      pdata = NULL;
+      break; 
     }
     gettimeofday(&tv1, NULL);
     if(tmtms > 0 && consumed < contentLen && TIME_TV_DIFF_MS(tv1, *ptv0) > (unsigned int) tmtms) {

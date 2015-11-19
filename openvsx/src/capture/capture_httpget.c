@@ -186,7 +186,7 @@ int http_recvloop(CAP_ASYNC_DESCR_T *pCfg,
   do {
    
     if(offset == 0) {
-      if((sz = netio_recvnb(pnetsock, pbuf, szbuf, 500)) < 0) {
+      if((sz = netio_recvnb(pnetsock, pbuf, szbuf, 500)) < 0 || (sz == 0 && PSTUNSOCK(pnetsock)->rcvclosed)) {
 
         LOG(X_ERROR("Failed to recv HTTP%s data %d/%d bytes from %s:%d "ERRNO_FMT_STR), 
             (pnetsock->flags & NETIO_FLAG_SSL_TLS) ? "S" : "",

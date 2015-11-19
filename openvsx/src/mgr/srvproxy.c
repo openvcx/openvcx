@@ -419,14 +419,12 @@ static int get_remote_conn(const char *pvirtRsrc,
   SYS_PROC_T proc;
   STREAM_DEVICE_T devtype;
   char tmp[128];
-  //char virtRsrc[VSX_MAX_PATH_LEN];
   int port;
   int startProc = 0;
   int isShared = 0;
   char *proxystr = NULL;
   struct stat st;
-  size_t sz = 0;
-  size_t sz2;
+  int startPort = 0;
 
   if(!pvirtRsrc || pvirtRsrc[0] == '\0' || !srv_ctrl_islegal_fpath(pvirtRsrc)) {
     LOG(X_ERROR("Invalid media resource request '%s'"), pvirtRsrc ? pvirtRsrc : "");
@@ -451,34 +449,21 @@ static int get_remote_conn(const char *pvirtRsrc,
       return -1;
   }
 
-  memset(&metaFile, 0, sizeof(metaFile));
+  //
+  // If the proxy port is not set in the metafile, treat this proxy request
+  // as if it were an HTTP request for the requested resource and
+  // start the stream specific process if necessary.
+  // 
+
   memset(&mediaRsrc, 0, sizeof(mediaRsrc));
+  memset(&metaFile, 0, sizeof(metaFile));
   memset(&mediaDescr, 0, sizeof(mediaDescr));
   memset(&devtype, 0, sizeof(devtype));
 
-  mediadb_prepend_dir(pConn->conn.pCfg->pMediaDb->mediaDir, pvirtRsrc,
-                      mediaRsrc.filepath, sizeof(mediaRsrc.filepath));
-  if((sz = strlen(mediaRsrc.filepath)) >= (sz2 = strlen(pvirtRsrc))) {
-    sz = sz - sz2; 
-  }
-  //mediaRsrc.puri = &mediaRsrc.filepath[sz];
-  strncpy(mediaRsrc.virtRsrc, &mediaRsrc.filepath[sz], sizeof(mediaRsrc.virtRsrc) - 1);
-  //mediaRsrc.pvirtRsrc = virtRsrc;
-  mediaDescr.type = MEDIA_FILE_TYPE_SDP;
-  memset(devtype.methods, 0, sizeof(devtype.methods));
-  devtype.devtype = STREAM_DEVICE_TYPE_UNKNOWN;
-  strncpy(devtype.name, STREAM_DEVICE_TYPE_UNKNOWN_STR, sizeof(devtype.name) - 1);
+  rc = srvmgr_load_metafile(pvirtRsrc, pConn->pMgrCfg->pCfg, &metaFile, &mediaRsrc, &devtype, &mediaDescr);
 
-  //
-  // Will append any extension (.sdp) if the resource is reference via a 'short' link
-  //
-  srv_ctrl_file_find_wext(mediaRsrc.filepath);
-
-  //
-  // Check the resource metafile for any resource specific configuration 
-  //
-  rc = srvmgr_check_metafile(&metaFile, &mediaRsrc, NULL, NULL);
   metafile_close(&metaFile);
+
 
   //
   // If the proxy port is not set in the metafile, treat this proxy request
@@ -500,25 +485,25 @@ static int get_remote_conn(const char *pvirtRsrc,
       if((rc = srvmgr_check_start_proc(pConn, &mediaRsrc, &mediaDescr, &proc, &devtype, 
                           //MEDIA_ACTION_UNKNOWN, STREAM_METHOD_UNKNOWN, isShared, &startProc)) < 0) {
                           MEDIA_ACTION_UNKNOWN, streamMethod, isShared, &startProc)) < 0) {
-        LOG(X_ERROR("Unable to %s process for '%s'"), 
-            (startProc ? "start" : "find"), mediaRsrc.filepath);
+        LOG(X_ERROR("Unable to %s process for '%s'"), (startProc ? "start" : "find"), mediaRsrc.filepath);
         return -1;
       }
+      startPort = proc.startPort;
 
       switch(streamMethod) {
         case STREAM_METHOD_RTMP:
-          port = MGR_GET_PORT_RTMP(proc.startPort, 0);
+          port = MGR_GET_PORT_RTMP(startPort, 0);
           break;
         case STREAM_METHOD_RTSP:
         case STREAM_METHOD_RTSP_INTERLEAVED:
         case STREAM_METHOD_RTSP_HTTP:
-          port = MGR_GET_PORT_RTSP(proc.startPort, 0);
+          port = MGR_GET_PORT_RTSP(startPort, 0);
           break;
         case STREAM_METHOD_MKVLIVE:
         case STREAM_METHOD_FLVLIVE:
         case STREAM_METHOD_TSLIVE:
         default:
-          port = MGR_GET_PORT_HTTP(proc.startPort, 0);
+          port = MGR_GET_PORT_HTTP(startPort, 0);
           break;
       }
       snprintf(proxystr, META_FILE_PROXY_STR_LEN, "127.0.0.1:%d", port);

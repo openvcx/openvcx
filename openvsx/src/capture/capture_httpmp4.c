@@ -87,7 +87,8 @@ int mp4_cbReadDataNet(void *pArg, void *pData, unsigned int len) {
      (rc = netio_recvnb_exact(pNs->pNetSock, &((unsigned char *)pData)[cachedRdSz], 
                               len - cachedRdSz, pNs->rcvTmtMs)) != (len - cachedRdSz)) {
     if(rc == 0) {
-      return rc;
+      // timeout or remotely closed
+      return -1;
     }
     return -1;
   }

@@ -38,19 +38,21 @@
 #define PORT_COUNT                    5000
 
 
-enum SYS_PROC_FLAG {
+typedef enum SYS_PROC_FLAG {
+  SYS_PROC_FLAG_NONE              = 0x00,
   SYS_PROC_FLAG_PENDING           = 0x01,
   SYS_PROC_FLAG_STARTED           = 0x02,
   SYS_PROC_FLAG_RUNNING           = 0x04,
   SYS_PROC_FLAG_ERROR             = 0x08,
-  SYS_PROC_FLAG_FAILSTART         = 0x10
-};
+  SYS_PROC_FLAG_FAILSTART         = 0x10,
+  SYS_PROC_FLAG_NOTERMINATE       = 0x20
+} SYS_PROC_FLAG_T;
 
 typedef struct SYS_PROC {
   struct SYS_PROC            *pnext;
   int                         pid;
   int                         startPort;
-  int                         flags;
+  SYS_PROC_FLAG_T             flags;
   struct timeval              tmStart;
   struct timeval              tmLastAccess;
   struct timeval              tmLastPoll;
@@ -96,14 +98,13 @@ SYS_PROC_T *procdb_findName(SYS_PROCLIST_T *pProcs, const char *name,
                             const char *id, int findLowestActive, int lock);
 int procdb_create_instanceId(char *buf);
 SYS_PROC_T *procdb_findInstanceId(SYS_PROCLIST_T *pProcs, const char *instanceId, int lock);
-//int procdb_delete(SYS_PROCLIST_T *pProcs, const char *name, const char *id, int lock);
 SYS_PROC_T *procdb_setup(SYS_PROCLIST_T *pProcs, const char *virtPath, const char *id, 
                          const MEDIA_DESCRIPTION_T *pMediaDescr, const char *pXcodeStr, 
-                         const char *pInstanceId, const char *pTokenId, int lock, int ssl);
+                         const char *pInstanceId, const char *pTokenId, int lock);
 int procdb_start(SYS_PROCLIST_T *pProcs, SYS_PROC_T *pProc, const char *filePath,
                  const STREAM_DEVICE_T *pDev, const char *launchpath, 
                  const char *xcodestr, const char *incapturestr, 
-                 const char *userpass, int methodBits, int ssl, int nossl);
+                 const char *userpass, int methodBits, int ssl, int nossl, SYS_PROC_FLAG_T flags);
 int procdb_create(SYS_PROCLIST_T *pProcs);
 void procdb_destroy(SYS_PROCLIST_T *pProcs);
 unsigned int procdb_getMbbps(const MEDIA_DESCRIPTION_T *pMediaDescr);

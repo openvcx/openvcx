@@ -41,27 +41,29 @@
 #define METAFILE_KEY_METHODS          "methods"
 #define METAFILE_KEY_PROFILE          "profile"
 #define METAFILE_KEY_SHARED           "shared"
+#define METAFILE_KEY_SECURE           "secure"
 #define METAFILE_KEY_HTTP_PROXY       "httpproxy"
 #define METAFILE_KEY_RTMP_PROXY       "rtmpproxy"
 #define METAFILE_KEY_RTSP_PROXY       "rtspproxy"
 #define METAFILE_KEY_XCODEARGS         SRV_CONF_KEY_XCODEARGS
 
-#define PARSE_FLAG_HAVE_FILENAME          0x0001
-#define PARSE_FLAG_HAVE_HTTPLINK          0x0002
-#define PARSE_FLAG_HAVE_TITLE             0x0004
-#define PARSE_FLAG_HAVE_DEVNAME           0x0008
-#define PARSE_FLAG_HAVE_DIGESTAUTH        0x0010
-#define PARSE_FLAG_HAVE_TOKEN             0x0020
-#define PARSE_FLAG_HAVE_ID                0x0040
-#define PARSE_FLAG_HAVE_IGNORE            0x0080
-#define PARSE_FLAG_HAVE_INPUT             0x0100
-#define PARSE_FLAG_HAVE_METHODS           0x0200
-#define PARSE_FLAG_HAVE_PROFILE           0x0400
-#define PARSE_FLAG_HAVE_SHARED            0x0800
-#define PARSE_FLAG_HAVE_HTTP_PROXY        0x1000
-#define PARSE_FLAG_HAVE_RTMP_PROXY        0x2000
-#define PARSE_FLAG_HAVE_RTSP_PROXY        0x4000
-#define PARSE_FLAG_HAVE_XCODEARGS         0x8000
+#define PARSE_FLAG_HAVE_FILENAME          0x000001
+#define PARSE_FLAG_HAVE_HTTPLINK          0x000002
+#define PARSE_FLAG_HAVE_TITLE             0x000004
+#define PARSE_FLAG_HAVE_DEVNAME           0x000008
+#define PARSE_FLAG_HAVE_DIGESTAUTH        0x000010
+#define PARSE_FLAG_HAVE_TOKEN             0x000020
+#define PARSE_FLAG_HAVE_ID                0x000040
+#define PARSE_FLAG_HAVE_IGNORE            0x000080
+#define PARSE_FLAG_HAVE_INPUT             0x000100
+#define PARSE_FLAG_HAVE_METHODS           0x000200
+#define PARSE_FLAG_HAVE_PROFILE           0x000400
+#define PARSE_FLAG_HAVE_SHARED            0x000800
+#define PARSE_FLAG_HAVE_SECURE            0x001000
+#define PARSE_FLAG_HAVE_HTTP_PROXY        0x002000
+#define PARSE_FLAG_HAVE_RTMP_PROXY        0x004000
+#define PARSE_FLAG_HAVE_RTSP_PROXY        0x008000
+#define PARSE_FLAG_HAVE_XCODEARGS         0x010000
 
 #define MATCH_HAVE_FILENAME   0x01
 #define MATCH_HAVE_XCODE      0x02
@@ -87,6 +89,7 @@ typedef struct PARSE_ENTRY_DATA {
   char                id[META_FILE_IDSTR_MAX];
   char                profile[META_FILE_PROFILESTR_MAX];
   int                 shared;
+  int                 secure;
   int                 flags;
   char                ignore[FILE_LIST_ENTRY_NAME_LEN];
   char                title[META_FILE_DESCR_LEN];
@@ -245,10 +248,22 @@ int cbparse_entry_metafile(void *pArg, const char *p) {
   } else if(!strncasecmp(p, METAFILE_KEY_SHARED, strlen(METAFILE_KEY_SHARED))) {
 
     if((p = store_parse_entry(p, METAFILE_KEY_SHARED, &pEntryData->flags, PARSE_FLAG_HAVE_SHARED, NULL, 0))) {
-      if(!strcasecmp(p, "false") || !strcmp(p, "0")) {
-        pEntryData->shared = 0;
-      } else if(!strcasecmp(p, "true") || !strcmp(p, "1")) {
-        pEntryData->shared =1;
+
+      if(IS_CONF_VAL_TRUE(p)) {
+        pEntryData->shared = BOOL_ENABLED_OVERRIDE;
+      } else if(IS_CONF_VAL_FALSE(p)) {
+        pEntryData->shared = BOOL_DISABLED_OVERRIDE;
+      }
+    }
+
+  } else if(!strncasecmp(p, METAFILE_KEY_SECURE, strlen(METAFILE_KEY_SECURE))) {
+
+    if((p = store_parse_entry(p, METAFILE_KEY_SECURE, &pEntryData->flags, PARSE_FLAG_HAVE_SECURE, NULL, 0))) {
+
+      if(IS_CONF_VAL_TRUE(p)) {
+        pEntryData->secure = BOOL_ENABLED_OVERRIDE;
+      } else if(IS_CONF_VAL_FALSE(p)) {
+        pEntryData->secure = BOOL_DISABLED_OVERRIDE;
       }
     }
 
@@ -466,6 +481,16 @@ static int handle_parsed_line(const PARSE_ENTRY_DATA_T *parseData,
     }
   }
 
+  if((parseData->flags & PARSE_FLAG_HAVE_SECURE) &&
+     ((matchDev == 1 && matchProf == 1) || !(*pmatch & MATCH_HAVE_XCODE))) {
+
+    if(match || (matchDev >= 0 && matchProf >= 0 &&
+       !((*pmatch & MATCH_BY_PROFILE) || (*pmatch & MATCH_BY_DEVICE)))) {
+
+      pMetaFile->secure = parseData->secure;
+    }
+  }
+
   if((parseData->flags & PARSE_FLAG_HAVE_INPUT) &&
      ((matchDev == 1 && matchProf == 1) || !(*pmatch & MATCH_HAVE_XCODE))) {
 
@@ -669,7 +694,8 @@ static void reset_parsedata_ctxt(PARSE_ENTRY_DATA_T *parseData) {
   parseData->httpproxy[0] = '\0';
   parseData->methodBits = 0;
   parseData->flags = 0;
-  parseData->shared = -1; // designates not set
+  parseData->shared = BOOL_DISABLED_DFLT;
+  parseData->secure = BOOL_DISABLED_DFLT; 
   parseData->ignore[0] = '\0';
   parseData->title[0] = '\0';
 
