@@ -165,6 +165,7 @@ int mediadb_prepend_dir(const char *mediaDir, const char *path,
     if((sz2 = strlen(path)) >= lenout - sz) {
       return -1;
     }
+
     strncpy(&out[sz], path, lenout - sz);
   }
 

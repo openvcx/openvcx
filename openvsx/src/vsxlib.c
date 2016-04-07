@@ -64,12 +64,20 @@ static int extractFromM2t(int video, int audio,
                         float fStart,
                         float fDuration) {
   FILE_STREAM_T fileIn;
+  char buf[VSX_MAX_PATH_LEN];
   int rc = 0;
 
   if(fStart != 0 || fDuration != 0) {
     LOG(X_ERROR("Partial extract not implemented for mpeg2-ts"));
     return -1;
+  } else if(!in) {
+    LOG(X_ERROR("No input file specified"));
+    return VSX_RC_ERROR;
   }
+
+  if(path_is_homedir(in) && path_homedirexpand(in, buf, sizeof(buf))) {
+    in = buf;
+  }   
 
   if(OpenMediaReadOnly(&fileIn, in) < 0) {
     return -1;
@@ -155,12 +163,17 @@ VSX_RC_T vsxlib_extractMedia(int video,
   float fStart= 0.0f;
   size_t sz = 0;
   char outPath[VSX_MAX_PATH_LEN];
+  char buf[VSX_MAX_PATH_LEN];
   FILE_STREAM_T fileIn;
   enum MEDIA_FILE_TYPE mediaType;
 
   if(!in) {
     LOG(X_ERROR("No input file specified"));
     return VSX_RC_ERROR;
+  }
+
+  if(path_is_homedir(in) && path_homedirexpand(in, buf, sizeof(buf))) {
+    in = buf;
   }
 
   if(OpenMediaReadOnly(&fileIn, in) < 0) {
@@ -239,6 +252,7 @@ VSX_RC_T vsxlib_createMp4(const char *in,
                             int esdsObjTypeIdxPlus1) {
   size_t sz;
   char outPath[VSX_MAX_PATH_LEN];
+  char buf[VSX_MAX_PATH_LEN];
   FILE_HANDLE fp;
   const char *pOut = out;
   FILE_STREAM_T streamIn;
@@ -248,6 +262,10 @@ VSX_RC_T vsxlib_createMp4(const char *in,
   if(!in) {
     LOG(X_ERROR("No input file specified"));
     return VSX_RC_ERROR;
+  }
+
+  if(path_is_homedir(in) && path_homedirexpand(in, buf, sizeof(buf))) {
+    in = buf;
   }
 
   if(OpenMediaReadOnly(&streamIn, in) < 0) {
@@ -469,9 +487,14 @@ static int dumpMkv(const char *in, int verbosity) {
 
 int vsxlib_dumpContainer(const char *in, int verbosity, const char *avsyncout, 
                          int readmeta) {
+  char buf[VSX_MAX_PATH_LEN];
   enum MEDIA_FILE_TYPE mediaType;
   FILE_STREAM_T streamIn;
   int rc = -1;
+
+  if(path_is_homedir(in) && path_homedirexpand(in, buf, sizeof(buf))) {
+    in = buf;
+  }
 
   if(OpenMediaReadOnly(&streamIn, in) < 0) {
     return -1;
@@ -516,6 +539,7 @@ int vsxlib_dumpContainer(const char *in, int verbosity, const char *avsyncout,
 
 #if defined(VSX_HAVE_VIDANALYZE)
 int vsxlib_analyzeH264(const char *in, double fps, int verbosity) {
+  char buf[VSX_MAX_PATH_LEN];
   MP4_CONTAINER_T *pMp4 = NULL;
   FLV_CONTAINER_T *pFlv= NULL;
   FILE_STREAM_T streamIn;
@@ -525,6 +549,10 @@ int vsxlib_analyzeH264(const char *in, double fps, int verbosity) {
   if(!in) {
     LOG(X_ERROR("No input file specified"));
     return -1;
+  }
+
+  if(path_is_homedir(in) && path_homedirexpand(in, buf, sizeof(buf))) {
+    in = buf;
   }
 
   if(OpenMediaReadOnly(&streamIn, in) < 0) {
@@ -870,7 +898,7 @@ int vsxlib_streamPlaylistCfg(PLAYLIST_M3U_T *pl,
                              int virtPl) {
 
   char filepath[VSX_MAX_PATH_LEN];
-  char *pfilepath;
+  char *pfilepath, *pcurpath;
   struct stat st;
   int rc = 0;
   int consec_errors = 0;
@@ -895,10 +923,17 @@ int vsxlib_streamPlaylistCfg(PLAYLIST_M3U_T *pl,
     while(pCur) {
 
       pfilepath = NULL;
+      pcurpath = pCur->path;
 
-      if(fileops_stat(pCur->path, &st) == 0) {
-        pfilepath = pCur->path;
+      if(path_is_homedir(pcurpath) &&
+         path_homedirexpand(pcurpath, filepath, sizeof(filepath))) {
+         pcurpath = pCur->path;
+      }
+
+      if(fileops_stat(pcurpath, &st) == 0) {
+        pfilepath = pcurpath;
       } else {
+        //local path given
         mediadb_prepend_dir(pl->dirPl, pCur->path, filepath, sizeof(filepath));
         if(fileops_stat(filepath, &st) == 0) {
           pfilepath = filepath;
@@ -1003,6 +1038,11 @@ int vsxlib_streamFileCfg(const char *filePath, double fps,
   int rc = 0;
   enum MEDIA_FILE_TYPE mediaType;
   FILE_STREAM_T streamIn;
+  char buf[VSX_MAX_PATH_LEN];
+
+  if(path_is_homedir(filePath) && path_homedirexpand(filePath, buf, sizeof(buf))) {
+    filePath = buf;
+  }
 
   //
   // Since we're not streaming from a live capture, we don't use any capture RTP sockets

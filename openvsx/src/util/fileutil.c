@@ -23,6 +23,7 @@
 
 
 #include "vsx_common.h"
+#include "util/lexparse.h"
 
 int OpenMediaReadOnly(FILE_STREAM_T *pStream, const char *path) {
 
@@ -151,4 +152,27 @@ int SeekMediaFile(FILE_STREAM_T *fs, FILE_OFFSET_T offset, int whence) {
 
   } 
   return 0;
+}
+
+int path_is_homedir(const char *path) {
+  if(path && path[0] == '~') {
+    return 1; 
+  }
+  return 0;
+}
+
+const char *path_homedirexpand(const char *path, char *buf, size_t szbuf) {
+  struct passwd *pwuid = NULL;
+
+  //
+  // Expand user's home directory
+  //
+  if(path_is_homedir(path) && buf && szbuf > 0 && (pwuid = getpwuid(getuid()))) {
+    MOVE_WHILE_CHAR(path, '~');
+    MOVE_WHILE_CHAR(path, DIR_DELIMETER);
+    mediadb_prepend_dir(pwuid->pw_dir, path, buf, szbuf); 
+    path = buf;
+  }
+
+  return path;
 }

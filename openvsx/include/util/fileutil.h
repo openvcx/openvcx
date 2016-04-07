@@ -45,5 +45,7 @@ int ReadFileStream(FILE_STREAM_T *fs, void *buf, uint32_t size);
 int ReadFileStreamNoEof(FILE_STREAM_T *fs, void *buf, uint32_t size);
 int WriteFileStream(FILE_STREAM_T *fs, const void *buf, uint32_t size);
 int SeekMediaFile(FILE_STREAM_T *fs, FILE_OFFSET_T offset, int whence);
+int path_is_homedir(const char *path);
+const char *path_homedirexpand(const char *path, char *buf, size_t szbuf);
 
 #endif // __FILE_UTIL_H__

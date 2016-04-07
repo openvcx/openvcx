@@ -73,6 +73,9 @@ typedef uint32_t in_addr_t;
 //#include <ctype.h>
 #include "wincompat.h"
 
+#include <pwd.h>
+#include <uuid/uuid.h>
+
 #define ERRNO_FMT_STR      "(errno: %d) %s" 
 #define ERRNO_FMT_ARGS     errno, strerror(errno)
 
