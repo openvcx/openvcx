@@ -34,4 +34,6 @@ void srvmgr_rtmpproxy_proc(void *pArg);
 void srvmgr_rtspproxy_proc(void *pArg);
 void srvmgr_httpproxy_proc(void *pArg);
 
+int srvmgr_http_handle_conn(SRV_MGR_CONN_T *pConn, const HTTP_PARSE_CTXT_T *pHdrCtxt);
+
 #endif // __SRV_PROXY_H__

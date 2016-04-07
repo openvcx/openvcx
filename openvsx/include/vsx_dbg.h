@@ -53,6 +53,7 @@
 #define VSX_DEBUG_FLAG_INFRAME          0x00100000
 #define VSX_DEBUG_FLAG_CODEC            0x00200000
 #define VSX_DEBUG_FLAG_MEM              0x00400000
+#define VSX_DEBUG_FLAG_PROXY            0x00800000
 
 #define VSX_DEBUG_NET(x)        if((g_debug_flags & VSX_DEBUG_FLAG_NET)) { x; }
 #define VSX_DEBUG_STREAMAV(x)   if((g_debug_flags & VSX_DEBUG_FLAG_STREAMAV)) { x; }
@@ -77,6 +78,7 @@
 #define VSX_DEBUG_INFRAME(x)    if((g_debug_flags & VSX_DEBUG_FLAG_INFRAME)) { x; }
 #define VSX_DEBUG_CODEC(x)      if((g_debug_flags & VSX_DEBUG_FLAG_CODEC)) { x; }
 #define VSX_DEBUG_MEM(x)        if((g_debug_flags & VSX_DEBUG_FLAG_MEM)) { x; }
+#define VSX_DEBUG_PROXY(x)      if((g_debug_flags & VSX_DEBUG_FLAG_PROXY)) { x; }
 
 #if defined(ANDROID_LOG)
 

@@ -1926,6 +1926,16 @@ void srvmgr_client_proc(void *pfuncarg) {
       VSX_DEBUG_MGR(LOG(X_DEBUG("MGR - get_method_fromurl '%s' %s (%d), directMediaReq: %d"), 
                         pConn->conn.phttpReq->puri, devtype_methodstr(reqMethod), reqMethod, directMediaReq); );
 
+#if 1
+      if(directMediaReq) {
+        //pConn->conn.httpReq
+        LOG(X_DEBUG(" hdrslen: %d, idxbuf: [%d]/%d, termcharidx: %d "), hdrCtxt.hdrslen, hdrCtxt.idxbuf, hdrCtxt.szbuf, hdrCtxt.termcharidx);
+        srvmgr_http_handle_conn(pConn, &hdrCtxt);
+        return;
+      }
+
+#endif // 0
+
       if(reqMethod == STREAM_METHOD_INVALID || 
          ((action == MEDIA_ACTION_UNKNOWN || 
           (action == MEDIA_ACTION_INDEX_FILELIST && strcmp(pConn->conn.phttpReq->puri, "/")))  && 

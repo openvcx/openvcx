@@ -140,8 +140,10 @@ enum CMD_OPT {
   CMD_OPT_DEBUG_DASH,
   CMD_OPT_DEBUG_HTTP,
   CMD_OPT_DEBUG_LIVE,
+  CMD_OPT_DEBUG_MEM,
   CMD_OPT_DEBUG_METAFILE,
   CMD_OPT_DEBUG_MGR,
+  CMD_OPT_DEBUG_PROXY,
   CMD_OPT_DEBUG_NET,
   CMD_OPT_DEBUG_SSL,
   CMD_OPT_DEBUG_RTMP,
@@ -181,8 +183,10 @@ int main(int argc, char *argv[]) {
                  { "debug-dash",  optional_argument,       NULL, CMD_OPT_DEBUG_DASH},
                  { "debug-http",  optional_argument,       NULL, CMD_OPT_DEBUG_HTTP },
                  { "debug-live",  optional_argument,       NULL, CMD_OPT_DEBUG_LIVE },
+                 { "debug-mem",   optional_argument,       NULL, CMD_OPT_DEBUG_MEM},
                  { "debug-metafile", optional_argument,    NULL, CMD_OPT_DEBUG_METAFILE },
                  { "debug-mgr",   optional_argument,       NULL, CMD_OPT_DEBUG_MGR },
+                 { "debug-proxy", optional_argument,       NULL, CMD_OPT_DEBUG_PROXY },
                  { "debug-net",   optional_argument,       NULL, CMD_OPT_DEBUG_NET },
                  { "debug-ssl",   optional_argument,       NULL, CMD_OPT_DEBUG_SSL },
                  { "debug-rtmp",  optional_argument,       NULL, CMD_OPT_DEBUG_RTMP },
@@ -257,8 +261,12 @@ int main(int argc, char *argv[]) {
           g_debug_flags |= VSX_DEBUG_FLAG_HTTP;
         } else if(!strcasecmp("live", optarg)) {
           g_debug_flags |= VSX_DEBUG_FLAG_LIVE;
+        } else if(!strcasecmp("mem", optarg)) {
+          g_debug_flags |= VSX_DEBUG_FLAG_MEM;
         } else if(!strcasecmp("mgr", optarg)) {
           g_debug_flags |= VSX_DEBUG_FLAG_MGR;
+        } else if(!strcasecmp("proxy", optarg)) {
+          g_debug_flags |= VSX_DEBUG_FLAG_PROXY;
         } else if(!strcasecmp("net", optarg)) {
           g_debug_flags |= VSX_DEBUG_FLAG_NET;
         } else if(!strcasecmp("metafile", optarg)) {
@@ -285,6 +293,12 @@ int main(int argc, char *argv[]) {
         break;
       case CMD_OPT_DEBUG_MGR:
         g_debug_flags |= VSX_DEBUG_FLAG_MGR;
+        break;
+      case CMD_OPT_DEBUG_MEM:
+        g_debug_flags |= VSX_DEBUG_FLAG_MEM;
+        break;
+      case CMD_OPT_DEBUG_PROXY:
+        g_debug_flags |= VSX_DEBUG_FLAG_PROXY;
         break;
       case CMD_OPT_DEBUG_NET:
         g_debug_flags |= VSX_DEBUG_FLAG_NET;

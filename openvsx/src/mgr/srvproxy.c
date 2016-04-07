@@ -64,6 +64,9 @@ typedef struct PROXY_CONNECTION {
   struct HDR_STATE        cli_header;
   struct HDR_STATE        rem_header;
 
+  const unsigned char     *prefdata;
+  unsigned int             pebufsz; 
+
 } PROXY_CONNECTION_T;
 
 static const char DESCR_CLIENT[] = "client";
@@ -308,6 +311,7 @@ static int proxyloop(PROXY_CONNECTION_T *pProxy) {
   fd_set wrset;
   struct timeval tv;
   unsigned char buf[16384];
+  char tmp[128];
   SOCKET_DESCR_T *pAddrSet[2];
 
   pAddrSet[0] = pProxy->pAddrClient;
@@ -343,23 +347,25 @@ static int proxyloop(PROXY_CONNECTION_T *pProxy) {
 
     if((val = select(fdhighest, &rdset, NULL, NULL, &tv)) > 0) {
 
-      //fprintf(stderr, "[%u] select returned: %d\n", pProxy->id, val);
+      VSX_DEBUG_PROXY( LOG(X_DEBUGV("PROXY - select returned: %d"), val); );
+
       for(idx = 0; idx < 2; idx++) {
         if(FD_ISSET(NETIOSOCK_FD(pAddrSet[idx]->netsocket), &rdset)) {
 
-          //fprintf(stderr, "%d is set\n", pAddrSet[idx]->netsocket.sock);
-          //if((ircv = recv(pAddrSet[idx]->netsocket.sock, buf, sizeof(buf), 0)) <= 0) {
+          VSX_DEBUG_PROXY( LOG(X_DEBUGV("PROXY - %d is set)"), NETIOSOCK_FD(pAddrSet[idx]->netsocket)); );
+
           if((ircv = netio_recv(&pAddrSet[idx]->netsocket, NULL, buf, sizeof(buf))) <= 0) {
-            LOG(X_ERROR("Proxy failed to read from %s %s:%d"),
+            LOG(X_ERROR("Proxy failed to read from %s %s:%d, rc: %d"),
               (idx == 0 ? DESCR_CLIENT : DESCR_REMOTE),
-              FORMAT_NETADDR(pAddrSet[idx]->sa, (char *)buf, sizeof(buf)), 
-              htons(INET_PORT(pAddrSet[idx]->sa)));
+              FORMAT_NETADDR(pAddrSet[idx]->sa, tmp, sizeof(tmp)), 
+              htons(INET_PORT(pAddrSet[idx]->sa)), ircv);
             return -1;
           }
 
-          //if(pProxy->client.cbOnRcvData == NULL) {
-          //  setCbRcvData(pProxy, buf, ircv);
-          //}
+          VSX_DEBUG_PROXY( LOG(X_DEBUG("PROXY - read %d from %s %s:%d"),
+              ircv, (idx == 0 ? DESCR_CLIENT : DESCR_REMOTE),
+              FORMAT_NETADDR(pAddrSet[idx]->sa, tmp, sizeof(tmp)), 
+              htons(INET_PORT(pAddrSet[idx]->sa))); );
 
           if(pProxy->client.cbOnRcvData == NULL) {
             return -1;
@@ -373,7 +379,7 @@ static int proxyloop(PROXY_CONNECTION_T *pProxy) {
       }
 
     } else if(val == 0) {
-      //fprintf(stderr, "[%u] select timeout returned: %d\n", pProxy->id, val);
+      VSX_DEBUG_PROXY( LOG(X_DEBUG("PROXY - select timeout returned: %d"), val); );
     } else {
       LOG(X_ERROR("Proxy select readers returned: %d"), val);
       break;
@@ -808,7 +814,7 @@ static int mgr_rtsp_handle_conn(SRV_MGR_CONN_T *pConn) {
   return 0;
 }
 
-static int mgr_http_handle_conn(SRV_MGR_CONN_T *pConn) {
+int srvmgr_http_handle_conn(SRV_MGR_CONN_T *pConn, const HTTP_PARSE_CTXT_T *pHdrCtxt) {
   SOCKET_DESCR_T sdSrv;
   PROXY_CONNECTION_T proxyConn;
 
@@ -820,6 +826,11 @@ static int mgr_http_handle_conn(SRV_MGR_CONN_T *pConn) {
   proxyConn.client.cbOnRcvData = cbOnRcvDataRtsp;
   proxyConn.pCbUserData = pConn;
   proxyConn.cbInitUserData = initUserDataHttp;
+
+  if(pHdrCtxt) {
+
+  }
+  // Set prebuf from hdrCtxt
 
   proxyloop(&proxyConn);
 
@@ -857,7 +868,7 @@ void srvmgr_httpclient_proc(void *pfuncarg) {
   LOG(X_DEBUG("Handling HTTP (proxy) connection from %s:%d"), 
        FORMAT_NETADDR(pConn->conn.sd.sa, tmp, sizeof(tmp)), ntohs(INET_PORT(pConn->conn.sd.sa)));
 
-  mgr_http_handle_conn(pConn);
+  srvmgr_http_handle_conn(pConn, NULL);
 
   netio_closesocket(&pConn->conn.sd.netsocket);
 
