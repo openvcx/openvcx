@@ -288,6 +288,8 @@ int h264_getCroppedDimensions(H264_NAL_SPS_T *pSps,
                               unsigned int *pworig, unsigned int *phorig);
 int h264_getVUITiming(H264_NAL_SPS_T *pSps,
                       unsigned int *pClockHz, unsigned int *pFrameDeltaHz);
+int h264_getVUITimingFromSps(AVC_DECODER_CFG_BLOB_T *pSpsBlob, 
+                             unsigned int *pClockHz, unsigned int *pFrameDeltaHz);
 int h264_getNALType(unsigned char hdr);
 int h264_isNALVcl(unsigned char hdr);
 H264_RESULT_T h264_decode_NALHdr(H264_DECODER_CTXT_T *pCtxt, BIT_STREAM_T *pNal,

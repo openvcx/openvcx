@@ -1198,11 +1198,9 @@ static int cbFlv_onAudExtract(FLV_CONTAINER_T *pFlv, FLV_TAG_AUDIO_T *pAud, void
 
   //ReadFileStream(pFlv->pStream, b, 4);
   //fprintf(stdout, "len:%u  0x%2.2x 0x%2.2x 0x%2.2x 0x%2.2x\n", pAud->hdr.size32-2,b[0], b[1], b[2], b[3]);
-
 //  fprintf(stdout, "cbAud file:0x%x (tag:0x%x) size:%u\n", pFlv->pStream->offset, pAud->hdr.fileOffset, pAud->hdr.size32);
 
   return esds_cbWriteSample(pFlv->pStream, pAud->hdr.size32 - 2, pArg, 0, 0); 
-//  return 0;
 }
 
 int flv_extractAacAud(FLV_CONTAINER_T *pFlv, const char *path, 
@@ -1280,8 +1278,6 @@ int flv_extractRaw(FLV_CONTAINER_T *pFlv, const char *outPrfx,
 
   durationHz = (uint64_t) (fDuration * pFlv->sampledeltaHz);
   startHz = (uint64_t) (fStart * pFlv->timescaleHz);
-
-
 
   szPath = strlen(outPrfx);
   outPath = (char *) avc_calloc(1, szPath + 8);

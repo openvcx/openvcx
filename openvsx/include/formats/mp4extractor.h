@@ -63,5 +63,6 @@ int mp4_initMp4aTrack(const MP4_CONTAINER_T *pMp4, MP4_TRAK_MP4A_T *pMp4BoxSet);
 int mp4_initSamrTrack(const MP4_CONTAINER_T *pMp4, MP4_TRAK_SAMR_T *pMp4BoxSet);
 
 BOX_T *mp4_loadTrack(BOX_T *pRoot, MP4_TRAK_T *pBoxes, uint32_t stsdType, int initMoov);
+int mp4_dumpStts(const char *pathout, const MP4_TRAK_T *pTrak, const char *filename, const char *trakDescr);
 
 #endif // __MP4_EXTRACTOR_H__

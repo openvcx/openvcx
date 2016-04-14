@@ -2368,7 +2368,7 @@ static void dump_box_stts(BOX_T *pBox, int context, int verbose, FILE *fp) {
 }
 
 void mp4_free_avsync_stts(BOX_STTS_ENTRY_LIST_T *pList) {
-  if(pList) {
+  if(pList && pList->pEntries) {
     free(pList->pEntries);
   }
 }

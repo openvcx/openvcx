@@ -783,6 +783,28 @@ int h264_getVUITiming(H264_NAL_SPS_T *pSps,
 
   return 0;
 }
+
+int h264_getVUITimingFromSps(AVC_DECODER_CFG_BLOB_T *pSpsBlob,
+                             unsigned int *pClockHz, unsigned int *pFrameDeltaHz) {
+  int rc = -1;
+  H264_RESULT_T res; 
+  H264_DECODER_CTXT_T ctxt;
+  BIT_STREAM_T bs;
+
+  if(!pSpsBlob) {
+    return -1;
+  }
+
+  memset(&ctxt, 0, sizeof(ctxt));
+  memset(&bs, 0, sizeof(bs));
+  bs.buf = pSpsBlob->data;
+  bs.sz = pSpsBlob->len;
+
+  if((res = h264_decode_NALHdr(&ctxt, &bs, 0)) >= H264_RESULT_DECODED &&
+    (rc = h264_getVUITiming(&ctxt.sps[ctxt.sps_idx], pClockHz, pFrameDeltaHz)) == 0) {
+  } 
+  return rc;
+}   
                       
 
 int h264_getCroppedDimensions(H264_NAL_SPS_T *pSps, 

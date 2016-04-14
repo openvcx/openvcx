@@ -348,8 +348,14 @@ static int mkvsrv_send_frame(MKVSRV_CTXT_T *pMkvCtxt,
   mbs.bs.idx += 2;
   mbs.bs.buf[mbs.bs.idx++] = (pFrame->isaud || keyframe) ? 0x80 : 0;
 
-  //fprintf(stderr, "MKV send %s frame size:%d pts:%.3f, dts:%.3f, keyframe:%d, lenData:%d, blockTm:%d, clusterTm:%lld, track:%d\n", pFrame->isvid ? "vid" : pFrame->isaud ? "aud" : "unknown", OUTFMT_LEN(pFrame), PTSF(OUTFMT_PTS(pFrame)), PTSF(OUTFMT_DTS(pFrame)),  keyframe, lenData, blockTime, pMkvCtxt->clusterTimeCode, pTrack->number);
-  //avc_dumpHex(stderr, mbs.bs.buf, mbs.bs.idx, 1);
+  VSX_DEBUG_MKV (
+    LOG(X_DEBUG("MKV - send %s frame size:%d pts:%.3f, dts:%.3f, keyframe:%d, lenData:%d, blockTm:%d, "
+                 "clusterTm:%lld, track:%d"),
+                 pFrame->isvid ? "vid" : pFrame->isaud ? "aud" : "unknown", OUTFMT_LEN(pFrame), 
+                 PTSF(OUTFMT_PTS(pFrame)), PTSF(OUTFMT_DTS(pFrame)),  keyframe, lenData, blockTime, 
+                 pMkvCtxt->clusterTimeCode, pTrack->number);
+    LOGHEX_DEBUGV(mbs.bs.buf, mbs.bs.idx);
+  )
 
   if((rc = pMkvCtxt->cbWrite(pMkvCtxt, mbs.bs.buf, mbs.bs.idx)) < 0) {
     return rc;
@@ -390,11 +396,19 @@ int mkvsrv_addFrame(void *pArg, const OUTFMT_FRAME_DATA_T *pFrame) {
   //if(pMkvCtxt->av.vid.pStreamerCfg->status.faoffset_mkvpktz != 0) {
   //  LOG(X_DEBUG("MKV PKTZ OFFSET: %.3f"), pMkvCtxt->av.vid.pStreamerCfg->status.faoffset_mkvpktz);
   //}
-
-  //LOG(X_DEBUG("mksrv_addFrame %s len:%d pts:%.3f dts:%.3f key:%d (vseq:%d, aseq:%d, sent:%d)"), pFrame->isvid ? "vid" : (pFrame->isaud ? "aud" : "?"), OUTFMT_LEN(pFrame), PTSF(OUTFMT_PTS(pFrame)), PTSF(OUTFMT_PTS(pFrame)), OUTFMT_KEYFRAME(pFrame), pMkvCtxt->av.vid.haveSeqHdr, pMkvCtxt->av.aud.haveSeqHdr, pMkvCtxt->av.vid.sentSeqHdr); //LOGHEX_DEBUG(OUTFMT_DATA(pFrame), MIN(OUTFMT_LEN(pFrame), 16));
-//if(OUTFMT_KEYFRAME(pFrame)) fprintf(stderr, "\n\n\n\n\n");
+ 
+  VSX_DEBUG_MKV(
+    LOG(X_DEBUG("MKV - addFrame %s len:%d pts:%.3f dts:%.3f key:%d (havekey:%d, vseq:%d, aseq:%d, sent:%d)"), 
+                pFrame->isvid ? "vid" : (pFrame->isaud ? "aud" : "?"), OUTFMT_LEN(pFrame), PTSF(OUTFMT_PTS(pFrame)), 
+                PTSF(OUTFMT_PTS(pFrame)), OUTFMT_KEYFRAME(pFrame), pMkvCtxt->av.vid.haveKeyFrame, 
+                pMkvCtxt->av.vid.haveSeqHdr, pMkvCtxt->av.aud.haveSeqHdr, pMkvCtxt->av.vid.sentSeqHdr); 
+    LOGHEX_DEBUGV(OUTFMT_DATA(pFrame), MIN(OUTFMT_LEN(pFrame), 16));
+    if(OUTFMT_KEYFRAME(pFrame)) {
+    //if(pFrame->isvid && pFrame->keyframe) fprintf(stderr, "KEYFRAME sps:%d pps:%d\n", OUTFMT_VSEQHDR(pFrame).h264.sps_len, OUTFMT_VSEQHDR(pFrame).h264.pps_len);
+      LOG(X_DEBUG("Keyframe\n\n"));
+    }
   
-  //if(pFrame->isvid && pFrame->keyframe) fprintf(stderr, "KEYFRAME sps:%d pps:%d\n", OUTFMT_VSEQHDR(pFrame).h264.sps_len, OUTFMT_VSEQHDR(pFrame).h264.pps_len);
+  )
 
   if((pFrame->isvid && *pMkvCtxt->pnovid) || (pFrame->isaud && *pMkvCtxt->pnoaud)) {
     return rc;
@@ -415,7 +429,13 @@ int mkvsrv_addFrame(void *pArg, const OUTFMT_FRAME_DATA_T *pFrame) {
 
     keyframe = OUTFMT_KEYFRAME(pFrame);
 
-    //fprintf(stderr, "mkvsrv_addFrame %s len:%d pts:%llu dts:%lld key:%d (vseq:%d, aseq:%d, sent:%d)\n", pFrame->isvid ? "vid" : (pFrame->isaud ? "aud" : "?"), OUTFMT_LEN(pFrame), OUTFMT_PTS(pFrame), OUTFMT_DTS(pFrame), keyframe, pMkvCtxt->av.vid.haveSeqHdr, pMkvCtxt->av.aud.haveSeqHdr, pMkvCtxt->av.vid.sentSeqHdr); //avc_dumpHex(stderr, OUTFMT_DATA(pFrame), 48, 1);
+    VSX_DEBUG_MKV(
+      LOG(X_DEBUGV("MKV - %s len:%d pts:%llu dts:%lld key:%d (vseq:%d, aseq:%d, sent:%d)"), 
+          pFrame->isvid ? "vid" : (pFrame->isaud ? "aud" : "?"), OUTFMT_LEN(pFrame), OUTFMT_PTS(pFrame), 
+          OUTFMT_DTS(pFrame), keyframe, pMkvCtxt->av.vid.haveSeqHdr, pMkvCtxt->av.aud.haveSeqHdr, 
+          pMkvCtxt->av.vid.sentSeqHdr); 
+          //avc_dumpHex(stderr, OUTFMT_DATA(pFrame), 48, 1);
+    )
 
   } else {
 
@@ -458,7 +478,7 @@ pMkvCtxt->av.aud.ctxt.startHdrsLen = pMkvCtxt->av.aud.pStreamerCfg->xcode.aud.hd
 */
 
     //fprintf(stderr, "check vidseqhdr: %d\n", rc);
-//fprintf(stderr, "avcc raw len:%d\n", pMkvCtxt->av.vid.codecCtxt.h264.avccRawLen); if(pMkvCtxt->av.vid.codecCtxt.h264.avccRawLen>0) avc_dumpHex(stderr, pMkvCtxt->av.vid.codecCtxt.h264.avccRaw, pMkvCtxt->av.vid.codecCtxt.h264.avccRawLen, 1);
+    //fprintf(stderr, "avcc raw len:%d\n", pMkvCtxt->av.vid.codecCtxt.h264.avccRawLen); if(pMkvCtxt->av.vid.codecCtxt.h264.avccRawLen>0) avc_dumpHex(stderr, pMkvCtxt->av.vid.codecCtxt.h264.avccRaw, pMkvCtxt->av.vid.codecCtxt.h264.avccRawLen, 1);
 
   } else if(pFrame->isaud && !pMkvCtxt->av.aud.haveSeqHdr) {
 
@@ -471,7 +491,11 @@ pMkvCtxt->av.aud.ctxt.startHdrsLen = pMkvCtxt->av.aud.pStreamerCfg->xcode.aud.hd
 
   }
 
-//fprintf(stderr, "isvid:%d, isaud:%d, RC:%d, senthdr:%d, vidseq:%d, audSeq:%d, novid:%d, noaud:%d\n", pFrame->isvid, pFrame->isaud, rc, pMkvCtxt->senthdr, pMkvCtxt->av.vid.haveSeqHdr, pMkvCtxt->av.aud.haveSeqHdr, *pMkvCtxt->pnovid, *pMkvCtxt->pnoaud);
+  VSX_DEBUG_MKV ( 
+    LOG(X_DEBUGV("MKV - isvid:%d, isaud:%d, RC:%d, senthdr:%d, vidseq:%d, audSeq:%d, novid:%d, noaud:%d"), 
+                pFrame->isvid, pFrame->isaud, rc, pMkvCtxt->senthdr, pMkvCtxt->av.vid.haveSeqHdr, 
+                pMkvCtxt->av.aud.haveSeqHdr, *pMkvCtxt->pnovid, *pMkvCtxt->pnoaud);
+  )
 
   if(!pMkvCtxt->av.vid.sentSeqHdr && (*pMkvCtxt->pnovid || pMkvCtxt->av.vid.haveSeqHdr) &&
      (*pMkvCtxt->pnoaud || pMkvCtxt->av.aud.haveSeqHdr)) {

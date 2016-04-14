@@ -152,6 +152,30 @@ static int extractFromFlv(int video,
   return rc;
 }
 
+static int extractFromMkv(int video,
+                          int audio,
+                          const char *in,
+                          const char *userOut,
+                          char *outPath,
+                          unsigned int outPathTotLen,
+                          unsigned int outPathEndIdx,
+                          float fStart,
+                          float fDuration) {
+  MKV_CONTAINER_T *pMkv;
+  int rc = 0;
+
+  if((pMkv = mkv_open(in)) == NULL) {
+    LOG(X_ERROR("Failed to read %s"), in);
+    return -1;
+  }
+
+  rc = mkv_extractMedia(pMkv, video, audio, video ? 1 : 0, 0, outPath, fStart, fDuration);
+
+  mkv_close(pMkv);
+
+  return rc;
+}
+
 VSX_RC_T vsxlib_extractMedia(int video, 
                                int audio,
                                const char *in, 
@@ -230,6 +254,12 @@ VSX_RC_T vsxlib_extractMedia(int video,
       break;
     case MEDIA_FILE_TYPE_MP2TS:
       if(extractFromM2t(video, audio, in, out, outPath, sizeof(outPath), 
+                          sz, fStart, fDuration) < 0) {
+        rc = VSX_RC_ERROR;
+      }
+      break;
+    case MEDIA_FILE_TYPE_MKV:
+      if(extractFromMkv(video, audio, in, out, outPath, sizeof(outPath), 
                           sz, fStart, fDuration) < 0) {
         rc = VSX_RC_ERROR;
       }
@@ -333,14 +363,12 @@ VSX_RC_T vsxlib_createMp4(const char *in,
 
 #if defined(VSX_DUMP_CONTAINER)
 static int dumpMp4_avsync(const MP4_CONTAINER_T *pMp4, const char *avsyncout) {
-  //FILE *fp = stdout;
-  FILE_HANDLE fp;
   MP4_TRAK_AVCC_T mp4BoxSetAvcc;
   MP4_TRAK_MP4V_T mp4BoxSetMp4v;
   MP4_TRAK_T *pTrak = NULL;
   char descr[16];
   char pathout[VSX_MAX_PATH_LEN];
-  unsigned int idx = 0;
+  int rc = 0;
 
   if(!avsyncout || avsyncout[0] == '\0') {
     snprintf(pathout, sizeof(pathout), "%s.stts", pMp4->pStream->cbGetName(pMp4->pStream));
@@ -374,30 +402,9 @@ static int dumpMp4_avsync(const MP4_CONTAINER_T *pMp4, const char *avsyncout) {
     return -1;
   }
 
-  if((fp = fileops_Open(pathout, O_RDWR | O_CREAT)) == FILEOPS_INVALID_FP) {
-    LOG(X_ERROR("Unable to open file for writing: %s"), pathout);
-    return -1;
-  }
+  rc = mp4_dumpStts(pathout, pTrak, pMp4->pStream->cbGetName(pMp4->pStream), descr); 
 
-  LOG(X_INFO("Created %s"), pathout);
-
-  fileops_WriteExt(fp, pathout, sizeof(pathout), "#av sync for %s\n", 
-                      pMp4->pStream->cbGetName(pMp4->pStream));
-  //fprintf(fp, "#%s %uHz \n", descr, pTrak->pMdhd->timescale); 
-  fileops_WriteExt(fp, pathout, sizeof(pathout), "#track=%s\n", descr);
-  fileops_WriteExt(fp, pathout, sizeof(pathout), "stts=%u\n", 
-                      pTrak->pStts->list.entrycnt);
-  fileops_WriteExt(fp, pathout, sizeof(pathout), "clock=%u\n", 
-                      pTrak->pMdhd->timescale);
-  for(idx = 0; idx < pTrak->pStts->list.entrycnt; idx++) {
-    fileops_WriteExt(fp, pathout, sizeof(pathout), "count=%u,delta=%u\n", 
-                    pTrak->pStts->list.pEntries[idx].samplecnt,
-                    pTrak->pStts->list.pEntries[idx].sampledelta);
-  }
-
-  fileops_Close(fp);
-
-  return 0;
+  return rc ;
 }
 
 static int dumpMp4(const char *in, int verbosity, const char *avsyncout) {

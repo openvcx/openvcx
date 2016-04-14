@@ -69,6 +69,7 @@
 #include "formats/rtmp_parse.h"
 #include "formats/flv_write.h"
 #include "formats/mkv_write.h"
+#include "formats/mkv_extract.h"
 #include "formats/rtmp_pkt.h"
 #include "formats/sdp.h"
 #include "formats/sdputil.h"

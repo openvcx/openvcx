@@ -306,6 +306,8 @@ typedef enum MKV_TRACK_TYPE {
   MKV_TRACK_TYPE_LOGO                       = 0x10,
   MKV_TRACK_TYPE_SUBTITLE                   = 0x11,
   MKV_TRACK_TYPE_CONTROL                    = 0x20,
+
+  MKV_TRACK_TYPE_ANYMEDIA                   = 0xff
 } MKV_TRACK_TYPE_T;
 
 

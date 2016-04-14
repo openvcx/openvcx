@@ -1362,6 +1362,42 @@ int mp4_extractRaw(const MP4_CONTAINER_T *pMp4, const char *outPrfx,
   return rc;
 } 
 
+int mp4_dumpStts(const char *pathout, const MP4_TRAK_T *pTrak, const char *filename, const char *trakDescr) {
+  unsigned int idx;
+  FILE_HANDLE fp;
+  char buf[512];
+  int rc = 0;
+
+  if(!pathout || !pTrak || !pTrak->pStts || !pTrak->pMdhd) {
+    return -1;
+  }
+
+  if((fp = fileops_Open(pathout, O_RDWR | O_CREAT)) == FILEOPS_INVALID_FP) {
+    LOG(X_ERROR("Unable to open file for writing: %s"), pathout);
+    return -1;
+  }
+
+  LOG(X_INFO("Created %s"), pathout);
+
+  if(filename) {
+    fileops_WriteExt(fp, buf, sizeof(buf), "#av sync for %s\n", filename);
+  }
+  if(trakDescr) {
+    fileops_WriteExt(fp, buf, sizeof(buf), "#track=%s\n", trakDescr);
+  }
+  fileops_WriteExt(fp, buf, sizeof(buf), "stts=%u\n", pTrak->pStts->list.entrycnt);
+  fileops_WriteExt(fp, buf, sizeof(buf), "clock=%u\n", pTrak->pMdhd->timescale);
+  for(idx = 0; idx < pTrak->pStts->list.entrycnt; idx++) {
+    fileops_WriteExt(fp, buf, sizeof(buf), "count=%u,delta=%u\n",
+                    pTrak->pStts->list.pEntries[idx].samplecnt,
+                    pTrak->pStts->list.pEntries[idx].sampledelta);
+  }
+
+  fileops_Close(fp);
+
+  return rc;
+}
+
 #if 0
 typedef struct MP4_STBL_CLONE {
   BOX_STTS_T stts;

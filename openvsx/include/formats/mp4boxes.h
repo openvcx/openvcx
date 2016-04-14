@@ -645,7 +645,7 @@ typedef struct MP4_MDAT_CONTENT_NODE {
   uint32_t playDurationHz;
   uint16_t flags;
   int8_t   decodeOffset;  
-  uint8_t  pad;
+  uint8_t  isvid;
 
   WRITE_SAMPLE_FUNC cbWriteSample;
   uint32_t tkhd_id;

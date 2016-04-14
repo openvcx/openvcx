@@ -36,6 +36,7 @@ int avc_strip_nl(char *str, size_t sz, int stripws);
 char *avc_dequote(const char *p, char *buf, unsigned int szbuf);
 void *avc_calloc(size_t count, size_t size);
 void *avc_realloc(void *porig, size_t size);
+void *avc_recalloc(void *porig, size_t size, size_t size_orig);
 void avc_free(void **pp);
 void avc_dumpHex(void *fp, const unsigned char *buf, unsigned int len, int ascii);
 const char *avc_getPrintableDuration(unsigned long long duration, unsigned int timescale);

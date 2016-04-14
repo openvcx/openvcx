@@ -33,6 +33,9 @@
 #define MKV_BLOCK_BUFSZ(pb) MIN(MKV_BLOCK_SIZE(pb), EBML_BLOB_PARTIAL_DATA_SZ - (pb)->bsIdx)
 #define MKV_BLOCK_FOFFSET(pb)  ((pb)->pBg->simpleBlock.fileOffset + (pb)->bsIdx)
 
+typedef int (*CB_MKV_READ_FRAME)(void *, const MP4_MDAT_CONTENT_NODE_T *);
+
+
 typedef struct MKV_CODEC_TYPE {
   const char               *str;
   XC_CODEC_TYPE_T           type;
@@ -91,7 +94,7 @@ typedef struct MKV_CODEC_CFG_VID_T {
   union {
     AVC_DECODER_CFG_T        *pCfgH264;
   } u;
-  VIDEO_DESCRIPTION_GENERIC_T descr;
+  VIDEO_DESCRIPTION_GENERIC_T descr; // TODO: currently not utilized
 
 } MKV_CODEC_CFG_VID_T;
 
@@ -102,7 +105,7 @@ typedef struct MKV_CODEC_CFG_AUD_T {
     ESDS_DECODER_CFG_T        aacCfg;
     EBML_BLOB_T              *pVorbisCfg;
   } u;
-  AUDIO_DESCRIPTION_GENERIC_T descr;
+  AUDIO_DESCRIPTION_GENERIC_T descr; // TODO currently not utilized
 
 } MKV_CODEC_CFG_AUD_T;
 
@@ -142,5 +145,8 @@ const char *mkv_getCodecStr(XC_CODEC_TYPE_T codecType);
 
 MEDIA_FILE_TYPE_T mkv_isvalidFile(FILE_STREAM_T *pFile);
 double mkv_getfps(const MKV_CONTAINER_T *pMkv);
+
+int mkv_loadFrames(MKV_CONTAINER_T *pMkv, void *pArgCb, CB_MKV_READ_FRAME cbMkvOnReadFrame);
+
 
 #endif // __MKV_H__

@@ -920,9 +920,9 @@ static int mkv_load_queued_block(MKV_BLOCKLIST_T *pBlockList, MKV_BLOCK_T *pBloc
 int mkv_next_block_type(MKV_CONTAINER_T *pMkv, MKV_BLOCK_T *pBlockOut, MKV_TRACK_TYPE_T type) {
   int rc;
 
-  VSX_DEBUG_MKV( LOG(X_DEBUG("MKV - mkv_next_block_type %d"), type) );
+  VSX_DEBUG_MKV( LOG(X_DEBUG("MKV - mkv_next_block_type 0x%x"), type) );
 
-  if(type != MKV_TRACK_TYPE_VIDEO && type != MKV_TRACK_TYPE_AUDIO) {
+  if(type != MKV_TRACK_TYPE_VIDEO && type != MKV_TRACK_TYPE_AUDIO && type != MKV_TRACK_TYPE_ANYMEDIA) {
     return -1;
   }
 
@@ -950,19 +950,21 @@ int mkv_next_block_type(MKV_CONTAINER_T *pMkv, MKV_BLOCK_T *pBlockOut, MKV_TRACK
       return rc;
     }
 
-    VSX_DEBUG_MKV( LOG(X_DEBUG("MKV - mkv_next_block got type:%d"), pBlockOut->pTrack ? pBlockOut->pTrack->type : -1) );
+    VSX_DEBUG_MKV( LOG(X_DEBUG("MKV - mkv_next_block got type: 0x%x"), pBlockOut->pTrack ? pBlockOut->pTrack->type : -1) );
 
     if(pBlockOut->pTrack) {
 
       //
       // The last block loaded from the cluster matches the requested track  
       //
-      if(pBlockOut->pTrack->type == type) {
-        VSX_DEBUG_MKV( LOG(X_DEBUG("MKV _ GOT matching block from cluster")) );
+      if(pBlockOut->pTrack->type == type ||
+         (type == MKV_TRACK_TYPE_ANYMEDIA && 
+          (pBlockOut->pTrack->type == MKV_TRACK_TYPE_VIDEO || pBlockOut->pTrack->type == MKV_TRACK_TYPE_AUDIO))) {
+        VSX_DEBUG_MKV( LOG(X_DEBUG("MKV - GOT matching block from cluster type: %d"), pBlockOut->pTrack->type) );
 
-        if(type == MKV_TRACK_TYPE_VIDEO) {
+        if(pBlockOut->pTrack->type == MKV_TRACK_TYPE_VIDEO) {
           pMkv->blocksVid.haveRead = 1;
-        } else if(type == MKV_TRACK_TYPE_AUDIO) {
+        } else if(pBlockOut->pTrack->type == MKV_TRACK_TYPE_AUDIO) {
           pMkv->blocksAud.haveRead = 1;
         }
         
@@ -997,7 +999,8 @@ int mkv_loadFrame(MKV_CONTAINER_T *pMkv, MP4_MDAT_CONTENT_NODE_T *pFrame,
 
   if(!pMkv || !pMkv->pStream || !pFrame) {
     return -1;
-  } else if(clockHz == 0 && (mkvTrackType ==  MKV_TRACK_TYPE_VIDEO || mkvTrackType == MKV_TRACK_TYPE_AUDIO)) {
+  } else if(clockHz == 0 && (mkvTrackType ==  MKV_TRACK_TYPE_VIDEO || mkvTrackType == MKV_TRACK_TYPE_AUDIO || 
+                             mkvTrackType == MKV_TRACK_TYPE_ANYMEDIA)) {
     LOG(X_ERROR("MKV %s track does not have clock rate set!"), ((mkvTrackType ==  MKV_TRACK_TYPE_VIDEO) ? "video" : (mkvTrackType ==  MKV_TRACK_TYPE_AUDIO) ? "audio" : "unknown"));
     return -1;
   }
@@ -1027,8 +1030,34 @@ int mkv_loadFrame(MKV_CONTAINER_T *pMkv, MP4_MDAT_CONTENT_NODE_T *pFrame,
   pFrame->playOffsetHz = block.timeCode * clockHz / 1000.0f;
   pFrame->playDurationHz = 0;
   pFrame->pStreamIn = pMkv->pStream;
+  pFrame->isvid = (block.pTrack->type == MKV_TRACK_TYPE_VIDEO) ? 1 : 0;
 
-  VSX_DEBUG_MKV( LOG(X_DEBUG("MKV - mkv_loadFrame trackType:%d, size:%d, fileoffset:%lld, timecode:%lld, clockHz:%dHz, offsetHz:%lldHz"), mkvTrackType, MKV_BLOCK_SIZE(&block), MKV_BLOCK_FOFFSET(&block), block.timeCode, clockHz, pFrame->playOffsetHz) );
+  VSX_DEBUG_MKV( 
+    LOG(X_DEBUG("MKV - mkv_loadFrame trackType:%d, size:%d, fileoffset:%lld, timecode:%lld, clockHz:%dHz, offsetHz:%lldHz"), 
+      block.pTrack->type, MKV_BLOCK_SIZE(&block), MKV_BLOCK_FOFFSET(&block), block.timeCode, clockHz, pFrame->playOffsetHz) );
+  return rc;
+}
+
+
+int mkv_loadFrames(MKV_CONTAINER_T *pMkv, void *pArgCb, CB_MKV_READ_FRAME cbMkvOnReadFrame) {
+  int rc = 0;
+  unsigned int clockHz = 1000;
+  MKV_TRACK_TYPE_T mkvTrackType = MKV_TRACK_TYPE_ANYMEDIA;
+  unsigned int lastFrameId = 0;
+  MP4_MDAT_CONTENT_NODE_T frame;
+
+  if(!pMkv || !cbMkvOnReadFrame) {
+    return -1;
+  }
+
+  memset(&frame, 0, sizeof(frame));
+
+  while((rc = mkv_loadFrame(pMkv, &frame, mkvTrackType, clockHz, &lastFrameId)) >= 0) {
+    if((rc = cbMkvOnReadFrame(pArgCb, &frame)) < 0) {
+      break;
+    }
+  }
+
   return rc;
 }
 

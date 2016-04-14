@@ -66,7 +66,34 @@ void *avc_realloc(void *porig, size_t size) {
     return NULL;
   }
 
-  VSX_DEBUG_MEM( LOG(X_DEBUG("MEM - avc_realloc 0x%x, %d at 0x%x"), porig, size, p); );
+  VSX_DEBUG_MEM( LOG(X_DEBUG("MEM - avc_realloc 0x%x, %d now at 0x%x"), porig, size, p); );
+
+  return p;
+}
+
+void *avc_recalloc(void *porig, size_t size, size_t size_orig) {
+  void *p;
+
+  if(porig && size_orig > size) {
+    return NULL;
+  } else if(size_orig == size) {
+    return porig;
+  }
+
+
+  if((p = avc_calloc(1, size)) == NULL) {
+    return NULL;
+  }
+
+  VSX_DEBUG_MEM( LOG(X_DEBUG("MEM - avc_recalloc 0x%x, %d now at 0x%x, %d"), porig, size_orig, p, size); );
+
+  if(porig) {
+    memcpy(p, porig, size_orig); 
+  }
+
+  if(porig) {
+    avc_free(&porig);
+  }
 
   return p;
 }
