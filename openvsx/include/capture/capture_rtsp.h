@@ -32,7 +32,7 @@ struct STREAMER_CFG;
 /**
  * Connect to an RTSP server and SETUP listening ports
  */
-int capture_rtsp_setup(CAPTURE_DESCR_COMMON_T *pCommon, const struct STREAMER_CFG *pStreamerCfg);
+int capture_rtsp_setup(CAPTURE_DESCR_COMMON_T *pCommon, struct STREAMER_CFG *pStreamerCfg);
 /**
  * PLAY an RTSP sessio which has been previously completed with SETUP
  */

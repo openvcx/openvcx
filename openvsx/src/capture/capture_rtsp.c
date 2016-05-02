@@ -694,7 +694,7 @@ int capture_rtsp_onsetupdone(RTSP_CLIENT_SESSION_T *pSession, CAPTURE_DESCR_COMM
 }
 
 static CONNECT_RETRY_RC_T capture_client_rtsp_setupstream(CAPTURE_DESCR_COMMON_T *pCommon, 
-                                                          const STREAMER_CFG_T *pStreamerCfg, const char *url) {
+                                                          STREAMER_CFG_T *pStreamerCfg, const char *url) {
   CONNECT_RETRY_RC_T rc = CONNECT_RETRY_RC_OK;
   RTSP_CLIENT_SESSION_T *pSession = &pCommon->rtsp;
 
@@ -718,6 +718,12 @@ static CONNECT_RETRY_RC_T capture_client_rtsp_setupstream(CAPTURE_DESCR_COMMON_T
   pSession->cseq++;
   if(rtsp_req_describe(pSession) < 0) {
     return CONNECT_RETRY_RC_ERROR;
+  }
+
+  if(pSession->sdp.vid.common.available &&  !pSession->sdp.aud.common.available) {
+    pStreamerCfg->noaud = 1; 
+  } else if(pSession->sdp.aud.common.available &&  !pSession->sdp.vid.common.available) {
+    pStreamerCfg->novid = 1; 
   }
 
   if((rc = rtsp_alloc_listener_ports(&pSession->s, pStreamerCfg->pRtspSessions->staticLocalPort,
@@ -1198,7 +1204,7 @@ int stream_rtsp_announce_start(STREAMER_CFG_T *pStreamerCfg, int wait_for_setup)
 }
 
 typedef struct CONNECT_RETRY_CTXT_RTSP {
-  const STREAMER_CFG_T      *pStreamerCfg;
+  STREAMER_CFG_T            *pStreamerCfg;
   CAPTURE_DESCR_COMMON_T    *pCommon;
   const char                *purl; 
 } CONNECT_RETRY_CTXT_RTSP_T;
@@ -1208,7 +1214,7 @@ CONNECT_RETRY_RC_T  capture_client_rtsp_cbonsetupstream(void *pArg) {
   return capture_client_rtsp_setupstream(pCtxt->pCommon, pCtxt->pStreamerCfg, pCtxt->purl);
 }
 
-int capture_rtsp_setup(CAPTURE_DESCR_COMMON_T *pCommon, const STREAMER_CFG_T *pStreamerCfg) {
+int capture_rtsp_setup(CAPTURE_DESCR_COMMON_T *pCommon, STREAMER_CFG_T *pStreamerCfg) {
   int rc = 0;
   const char *purl = NULL;
   RTSP_CLIENT_SESSION_T *pSession = NULL;
